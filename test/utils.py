@@ -38,7 +38,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
 
         self.communicator.add_rpc_subscriber(on_receive, 'rpc')
         future = self.communicator.rpc_send('rpc', MESSAGE)
-        response = self._action_future(future)
+        response = self.communicator.await_response(future)
 
         self.assertEqual(messages[0], MESSAGE)
         self.assertEqual(response, RESPONSE)
@@ -55,7 +55,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
 
         self.communicator.add_task_subscriber(on_task)
         future = self.communicator.task_send(TASK)
-        response = self._action_future(future)
+        response = self.communicator.await_response(future)
 
         self.assertEquals(tasks[0], TASK)
         self.assertEquals(response, RESULT)
@@ -72,10 +72,6 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         self.communicator.add_task_subscriber(on_task)
         future = self.communicator.task_send(TASK)
         with self.assertRaises(kiwi.RemoteException):
-            self._action_future(future)
+            self.communicator.await_response(future)
 
         self.assertEquals(tasks[0], TASK)
-
-    def _action_future(self, future):
-        self.wait_for_message(future)
-        return future.result()

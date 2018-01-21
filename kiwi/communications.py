@@ -50,6 +50,11 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         :rtype: :class:`kiwi.Future`
         """
 
+    def task_send_and_wait(self, msg):
+        future = self.task_send(msg)
+        self.await_response(future)
+        return future.result()
+
     @abc.abstractmethod
     def rpc_send(self, recipient_id, msg):
         """
@@ -62,8 +67,17 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         """
         pass
 
+    def rpc_send_and_wait(self, recipient_id, msg):
+        future = self.rpc_send(recipient_id, msg)
+        self.await_response(future)
+        return future.result()
+
     @abc.abstractmethod
     def broadcast_msg(self, msg, reply_to=None, correlation_id=None):
+        pass
+
+    @abc.abstractmethod
+    def await_response(self, future):
         pass
 
 

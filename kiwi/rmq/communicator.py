@@ -208,6 +208,8 @@ class RmqCommunicator(kiwi.CommunicatorHelper):
                  encoder=yaml.dump,
                  decoder=yaml.load,
                  testing_mode=False):
+        self._connector = connector
+
         self._message_publisher = RmqPublisher(
             connector,
             exchange_name=exchange_name,
@@ -276,3 +278,18 @@ class RmqCommunicator(kiwi.CommunicatorHelper):
 
     def task_send(self, msg):
         return self._task_publisher.task_send(msg)
+
+    def await_response(self, future):
+        loop = self._connector._loop
+
+        def stop():
+            loop.stop()
+        try:
+            future.add_done_callback(lambda _: loop.stop())
+            loop.start()
+        except RuntimeError:
+            future.remove_done_callback(stop)
+            raise RuntimeError("Cannot await a response inside the running event loop")
+        else:
+            return future.result()
+
