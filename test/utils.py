@@ -74,4 +74,4 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         with self.assertRaises(kiwi.RemoteException):
             self.communicator.await_response(future)
 
-        self.assertEquals(tasks[0], TASK)
+        self.assertEqual(tasks[0], TASK)
