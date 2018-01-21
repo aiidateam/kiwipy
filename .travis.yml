@@ -1,0 +1,16 @@
+language: python
+cache: pip
+
+services:
+  - rabbitmq
+
+python:
+  - "2.7"
+  - "3.5"
+  - "3.6"
+
+install:
+  - pip install .[rmq]
+
+script:
+  - py.test
