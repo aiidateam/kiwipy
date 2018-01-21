@@ -70,13 +70,13 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._decode = decoder
         self._encode = encoder
 
-        self._listeners = []
+        self._subscribers = []
 
-    def add_task_receiver(self, task_receiver):
-        self._listeners.append(task_receiver)
+    def add_task_subscriber(self, subscriber):
+        self._subscribers.append(subscriber)
 
-    def remove_task_receiver(self, task_receiver):
-        self._listeners.remove(task_receiver)
+    def remove_task_subscriber(self, subscriber):
+        self._subscribers.remove(subscriber)
 
     @messages.initialiser()
     def on_channel_open(self, channel):
@@ -104,10 +104,10 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
     def _on_task(self, ch, method, props, body):
         handled = False
-        for receiver in self._listeners:
+        for subscriber in self._subscribers:
             try:
                 task = self._decode(body)
-                result = receiver.on_task_received(task)
+                result = subscriber(task)
                 if isinstance(result, kiwi.Future):
                     result.add_done_callback(partial(self._on_task_done, props, method))
                 else:

@@ -1,4 +1,4 @@
-EXCHANGE = 'kiwi.exchange'
-TASK_QUEUE = 'kiwi.task_queue'
+TASK_EXCHANGE = 'kiwi.tasks'
+TASK_QUEUE = 'kiwi.tasks'
 MESSAGE_EXCHANGE = 'kiwi.messages'
 

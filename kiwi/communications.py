@@ -1,9 +1,12 @@
 import abc
 from future.utils import with_metaclass
+import sys
 
 from . import futures
 
-__all__ = ['Communicator', 'RemoteException', 'Receiver', 'DeliveryFailed', 'TaskRejected']
+__all__ = ['Communicator', 'CommunicatorHelper',
+           'RemoteException', 'DeliveryFailed', 'TaskRejected',
+           ]
 
 
 class RemoteException(Exception):
@@ -20,15 +23,19 @@ class TaskRejected(Exception):
 
 class Communicator(with_metaclass(abc.ABCMeta)):
     @abc.abstractmethod
-    def register_receiver(self, receiver, identifier=None):
+    def add_rpc_subscriber(self, receiver, identifier):
         pass
 
     @abc.abstractmethod
-    def add_task_receiver(self, task_receiver):
+    def remove_rpc_subscriber(self, receiver):
         pass
 
     @abc.abstractmethod
-    def remove_task_receiver(self, task_receiver):
+    def add_task_subscriber(self, task_receiver):
+        pass
+
+    @abc.abstractmethod
+    def remove_task_subscriber(self, task_receiver):
         pass
 
     @abc.abstractmethod
@@ -60,36 +67,73 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         pass
 
 
-class Receiver(object):
-    def on_rpc_receive(self, msg):
-        """
-        Receive a remote procedure call sent directly to this receiver.
-        :param msg: The RPC message
-        :return: The return value will be returned to the sender
-        """
-        pass
+class CommunicatorHelper(Communicator):
+    def __init__(self):
+        self._task_subscribers = []
+        self._broadcast_subscribers = []
+        self._rpc_subscribers = {}
 
-    def on_broadcast_receive(self, msg):
-        """
-        Receive a broadcast message.
-        :param msg: The broadcast message
-        :return:
-        """
-        pass
+    def add_rpc_subscriber(self, subscriber, identifier):
+        self._rpc_subscribers[identifier] = subscriber
 
+    def remove_rpc_subscriber(self, subscriber):
+        for identifier, sub in self._rpc_subscribers.items():
+            if sub is subscriber:
+                self._rpc_subscribers.pop(identifier)
+                return
+        raise ValueError("Unknown subscriber '{}'".format(subscriber))
 
-class TaskReceiver(with_metaclass(abc.ABCMeta)):
-    @abc.abstractmethod
-    def on_task_received(self, msg):
+    def add_task_subscriber(self, subscriber):
         """
-        Receive a task.
-        :param msg: The task message
-        :return: The task result or a Future to indicate that the task is in
-        progress in which case the response will no be send until it is done
+        Register a task subscriber
+
+        :param subscriber: The task callback function
         """
-        pass
+        self._task_subscribers.append(subscriber)
 
+    def remove_task_subscriber(self, subscriber):
+        """
+        Deregister a task subscriber
 
-class Action(futures.Future):
-    def execute(self, publisher):
-        pass
+        :param subscriber: The task callback function
+        """
+        # TODO: Put exception guard and raise out own exception
+        self._task_subscribers.remove(subscriber)
+
+    def fire_task(self, msg):
+        future = futures.Future()
+
+        for subscriber in self._task_subscribers:
+            try:
+                result = subscriber(msg)
+                future.set_result(result)
+                break
+            except TaskRejected:
+                pass
+            except Exception:
+                future.set_exception(RemoteException(sys.exc_info()))
+        if not future.done():
+            future.set_exception(TaskRejected("Rejected by all subscribers"))
+
+        return future
+
+    def fire_rpc(self, recipient_id, msg):
+        try:
+            subscriber = self._rpc_subscribers[recipient_id]
+        except KeyError:
+            raise ValueError("Unknown recipient '{}'".format(recipient_id))
+        else:
+            future = futures.Future()
+            try:
+                result = subscriber(msg)
+                if isinstance(result, futures.Future):
+                    futures.chain(result, future)
+                else:
+                    future.set_result(result)
+            except Exception:
+                future.set_exception(RemoteException(sys.exc_info()))
+            return future
+
+    def fire_broadcast(self, msg):
+        for subscriber in self._broadcast_subscribers:
+            subscriber(msg)

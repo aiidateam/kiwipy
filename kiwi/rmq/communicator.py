@@ -1,5 +1,4 @@
 from functools import partial
-from past.builtins import basestring
 
 import kiwi
 import pika
@@ -52,7 +51,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
     RMQ_INITAILISED = 0b11
 
     def __init__(self, connector,
-                 exchange_name=defaults.EXCHANGE,
+                 exchange_name=defaults.TASK_EXCHANGE,
                  decoder=yaml.load,
                  encoder=yaml.dump):
         """
@@ -69,8 +68,8 @@ class RmqSubscriber(pubsub.ConnectionListener):
         self._response_encode = encoder
         self._channel = None
 
-        self._specific_receivers = {}
-        self._all_receivers = []
+        self._rpc_subscribers = {}
+        self._broadcast_subscribers = []
 
         self._reset_channel()
 
@@ -82,12 +81,15 @@ class RmqSubscriber(pubsub.ConnectionListener):
     def initialised_future(self):
         return self._initialising
 
-    def register_receiver(self, receiver, identifier=None):
-        if identifier is not None:
-            if not isinstance(identifier, basestring):
-                raise TypeError("Identifier must be a unicode or string")
-            self._specific_receivers[identifier] = receiver
-        self._all_receivers.append(receiver)
+    def add_rpc_subscriber(self, subscriber, identifier):
+        self._rpc_subscribers[identifier] = subscriber
+
+    def remove_rpc_subscriber(self, subscriber):
+        for identifier, sub in self._rpc_subscribers:
+            if sub is subscriber:
+                self._rpc_subscribers.pop(identifier)
+                return
+        raise ValueError("Unknown subscriber '{}'".format(subscriber))
 
     def on_connection_opened(self, connector, connection):
         self._open_channel(connection)
@@ -157,7 +159,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
     def _on_rpc(self, ch, method, props, body):
         identifier = method.routing_key[len('rpc.'):]
-        receiver = self._specific_receivers.get(identifier, None)
+        receiver = self._rpc_subscribers.get(identifier, None)
         if receiver is None:
             self._channel.basic_reject(method.delivery_tag)
         else:
@@ -167,7 +169,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
             msg = self._decode(body)
 
             try:
-                result = receiver.on_rpc_receive(msg)
+                result = receiver(msg)
                 if isinstance(result, kiwi.Future):
                     response = utils.pending_response()
                 else:
@@ -179,7 +181,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
     def _on_broadcast(self, ch, method, props, body):
         msg = self._decode(body)
-        for receiver in self._all_receivers:
+        for receiver in self._broadcast_subscribers:
             try:
                 receiver.on_broadcast_receive(msg)
             except BaseException:
@@ -194,30 +196,31 @@ class RmqSubscriber(pubsub.ConnectionListener):
         )
 
 
-class RmqCommunicator(kiwi.Communicator):
+class RmqCommunicator(kiwi.CommunicatorHelper):
     """
     A publisher and subscriber that implements the Communicator interface.
     """
 
     def __init__(self, connector,
-                 exchange_name=defaults.EXCHANGE,
+                 exchange_name=defaults.MESSAGE_EXCHANGE,
+                 task_exchange=defaults.TASK_EXCHANGE,
+                 task_queue=defaults.TASK_QUEUE,
                  encoder=yaml.dump,
                  decoder=yaml.load,
-                 testing_mode=False,
-                 task_queue=defaults.TASK_QUEUE):
-        self._publisher = RmqPublisher(
+                 testing_mode=False):
+        self._message_publisher = RmqPublisher(
             connector,
             exchange_name=exchange_name,
             encoder=encoder,
             decoder=decoder)
-        self._subscriber = RmqSubscriber(
+        self._message_subscriber = RmqSubscriber(
             connector,
             exchange_name,
             encoder=encoder,
             decoder=decoder)
         self._task_publisher = task.RmqTaskPublisher(
             connector,
-            exchange_name=exchange_name,
+            exchange_name=task_exchange,
             task_queue_name=task_queue,
             encoder=encoder,
             decoder=decoder,
@@ -225,7 +228,7 @@ class RmqCommunicator(kiwi.Communicator):
         )
         self._task_subscriber = task.RmqTaskSubscriber(
             connector,
-            exchange_name=exchange_name,
+            exchange_name=task_exchange,
             task_queue_name=task_queue,
             encoder=encoder,
             decoder=decoder,
@@ -233,27 +236,30 @@ class RmqCommunicator(kiwi.Communicator):
         )
 
     def close(self):
-        self._publisher.close()
-        self._subscriber.close()
+        self._message_publisher.close()
+        self._message_subscriber.close()
         self._task_publisher.close()
         self._task_subscriber.close()
 
     def initialised_future(self):
         return kiwi.gather(
-            self._publisher.initialised_future(),
-            self._subscriber.initialised_future(),
+            self._message_publisher.initialised_future(),
+            self._message_subscriber.initialised_future(),
             self._task_publisher.initialised_future(),
             self._task_subscriber.initialised_future()
         )
 
-    def register_receiver(self, receiver, identifier=None):
-        return self._subscriber.register_receiver(receiver, identifier)
+    def add_rpc_subscriber(self, subscriber, identifier):
+        self._message_subscriber.add_rpc_subscriber(subscriber, identifier)
 
-    def add_task_receiver(self, task_receiver):
-        self._task_subscriber.add_task_receiver(task_receiver)
+    def remove_rpc_subscriber(self, subscriber):
+        self._message_subscriber.remove_rpc_subscriber(subscriber)
 
-    def remove_task_receiver(self, task_receiver):
-        self._task_subscriber.remove_task_receiver(task_receiver)
+    def add_task_subscriber(self, subscriber):
+        self._task_subscriber.add_task_subscriber(subscriber)
+
+    def remove_task_subscriber(self, task_receiver):
+        self._task_subscriber.remove_task_subscriber(task_receiver)
 
     def rpc_send(self, recipient_id, msg):
         """
@@ -263,10 +269,10 @@ class RmqCommunicator(kiwi.Communicator):
         :param msg: The body of the message
         :return: A future corresponding to the outcome of the call
         """
-        return self._publisher.rpc_send(recipient_id, msg)
+        return self._message_publisher.rpc_send(recipient_id, msg)
 
     def broadcast_msg(self, msg, reply_to=None, correlation_id=None):
-        return self._publisher.broadcast_send(msg, reply_to, correlation_id)
+        return self._message_publisher.broadcast_send(msg, reply_to, correlation_id)
 
     def task_send(self, msg):
         return self._task_publisher.task_send(msg)
