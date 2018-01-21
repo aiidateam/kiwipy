@@ -1,7 +1,7 @@
 import tornado.concurrent
 from functools import partial
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError']
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
 
 
 class InvalidStateError(BaseException):
