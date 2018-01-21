@@ -1,3 +1,11 @@
-# plum
-A python workflow library that supports multithreading, and RabbitMQ as a message broker for starting/stopping/monitoring tasks.
+# kiwi
+
+
+Kiwi is a library that supports various types of messaging, so far we have:
+
+* RPC
+* Broadcast
+* Task queue messages
+
+
 
