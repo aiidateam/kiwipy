@@ -1,4 +1,4 @@
-import kiwi
+import kiwipy
 import unittest
 
 from .utils import CommunicatorTester
@@ -6,4 +6,4 @@ from .utils import CommunicatorTester
 
 class TestLocalCommunicator(CommunicatorTester, unittest.TestCase):
     def create_communicator(self):
-        return kiwi.LocalCommunicator()
+        return kiwipy.LocalCommunicator()

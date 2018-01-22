@@ -1,7 +1,7 @@
-# kiwi
+# kiwipy
 
 
-Kiwi is a library that supports various types of messaging, so far we have:
+kiwipy is a library that supports various types of messaging, so far we have:
 
 * RPC
 * Broadcast

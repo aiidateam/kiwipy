@@ -1,6 +1,6 @@
 from future.utils import with_metaclass
 import abc
-import kiwi
+import kiwipy
 import unittest
 
 
@@ -37,8 +37,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
             return RESPONSE
 
         self.communicator.add_rpc_subscriber(on_receive, 'rpc')
-        future = self.communicator.rpc_send('rpc', MESSAGE)
-        response = self.communicator.await_response(future)
+        response = self.communicator.rpc_send_and_wait('rpc', MESSAGE)
 
         self.assertEqual(messages[0], MESSAGE)
         self.assertEqual(response, RESPONSE)
@@ -54,11 +53,10 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
             return RESULT
 
         self.communicator.add_task_subscriber(on_task)
-        future = self.communicator.task_send(TASK)
-        response = self.communicator.await_response(future)
+        result = self.communicator.task_send_and_wait(TASK)
 
-        self.assertEquals(tasks[0], TASK)
-        self.assertEquals(response, RESULT)
+        self.assertEqual(tasks[0], TASK)
+        self.assertEqual(result, RESULT)
 
     def test_task_exception(self):
         TASK = 'The meaning?'
@@ -70,8 +68,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
             raise RuntimeError("I cannea do it Captain!")
 
         self.communicator.add_task_subscriber(on_task)
-        future = self.communicator.task_send(TASK)
-        with self.assertRaises(kiwi.RemoteException):
-            self.communicator.await_response(future)
+        with self.assertRaises(kiwipy.RemoteException):
+            self.communicator.task_send_and_wait(TASK)
 
         self.assertEqual(tasks[0], TASK)

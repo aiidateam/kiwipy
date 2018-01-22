@@ -1,12 +1,12 @@
 import unittest
 import uuid
 
-import kiwi
+import kiwipy
 from . import utils
 
 try:
     import pika
-    from kiwi import rmq
+    from kiwipy import rmq
 except ImportError:
     pika = None
 
@@ -34,8 +34,8 @@ class TestTaskControllerAndRunner(utils.TestCaseWithLoop):
         self.connector.connect()
         # Run the loop until until both are ready
         rmq.run_until_complete(
-            kiwi.gather(self.subscriber.initialised_future(),
-                        self.publisher.initialised_future()))
+            kiwipy.gather(self.subscriber.initialised_future(),
+                          self.publisher.initialised_future()))
 
     def tearDown(self):
         # Close the connector before calling super because it will

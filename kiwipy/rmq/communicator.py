@@ -1,11 +1,11 @@
 from functools import partial
 
-import kiwi
+import kiwipy
 import pika
 import yaml
 
 from . import defaults
-from . import task
+from . import tasks
 from . import messages
 from . import pubsub
 from . import utils
@@ -44,12 +44,7 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
         return message.future
 
 
-class RmqSubscriber(pubsub.ConnectionListener):
-    # Bitmasks for starting up the launcher
-    RPC_QUEUE_CREATED = 0b01
-    BROADCAST_QUEUE_CREATED = 0b10
-    RMQ_INITAILISED = 0b11
-
+class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
     def __init__(self, connector,
                  exchange_name=defaults.TASK_EXCHANGE,
                  decoder=yaml.load,
@@ -62,6 +57,8 @@ class RmqSubscriber(pubsub.ConnectionListener):
         :param exchange_name: The name of the exchange to use
         :param decoder:
         """
+        super(RmqSubscriber, self).__init__()
+
         self._connector = connector
         self._exchange_name = exchange_name
         self._decode = decoder
@@ -77,9 +74,6 @@ class RmqSubscriber(pubsub.ConnectionListener):
         connector.add_connection_listener(self)
         if connector.is_connected:
             self._open_channel(connector.connection())
-
-    def initialised_future(self):
-        return self._initialising
 
     def add_rpc_subscriber(self, subscriber, identifier):
         self._rpc_subscribers[identifier] = subscriber
@@ -103,19 +97,21 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
     # region RMQ methods
     def _reset_channel(self):
-        self._initialisation_state = 0
-        self._initialising = kiwi.Future()
+        self.reinitialising()
 
+    @utils.initialiser()
     def _open_channel(self, connection):
         """ We have a connection, now create a channel """
         self._connector.open_channel(self._on_channel_open)
 
+    @utils.initialiser()
     def _on_channel_open(self, channel):
         """ We have a channel, now declare the exchange """
         self._channel = channel
         channel.exchange_declare(
             self._on_exchange_declareok, exchange=self._exchange_name, **EXCHANGE_PROPERTIES)
 
+    @utils.initialiser()
     def _on_exchange_declareok(self, unused_frame):
         """
         The exchange is up, now create an temporary, exclusive queue for us
@@ -126,6 +122,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
         # Broadcast queue
         self._channel.queue_declare(self._on_broadcast_queue_declareok, exclusive=True, auto_delete=True)
 
+    @utils.initialiser()
     def _on_rpc_queue_declareok(self, frame):
         """
         The queue as been declared, now bind it to the exchange using the
@@ -136,26 +133,23 @@ class RmqSubscriber(pubsub.ConnectionListener):
             partial(self._on_rpc_bindok, queue_name), queue_name, self._exchange_name,
             routing_key='rpc.*')
 
+    @utils.initialiser()
     def _on_rpc_bindok(self, queue_name, unused_frame):
         """ The queue has been bound, we can start consuming. """
         self._channel.basic_consume(self._on_rpc, queue=queue_name)
-        self._initialisation_state |= self.RPC_QUEUE_CREATED
-        if self._initialisation_state == self.RMQ_INITAILISED:
-            self._initialising.set_result(True)
 
+    @utils.initialiser()
     def _on_broadcast_queue_declareok(self, frame):
         queue_name = frame.method.queue
         self._channel.queue_bind(
             partial(self._on_broadcast_bindok, queue_name), queue_name, self._exchange_name,
             routing_key="broadcast")
 
+    @utils.initialiser()
     def _on_broadcast_bindok(self, queue_name, unused_frame):
         """ The queue has been bound, we can start consuming. """
         self._channel.basic_consume(self._on_broadcast, queue=queue_name)
-        self._initialisation_state |= self.BROADCAST_QUEUE_CREATED
-        if self._initialisation_state == self.RMQ_INITAILISED:
-            self._initialising.set_result(True)
-            # end region
+    # end region
 
     def _on_rpc(self, ch, method, props, body):
         identifier = method.routing_key[len('rpc.'):]
@@ -170,7 +164,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
             try:
                 result = receiver(msg)
-                if isinstance(result, kiwi.Future):
+                if isinstance(result, kiwipy.Future):
                     response = utils.pending_response()
                 else:
                     response = utils.result_response(result)
@@ -196,7 +190,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
         )
 
 
-class RmqCommunicator(kiwi.CommunicatorHelper):
+class RmqCommunicator(kiwipy.CommunicatorHelper):
     """
     A publisher and subscriber that implements the Communicator interface.
     """
@@ -220,7 +214,7 @@ class RmqCommunicator(kiwi.CommunicatorHelper):
             exchange_name,
             encoder=encoder,
             decoder=decoder)
-        self._task_publisher = task.RmqTaskPublisher(
+        self._task_publisher = tasks.RmqTaskPublisher(
             connector,
             exchange_name=task_exchange,
             task_queue_name=task_queue,
@@ -228,7 +222,7 @@ class RmqCommunicator(kiwi.CommunicatorHelper):
             decoder=decoder,
             testing_mode=testing_mode
         )
-        self._task_subscriber = task.RmqTaskSubscriber(
+        self._task_subscriber = tasks.RmqTaskSubscriber(
             connector,
             exchange_name=task_exchange,
             task_queue_name=task_queue,
@@ -244,7 +238,7 @@ class RmqCommunicator(kiwi.CommunicatorHelper):
         self._task_subscriber.close()
 
     def initialised_future(self):
-        return kiwi.gather(
+        return kiwipy.gather(
             self._message_publisher.initialised_future(),
             self._message_subscriber.initialised_future(),
             self._task_publisher.initialised_future(),

@@ -20,4 +20,4 @@ class NullHandler(logging.Handler):
         pass
 
 
-logging.getLogger("kiwi").addHandler(NullHandler())
+logging.getLogger("kiwipy").addHandler(NullHandler())

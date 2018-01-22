@@ -7,7 +7,7 @@ __license__ = "GPLv3 and MIT, see LICENSE file"
 __contributors__ = "Sebastiaan Huber"
 
 about = {}
-with open('kiwi/version.py') as f:
+with open('kiwipy/version.py') as f:
     exec (f.read(), about)
 
 setup(
@@ -41,6 +41,6 @@ setup(
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['backports.tempfile']
     },
-    packages=['kiwi'],
+    packages=['kiwipy'],
     test_suite='test'
 )

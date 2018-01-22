@@ -1,5 +1,5 @@
 from functools import partial
-import kiwi
+import kiwipy
 import pika
 import pika.exceptions
 import logging
@@ -34,7 +34,7 @@ class RmqConnector(object):
         self._loop = loop
         self._channels = []
 
-        self._event_helper = kiwi.EventHelper(ConnectionListener)
+        self._event_helper = kiwipy.EventHelper(ConnectionListener)
         self._stopping = False
 
     @property

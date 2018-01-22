@@ -4,7 +4,7 @@ import collections
 import functools
 from future.utils import with_metaclass
 import inspect
-import kiwi
+import kiwipy
 import pika
 import uuid
 import yaml
@@ -55,7 +55,7 @@ class RpcMessage(Message):
         self.recipient_id = recipient_id
         self.body = body
         self.correlation_id = str(uuid.uuid4())
-        self.future = kiwi.Future()
+        self.future = kiwipy.Future()
         self._publisher = None
 
     def send(self, publisher):
@@ -69,47 +69,13 @@ class RpcMessage(Message):
 
     def on_delivery_failed(self, publisher, reason):
         self.future.set_exception(
-            kiwi.DeliveryFailed("Message could not be delivered ({})".format(reason)))
+            kiwipy.DeliveryFailed("Message could not be delivered ({})".format(reason)))
 
     def on_response(self, done_future):
-        kiwi.copy_future(done_future, self.future)
+        kiwipy.copy_future(done_future, self.future)
 
 
-def initialiser():
-    def wrapper(wrapped):
-        @functools.wraps(wrapped)
-        def init_fn(self, *a, **kw):
-            if not self._in_init_method:
-                self._in_init_method = True
-                try:
-                    wrapped(self, *a, **kw)
-                except Exception:
-                    import sys
-                    self._initialising.set_exc_info(sys.exc_info())
-                else:
-                    self._initialised(wrapped)
-                finally:
-                    self._in_init_method = False
-            else:
-                wrapped(self, *a, **kw)
-
-        init_fn.__is_initailiser = True
-        return init_fn
-
-    return wrapper
-
-
-def get_num_initialisers(rmq_instance):
-    def is_initialiser(fn):
-        try:
-            return inspect.ismethod(fn) and fn.__is_initailiser
-        except AttributeError:
-            return False
-
-    return len(inspect.getmembers(rmq_instance, predicate=is_initialiser))
-
-
-class BaseConnectionWithExchange(pubsub.ConnectionListener):
+class BaseConnectionWithExchange(utils.InitialisationMixin, pubsub.ConnectionListener):
     """
     An RMQ connection with an exchange
     """
@@ -121,6 +87,8 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
     def __init__(self, connector,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None):
+        super(BaseConnectionWithExchange, self).__init__()
+
         if exchange_params is None:
             exchange_params = self.DEFAULT_EXCHANGE_PARAMS
 
@@ -128,16 +96,10 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
         self._exchange_name = exchange_name
         self._exchange_params = exchange_params
 
-        self._in_init_method = False
-        self._num_initialisers = get_num_initialisers(self)
-
         self._reset_channel()
         connector.add_connection_listener(self)
         if connector.is_connected:
             connector.open_channel(self.on_channel_open)
-
-    def initialised_future(self):
-        return self._initialising
 
     def on_connection_opened(self, connector, connection):
         connector.open_channel(self.on_channel_open)
@@ -162,9 +124,9 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
         self._channel = None
         self._num_initialised = 0
         self._initialisation_state = 0
-        self._initialising = kiwi.Future()
+        self._initialising = kiwipy.Future()
 
-    @initialiser()
+    @utils.initialiser()
     def on_channel_open(self, channel):
         self._channel = channel
         channel.add_on_close_callback(self._on_channel_close)
@@ -175,17 +137,13 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
     def _on_channel_close(self, channel, reply_code, reply_text):
         self._reset_channel()
 
-    @initialiser()
+    @utils.initialiser()
     def on_exchange_declareok(self, unused_frame):
         pass
 
-    def _initialised(self, fn):
-        self._num_initialised += 1
-        if self._num_initialised == self._num_initialisers:
-            self._initialising.set_result(True)
 
-
-class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
+class BasePublisherWithReplyQueue(
+    utils.InitialisationMixin, pubsub.ConnectionListener, Publisher):
     """
 
     """
@@ -200,6 +158,8 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
                  encoder=yaml.dump,
                  decoder=yaml.load,
                  confirm_deliveries=True):
+        super(BasePublisherWithReplyQueue, self).__init__()
+
         if exchange_params is None:
             exchange_params = self.DEFAULT_EXCHANGE_PARAMS
 
@@ -208,9 +168,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         self._encode = encoder
         self._response_decode = decoder
         self._confirm_deliveries = confirm_deliveries
-
-        self._in_init_method = False
-        self._num_initialisers = get_num_initialisers(self)
 
         self._queued_messages = []
         self._awaiting_response = {}
@@ -221,9 +178,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         connector.add_connection_listener(self)
         if connector.is_connected:
             connector.open_channel(self.on_channel_open)
-
-    def initialised_future(self):
-        return self._initialising
 
     def action_message(self, message):
         """
@@ -284,7 +238,7 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
             pass
         else:
             response = self._response_decode(body)
-            response_future = kiwi.Future()
+            response_future = kiwipy.Future()
             utils.response_to_future(response, response_future)
             if response_future.done():
                 self._awaiting_response.pop(correlation_id)
@@ -307,14 +261,16 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         """ Reset all channel specific members """
         self._channel = None
         self._reply_queue_name = None
-        self._num_initialised = 0
         self._num_published = 0
         if self._confirm_deliveries:
             self._sent_messages = deque()
-        self._initialising = kiwi.Future()
-        self._initialising.add_done_callback(lambda x: self._send_queued_messages())
 
-    @initialiser()
+        self.reinitialising()
+        # Send messages when ready
+        self.initialised_future().add_done_callback(
+            lambda x: self._send_queued_messages())
+
+    @utils.initialiser()
     def on_channel_open(self, channel):
         self._channel = channel
         channel.add_on_close_callback(self._on_channel_close)
@@ -331,11 +287,11 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
     def _on_channel_close(self, channel, reply_code, reply_text):
         self._reset_channel()
 
-    @initialiser()
+    @utils.initialiser()
     def on_exchange_declareok(self, frame):
         pass
 
-    @initialiser()
+    @utils.initialiser()
     def _on_queue_declareok(self, frame):
         self._reply_queue_name = frame.method.queue
         self._channel.basic_consume(
@@ -359,8 +315,3 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
 
 
                 # endregion
-
-    def _initialised(self, fn):
-        self._num_initialised += 1
-        if self._num_initialised == self._num_initialisers:
-            self._initialising.set_result(True)
