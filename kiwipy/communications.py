@@ -10,18 +10,25 @@ __all__ = ['Communicator', 'CommunicatorHelper',
 
 
 class RemoteException(Exception):
+    """ An exception occurred at the remote end of the call """
     pass
 
 
 class DeliveryFailed(Exception):
+    """ Failed to deliver a message """
     pass
 
 
 class TaskRejected(Exception):
+    """ A task was rejected at the remote end """
     pass
 
 
 class Communicator(with_metaclass(abc.ABCMeta)):
+    """
+    The interface for a communicator used to both send and receive various
+    types of message.
+    """
     @abc.abstractmethod
     def add_rpc_subscriber(self, receiver, identifier):
         pass

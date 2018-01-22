@@ -116,7 +116,6 @@ class BaseConnectionWithExchange(utils.InitialisationMixin, pubsub.ConnectionLis
             self._connector.close_channel(self.get_channel())
         self._connector = None
         self._channel = None
-        self._initialised_future = None
 
     # region RMQ communications
     def _reset_channel(self):
@@ -143,7 +142,7 @@ class BaseConnectionWithExchange(utils.InitialisationMixin, pubsub.ConnectionLis
 
 
 class BasePublisherWithReplyQueue(
-    utils.InitialisationMixin, pubsub.ConnectionListener, Publisher):
+        utils.InitialisationMixin, pubsub.ConnectionListener, Publisher):
     """
 
     """
