@@ -6,7 +6,7 @@ from .futures import *
 from .local import *
 from .utils import *
 from .version import *
-from .rmq import *
+from . import rmq
 
 __all__ = (futures.__all__ + communications.__all__ + version.__all__ + utils.__all__ + local.__all__ + [rmq])
 
