@@ -1,14 +1,14 @@
 import unittest
 import uuid
 
-import kiwi
+import kiwipy
 
 from . import utils
 from ..utils import CommunicatorTester
 
 try:
     import pika
-    from kiwi import rmq
+    from kiwipy import rmq
 except ImportError:
     pika = None
 
@@ -36,6 +36,3 @@ class TestCommunicator(CommunicatorTester, utils.TestCaseWithLoop):
     def destroy_communicator(self, communicator):
         communicator.close()
         self.connector.close()
-
-    def wait_for_message(self, future):
-        rmq.run_until_complete(future, self.loop)

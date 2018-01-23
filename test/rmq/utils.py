@@ -2,7 +2,7 @@ import unittest
 
 try:
     import pika
-    from kiwi import rmq
+    from kiwipy import rmq
 except ImportError:
     pika = None
 

@@ -10,18 +10,26 @@ __all__ = ['Communicator', 'CommunicatorHelper',
 
 
 class RemoteException(Exception):
+    """ An exception occurred at the remote end of the call """
     pass
 
 
 class DeliveryFailed(Exception):
+    """ Failed to deliver a message """
     pass
 
 
 class TaskRejected(Exception):
+    """ A task was rejected at the remote end """
     pass
 
 
 class Communicator(with_metaclass(abc.ABCMeta)):
+    """
+    The interface for a communicator used to both send and receive various
+    types of message.
+    """
+
     @abc.abstractmethod
     def add_rpc_subscriber(self, receiver, identifier):
         pass
@@ -36,6 +44,14 @@ class Communicator(with_metaclass(abc.ABCMeta)):
 
     @abc.abstractmethod
     def remove_task_subscriber(self, task_receiver):
+        pass
+
+    @abc.abstractmethod
+    def add_broadcast_subscriber(self, broadcast_subscriber):
+        pass
+
+    @abc.abstractmethod
+    def remove_broadcast_subscriber(self, broadcast_subscriber):
         pass
 
     @abc.abstractmethod
@@ -73,7 +89,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         return future.result()
 
     @abc.abstractmethod
-    def broadcast_msg(self, msg, reply_to=None, correlation_id=None):
+    def broadcast_send(self, msg, reply_to=None, correlation_id=None):
         pass
 
     @abc.abstractmethod
@@ -114,6 +130,12 @@ class CommunicatorHelper(Communicator):
         # TODO: Put exception guard and raise out own exception
         self._task_subscribers.remove(subscriber)
 
+    def add_broadcast_subscriber(self, broadcast_subscriber):
+        self._broadcast_subscribers.append(broadcast_subscriber)
+
+    def remove_broadcast_subscriber(self, broadcast_subscriber):
+        self._broadcast_subscribers.remove(broadcast_subscriber)
+
     def fire_task(self, msg):
         future = futures.Future()
 
@@ -151,3 +173,7 @@ class CommunicatorHelper(Communicator):
     def fire_broadcast(self, msg):
         for subscriber in self._broadcast_subscribers:
             subscriber(msg)
+        future = futures.Future()
+        future.set_result(True)
+        return future
+
