@@ -1,7 +1,7 @@
 
 
 
-version=`python -c 'import kiwi; print(kiwi.__version__)'`
+version=`python -c 'import kiwipy; print(kiwipy.__version__)'`
 tag="v${version}"
 relbranch="release-${version}"
 
