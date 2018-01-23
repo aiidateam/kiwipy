@@ -1,7 +1,15 @@
-from .communicator import *
-from .tasks import *
-from .loop import *
-from .pubsub import *
+try:
+    import pika
+except ImportError:
+    pika = None
 
-__all__ = (tasks.__all__ + loop.__all__ +
-           pubsub.__all__ + communicator.__all__)
+if pika:
+    # We have to have pika, otherwise disable
+
+    from .communicator import *
+    from .tasks import *
+    from .loops import *
+    from .pubsub import *
+
+    __all__ = (tasks.__all__ + loops.__all__ +
+               pubsub.__all__ + communicator.__all__)

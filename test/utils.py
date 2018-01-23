@@ -1,7 +1,6 @@
 from future.utils import with_metaclass
 import abc
 import kiwipy
-import unittest
 
 
 class CommunicatorTester(with_metaclass(abc.ABCMeta)):
@@ -72,3 +71,27 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
             self.communicator.task_send_and_wait(TASK)
 
         self.assertEqual(tasks[0], TASK)
+
+    def test_broadcast_send(self):
+        MSG = 'Shout it out loud!'
+
+        message1 = kiwipy.Future()
+        message2 = kiwipy.Future()
+
+        def on_broadcast_1(msg):
+            message1.set_result(msg)
+
+        def on_broadcast_2(msg):
+            message2.set_result(msg)
+
+        self.communicator.add_broadcast_subscriber(on_broadcast_1)
+        self.communicator.add_broadcast_subscriber(on_broadcast_2)
+
+        sent = self.communicator.broadcast_send(MSG)
+        # Wait fot the send and receive
+        self.communicator.await_response(sent)
+        self.communicator.await_response(kiwipy.gather(message1, message2))
+
+        self.assertEqual(message1.result(), MSG)
+        self.assertEqual(message2.result(), MSG)
+

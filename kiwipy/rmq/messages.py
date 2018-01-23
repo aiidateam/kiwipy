@@ -1,9 +1,6 @@
 import abc
-from collections import deque
-import collections
-import functools
+from collections import deque, namedtuple
 from future.utils import with_metaclass
-import inspect
 import kiwipy
 import pika
 import uuid
@@ -16,7 +13,19 @@ from . import utils
 
 class Publisher(with_metaclass(abc.ABCMeta)):
     @abc.abstractmethod
-    def publish_msg(self, body, routing_key, correlation_id):
+    def publish_msg(self, body, routing_key, correlation_id=None):
+        """
+        Publish a message with a routing key and optional correlation id
+
+        :param body: The body of the message
+        :param routing_key: The routing key
+        :type routing_key: str
+        :param correlation_id: The correlation id
+        :type correlation_id: str
+        :return: A future representing the delivery of the message if the
+            publisher has confirm deliveries enabled, otherwise None
+        :rtype: :class:`kiwi.Future` or NoneType
+        """
         pass
 
     @abc.abstractmethod
@@ -25,23 +34,15 @@ class Publisher(with_metaclass(abc.ABCMeta)):
 
 
 class Message(with_metaclass(abc.ABCMeta)):
+    @abc.abstractproperty
+    def future(self):
+        pass
+
     @abc.abstractmethod
     def send(self, publisher):
         """
+        Send the message using the supplied publisher
         :return:
-        """
-        pass
-
-    @abc.abstractmethod
-    def on_delivered(self, publisher):
-        pass
-
-    @abc.abstractmethod
-    def on_delivery_failed(self, publisher, reason):
-        """
-        The delivery of the message failed
-        :param reason: Text containing the error
-        :type reason: str
         """
         pass
 
@@ -55,24 +56,43 @@ class RpcMessage(Message):
         self.recipient_id = recipient_id
         self.body = body
         self.correlation_id = str(uuid.uuid4())
-        self.future = kiwipy.Future()
+        self._future = kiwipy.Future()
         self._publisher = None
+
+    @property
+    def future(self):
+        return self._future
 
     def send(self, publisher):
         self._publisher = publisher
-        routing_key = "rpc.{}".format(self.recipient_id)
-        publisher.publish_msg(self.body, routing_key, self.correlation_id)
+        routing_key = "{}.{}".format(defaults.RPC_TOPIC, self.recipient_id)
+        delivery_future = publisher.publish_msg(self.body, routing_key, self.correlation_id, mandatory=True)
+        self._publisher.await_response(self.correlation_id, self.on_response)
+        if delivery_future is not None:
+            delivery_future.add_done_callback(self.on_delivered)
         return self.future
 
-    def on_delivered(self, publisher):
-        self._publisher.await_response(self.correlation_id, self.on_response)
-
-    def on_delivery_failed(self, publisher, reason):
-        self.future.set_exception(
-            kiwipy.DeliveryFailed("Message could not be delivered ({})".format(reason)))
+    def on_delivered(self, future):
+        if future.exception():
+            kiwipy.copy_future(future, self.future)
 
     def on_response(self, done_future):
         kiwipy.copy_future(done_future, self.future)
+
+
+class BroadcastMessage(Message):
+    def __init__(self, body):
+        self.body = body
+        self._future = kiwipy.Future()
+
+    @property
+    def future(self):
+        return self._future
+
+    def send(self, publisher):
+        delivery_future = publisher.publish_msg(self.body, defaults.BROADCAST_TOPIC)
+        kiwipy.chain(delivery_future, self.future)
+        return self.future
 
 
 class BaseConnectionWithExchange(utils.InitialisationMixin, pubsub.ConnectionListener):
@@ -121,9 +141,7 @@ class BaseConnectionWithExchange(utils.InitialisationMixin, pubsub.ConnectionLis
     def _reset_channel(self):
         """ Reset all channel specific members """
         self._channel = None
-        self._num_initialised = 0
-        self._initialisation_state = 0
-        self._initialising = kiwipy.Future()
+        self.reinitialising()
 
     @utils.initialiser()
     def on_channel_open(self, channel):
@@ -141,8 +159,11 @@ class BaseConnectionWithExchange(utils.InitialisationMixin, pubsub.ConnectionLis
         pass
 
 
+DeliveryInfo = namedtuple('DeliveryInfo', ['tag', 'correlation_id', 'future'])
+
+
 class BasePublisherWithReplyQueue(
-        utils.InitialisationMixin, pubsub.ConnectionListener, Publisher):
+    utils.InitialisationMixin, pubsub.ConnectionListener, Publisher):
     """
 
     """
@@ -156,7 +177,8 @@ class BasePublisherWithReplyQueue(
                  exchange_params=None,
                  encoder=yaml.dump,
                  decoder=yaml.load,
-                 confirm_deliveries=True):
+                 confirm_deliveries=True,
+                 blocking_mode=True):
         super(BasePublisherWithReplyQueue, self).__init__()
 
         if exchange_params is None:
@@ -167,6 +189,7 @@ class BasePublisherWithReplyQueue(
         self._encode = encoder
         self._response_decode = decoder
         self._confirm_deliveries = confirm_deliveries
+        self._blocking_mode = blocking_mode
 
         self._queued_messages = []
         self._awaiting_response = {}
@@ -186,7 +209,7 @@ class BasePublisherWithReplyQueue(
         :return: A future corresponding to action
         :rtype: :class:`kiwi.Future`
         """
-        if self._initialising.done():
+        if self.initialised_future().done():
             self._send_message(message)
         else:
             self._queued_messages.append(message)
@@ -195,18 +218,46 @@ class BasePublisherWithReplyQueue(
     def await_response(self, correlation_id, callback):
         self._awaiting_response[correlation_id] = callback
 
-    def publish_msg(self, msg, routing_key, correlation_id):
-        self._channel.basic_publish(
-            exchange=self._exchange_name, routing_key=routing_key,
+    def publish_msg(self, msg, routing_key, correlation_id=None, mandatory=False):
+        return self.do_publish(
+            correlation_id,
+            exchange=self._exchange_name,
+            routing_key=routing_key,
             properties=pika.BasicProperties(
-                reply_to=self._reply_queue_name, correlation_id=correlation_id,
+                reply_to=self._reply_queue_name,
+                correlation_id=correlation_id,
                 delivery_mode=1,
                 content_type='text/json',
                 # expiration="600"
             ),
             body=self._encode(msg),
-            mandatory=True
+            mandatory=mandatory
         )
+
+    def do_publish(self, correlation_id, *args, **kwargs):
+        if self._confirm_deliveries and correlation_id is None:
+            # Give a temporary ID to be able to keep track of returned messages
+            correlation_id = str(uuid.uuid4())
+
+        try:
+            properties = kwargs['properties']
+        except KeyError:
+            properties = pika.BasicProperties()
+
+        properties.correlation_id = correlation_id
+
+        self._channel.basic_publish(*args, **kwargs)
+        delivery_future = None
+
+        if self._confirm_deliveries:
+            delivery_future = kiwipy.Future()
+            self._num_published += 1
+            self._delivery_info.append(DeliveryInfo(self._num_published, correlation_id, delivery_future))
+
+            if self._blocking_mode:
+                self._connector.ensure_completes(delivery_future)
+
+        return delivery_future
 
     def on_connection_opened(self, connector, connection):
         connector.open_channel(self.on_channel_open)
@@ -251,18 +302,21 @@ class BasePublisherWithReplyQueue(
         self._queued_messages = []
 
     def _send_message(self, message):
+        """
+        The central method through which all messages actually get sent
+        :param message: The message to send
+        :type message: :class:`Message`
+        """
         message.send(self)
-        self._num_published += 1
-        self._sent_messages.append((self._num_published, message))
 
     # region RMQ communications
     def _reset_channel(self):
         """ Reset all channel specific members """
         self._channel = None
         self._reply_queue_name = None
-        self._num_published = 0
         if self._confirm_deliveries:
-            self._sent_messages = deque()
+            self._num_published = 0
+            self._delivery_info = deque()
 
         self.reinitialising()
         # Send messages when ready
@@ -297,20 +351,19 @@ class BasePublisherWithReplyQueue(
             self._on_response, no_ack=True, queue=self._reply_queue_name)
 
     def _on_channel_return(self, channel, method, props, body):
-        self._returned_messages.add(props.correlation_id)
-        # After this we will get a delivery ack so there we deal with the failure
+        for delivery_info in self._delivery_info:
+            if delivery_info.correlation_id == props.correlation_id:
+                delivery_info.future.set_exception(
+                    kiwipy.DeliveryFailed("Channel returned the message: {}".format(method.reply_text)))
+                self._delivery_info.remove(delivery_info)
+                break
 
     def _on_delivery_confirmed(self, frame):
         # All messages up and and including this tag have been confirmed
         delivery_tag = frame.method.delivery_tag
 
-        while self._sent_messages and self._sent_messages[0][0] <= delivery_tag:
-            tag, message = self._sent_messages.popleft()
-            try:
-                self._returned_messages.remove(message.correlation_id)
-                message.on_delivery_failed(self, "Channel returned the message")
-            except KeyError:
-                message.on_delivered(self)
+        while self._delivery_info and self._delivery_info[0].tag <= delivery_tag:
+            self._delivery_info.popleft().future.set_result(True)
 
 
-                # endregion
+            # endregion

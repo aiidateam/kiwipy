@@ -36,6 +36,3 @@ class TestCommunicator(CommunicatorTester, utils.TestCaseWithLoop):
     def destroy_communicator(self, communicator):
         communicator.close()
         self.connector.close()
-
-    def wait_for_message(self, future):
-        rmq.run_until_complete(future, self.loop)

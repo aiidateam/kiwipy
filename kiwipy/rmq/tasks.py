@@ -21,19 +21,25 @@ class TaskMessage(messages.Message):
         super(TaskMessage, self).__init__()
         self.correlation_id = correlation_id if correlation_id is not None else str(uuid.uuid4())
         self.body = body
-        self.future = kiwipy.Future()
+        self._future = kiwipy.Future()
+
+    @property
+    def future(self):
+        return self._future
 
     def send(self, publisher):
         if self.correlation_id is None:
             self.correlation_id = str(uuid.uuid4())
-        publisher.publish_msg(self.body, None, self.correlation_id)
+        delivery_future = publisher.publish_msg(self.body, None, self.correlation_id)
+        if delivery_future:
+            delivery_future.add_done_callback(self.on_delivered)
+
+        publisher.await_response(self.correlation_id, self.on_response)
         return self.future
 
-    def on_delivered(self, publisher):
-        publisher.await_response(self.correlation_id, self.on_response)
-
-    def on_delivery_failed(self, publisher, reason):
-        self.future.set_exception(RuntimeError("Message could not be delivered: {}".format(reason)))
+    def on_delivered(self, future):
+        if future.exception():
+            kiwipy.copy_future(future, self.future)
 
     def on_response(self, done_future):
         kiwipy.copy_future(done_future, self.future)
@@ -163,19 +169,22 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
 
     def __init__(self, connector,
                  task_queue_name=defaults.TASK_QUEUE,
-                 testing_mode=False,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
                  encoder=yaml.dump,
                  decoder=yaml.load,
-                 confirm_deliveries=True, ):
+                 confirm_deliveries=True,
+                 blocking_mode=True,
+                 testing_mode=False,
+                 ):
         super(RmqTaskPublisher, self).__init__(
             connector,
             exchange_name=exchange_name,
             exchange_params=exchange_params,
             encoder=encoder,
             decoder=decoder,
-            confirm_deliveries=confirm_deliveries
+            confirm_deliveries=confirm_deliveries,
+            blocking_mode=blocking_mode,
         )
         self._task_queue_name = task_queue_name
         self._testing_mode = testing_mode
@@ -206,16 +215,17 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
             _LOGGER.warn(
                 "Routing key '{}' passed but is ignored for all tasks".format(routing_key))
 
-        properties = pika.BasicProperties(
-            reply_to=self.get_reply_queue_name(),
-            delivery_mode=2,  # Persistent
-            correlation_id=correlation_id
-        )
-        self._channel.basic_publish(
+        return self.do_publish(
+            correlation_id,
             exchange=self.get_exchange_name(),
             routing_key=self._task_queue_name,
+            properties=pika.BasicProperties(
+                reply_to=self.get_reply_queue_name(),
+                delivery_mode=2,  # Persistent
+                correlation_id=correlation_id
+            ),
             body=self._encode(task),
-            properties=properties)
+        )
 
     def task_send(self, msg):
         message = TaskMessage(msg)

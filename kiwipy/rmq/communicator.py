@@ -1,6 +1,6 @@
 from functools import partial
-
 import kiwipy
+import logging
 import pika
 import yaml
 
@@ -12,13 +12,7 @@ from . import utils
 
 __all__ = ['RmqCommunicator']
 
-_RESULT_KEY = 'result'
-# This means that the intent has been actioned but not yet completed
-_ACTION_SCHEDULED = 'SCHEDULED'
-# This means that the intent has been completed
-_ACTION_DONE = 'DONE'
-# The action failed to be completed
-_ACTION_FAILED = 'ACTION_FAILED'
+_LOGGER = logging.getLogger(__name__)
 
 
 def declare_exchange(channel, name, done_callback):
@@ -40,6 +34,11 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
 
     def rpc_send(self, recipient_id, msg):
         message = messages.RpcMessage(recipient_id, body=msg)
+        self.action_message(message)
+        return message.future
+
+    def broadcast_send(self, msg):
+        message = messages.BroadcastMessage(body=msg)
         self.action_message(message)
         return message.future
 
@@ -84,6 +83,12 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
                 self._rpc_subscribers.pop(identifier)
                 return
         raise ValueError("Unknown subscriber '{}'".format(subscriber))
+
+    def add_broadcast_subscriber(self, subscriber):
+        self._broadcast_subscribers.append(subscriber)
+
+    def remove_broadcast_subscriber(self, subscriber):
+        self._broadcast_subscribers.remove(subscriber)
 
     def on_connection_opened(self, connector, connection):
         self._open_channel(connection)
@@ -131,7 +136,7 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
         queue_name = frame.method.queue
         self._channel.queue_bind(
             partial(self._on_rpc_bindok, queue_name), queue_name, self._exchange_name,
-            routing_key='rpc.*')
+            routing_key='{}.*'.format(defaults.RPC_TOPIC))
 
     @utils.initialiser()
     def _on_rpc_bindok(self, queue_name, unused_frame):
@@ -143,16 +148,17 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
         queue_name = frame.method.queue
         self._channel.queue_bind(
             partial(self._on_broadcast_bindok, queue_name), queue_name, self._exchange_name,
-            routing_key="broadcast")
+            routing_key=defaults.BROADCAST_TOPIC)
 
     @utils.initialiser()
     def _on_broadcast_bindok(self, queue_name, unused_frame):
         """ The queue has been bound, we can start consuming. """
         self._channel.basic_consume(self._on_broadcast, queue=queue_name)
+
     # end region
 
     def _on_rpc(self, ch, method, props, body):
-        identifier = method.routing_key[len('rpc.'):]
+        identifier = method.routing_key[len('{}.'.format(defaults.RPC_TOPIC)):]
         receiver = self._rpc_subscribers.get(identifier, None)
         if receiver is None:
             self._channel.basic_reject(method.delivery_tag)
@@ -177,10 +183,12 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
         msg = self._decode(body)
         for receiver in self._broadcast_subscribers:
             try:
-                receiver.on_broadcast_receive(msg)
+                receiver(msg)
             except BaseException:
-                # TODO: Log
-                pass
+                import sys
+                _LOGGER.error("Exception in broadcast receiver!\n"
+                              "msg: {}\n"
+                              "traceback:\n{}".format(msg, sys.exc_info()))
 
     def _send_response(self, ch, reply_to, correlation_id, response):
         ch.basic_publish(
@@ -190,7 +198,7 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
         )
 
 
-class RmqCommunicator(kiwipy.CommunicatorHelper):
+class RmqCommunicator(kiwipy.Communicator):
     """
     A publisher and subscriber that implements the Communicator interface.
     """
@@ -201,26 +209,27 @@ class RmqCommunicator(kiwipy.CommunicatorHelper):
                  task_queue=defaults.TASK_QUEUE,
                  encoder=yaml.dump,
                  decoder=yaml.load,
+                 blocking_mode=True,
                  testing_mode=False):
+        super(RmqCommunicator, self).__init__()
+
         self._connector = connector
 
-        self._message_publisher = RmqPublisher(
-            connector,
-            exchange_name=exchange_name,
-            encoder=encoder,
-            decoder=decoder)
+        # WARNING: Always have the corresponding subscriber BEFORE the publisher.
+        # This way they are ready and listening by the time the user has a chance
+        # to publish a message.  Otherwise you may get delivery failures (NO_ROUTE)
         self._message_subscriber = RmqSubscriber(
             connector,
             exchange_name,
             encoder=encoder,
-            decoder=decoder)
-        self._task_publisher = tasks.RmqTaskPublisher(
+            decoder=decoder
+        )
+        self._message_publisher = RmqPublisher(
             connector,
-            exchange_name=task_exchange,
-            task_queue_name=task_queue,
+            exchange_name=exchange_name,
             encoder=encoder,
             decoder=decoder,
-            testing_mode=testing_mode
+            blocking_mode=blocking_mode
         )
         self._task_subscriber = tasks.RmqTaskSubscriber(
             connector,
@@ -229,6 +238,15 @@ class RmqCommunicator(kiwipy.CommunicatorHelper):
             encoder=encoder,
             decoder=decoder,
             testing_mode=testing_mode,
+        )
+        self._task_publisher = tasks.RmqTaskPublisher(
+            connector,
+            exchange_name=task_exchange,
+            task_queue_name=task_queue,
+            encoder=encoder,
+            decoder=decoder,
+            blocking_mode=blocking_mode,
+            testing_mode=testing_mode
         )
 
     def close(self):
@@ -254,8 +272,14 @@ class RmqCommunicator(kiwipy.CommunicatorHelper):
     def add_task_subscriber(self, subscriber):
         self._task_subscriber.add_task_subscriber(subscriber)
 
-    def remove_task_subscriber(self, task_receiver):
-        self._task_subscriber.remove_task_subscriber(task_receiver)
+    def remove_task_subscriber(self, subscriber):
+        self._task_subscriber.remove_task_subscriber(subscriber)
+
+    def add_broadcast_subscriber(self, subscriber):
+        self._message_subscriber.add_broadcast_subscriber(subscriber)
+
+    def remove_broadcast_subscriber(self, subscriber):
+        self._message_subscriber.remove_broadcast_subscriber(subscriber)
 
     def rpc_send(self, recipient_id, msg):
         """
@@ -267,23 +291,11 @@ class RmqCommunicator(kiwipy.CommunicatorHelper):
         """
         return self._message_publisher.rpc_send(recipient_id, msg)
 
-    def broadcast_msg(self, msg, reply_to=None, correlation_id=None):
-        return self._message_publisher.broadcast_send(msg, reply_to, correlation_id)
+    def broadcast_send(self, msg, reply_to=None, correlation_id=None):
+        return self._message_publisher.broadcast_send(msg)
 
     def task_send(self, msg):
         return self._task_publisher.task_send(msg)
 
     def await_response(self, future):
-        loop = self._connector._loop
-
-        def stop():
-            loop.stop()
-        try:
-            future.add_done_callback(lambda _: loop.stop())
-            loop.start()
-        except RuntimeError:
-            future.remove_done_callback(stop)
-            raise RuntimeError("Cannot await a response inside the running event loop")
-        else:
-            return future.result()
-
+        return self._connector.run_until_complete(future)
