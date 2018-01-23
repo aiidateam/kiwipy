@@ -13,7 +13,7 @@ with open('kiwipy/version.py') as f:
 setup(
     name="kiwipy",
     version=about['__version__'],
-    description='A python remove communications library',
+    description='A python remote communications library',
     long_description=open('README.md').read(),
     url='https://github.com/muhrin/kiwipy.git',
     author='Martin Uhrin',
