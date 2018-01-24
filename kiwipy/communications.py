@@ -31,35 +31,35 @@ class Communicator(with_metaclass(abc.ABCMeta)):
     """
 
     @abc.abstractmethod
-    def add_rpc_subscriber(self, receiver, identifier):
+    def add_rpc_subscriber(self, subscriber, identifier):
         pass
 
     @abc.abstractmethod
-    def remove_rpc_subscriber(self, receiver):
+    def remove_rpc_subscriber(self, subscriber):
         pass
 
     @abc.abstractmethod
-    def add_task_subscriber(self, task_receiver):
+    def add_task_subscriber(self, subscriber):
         pass
 
     @abc.abstractmethod
-    def remove_task_subscriber(self, task_receiver):
+    def remove_task_subscriber(self, subscriber):
         pass
 
     @abc.abstractmethod
-    def add_broadcast_subscriber(self, broadcast_subscriber):
+    def add_broadcast_subscriber(self, subscriber):
         pass
 
     @abc.abstractmethod
-    def remove_broadcast_subscriber(self, broadcast_subscriber):
+    def remove_broadcast_subscriber(self, subscriber):
         pass
 
     @abc.abstractmethod
     def task_send(self, msg):
         """
         Send a task messages, this will be queued and picked up by a
-        worker receiver at some point in the future.  When finished
-        the task future will have a result.
+        worker at some point in the future.  The method returns a future
+        representing the outcome of the task.
 
         :param msg: The task message
         :return: A future corresponding to the outcome of the task
@@ -74,7 +74,8 @@ class Communicator(with_metaclass(abc.ABCMeta)):
     @abc.abstractmethod
     def rpc_send(self, recipient_id, msg):
         """
-        Initiate a remote procedure call on a recipient
+        Initiate a remote procedure call on a recipient.  This method
+        returns a futre representing the outcome of the call.
 
         :param recipient_id: The recipient identifier
         :param msg: The body of the message
@@ -89,7 +90,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         return future.result()
 
     @abc.abstractmethod
-    def broadcast_send(self, msg, reply_to=None, correlation_id=None):
+    def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         pass
 
     @abc.abstractmethod
@@ -170,9 +171,9 @@ class CommunicatorHelper(Communicator):
                 future.set_exception(RemoteException(sys.exc_info()))
             return future
 
-    def fire_broadcast(self, msg):
+    def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):
         for subscriber in self._broadcast_subscribers:
-            subscriber(msg)
+            subscriber(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
         future = futures.Future()
         future.set_result(True)
         return future

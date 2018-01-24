@@ -73,25 +73,90 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         self.assertEqual(tasks[0], TASK)
 
     def test_broadcast_send(self):
-        MSG = 'Shout it out loud!'
+        SUBJECT = 'yo momma'
+        BODY = 'so fat'
+        SENDER_ID = 'me'
+        FULL_MSG = {'body': BODY, 'subject': SUBJECT, 'sender': SENDER_ID, 'correlation_id': None}
 
         message1 = kiwipy.Future()
         message2 = kiwipy.Future()
 
-        def on_broadcast_1(msg):
+        def on_broadcast_1(*args, **msg):
             message1.set_result(msg)
 
-        def on_broadcast_2(msg):
+        def on_broadcast_2(*args, **msg):
             message2.set_result(msg)
 
         self.communicator.add_broadcast_subscriber(on_broadcast_1)
         self.communicator.add_broadcast_subscriber(on_broadcast_2)
 
-        sent = self.communicator.broadcast_send(MSG)
+        sent = self.communicator.broadcast_send(**FULL_MSG)
         # Wait fot the send and receive
         self.communicator.await_response(sent)
         self.communicator.await_response(kiwipy.gather(message1, message2))
 
-        self.assertEqual(message1.result(), MSG)
-        self.assertEqual(message2.result(), MSG)
+        self.assertDictEqual(message1.result(), FULL_MSG)
+        self.assertDictEqual(message2.result(), FULL_MSG)
 
+    def test_broadcast_filter_subject(self):
+        subjects = []
+
+        def on_broadcast_1(body, sender=None, subject=None, correlation_id=None):
+            subjects.append(subject)
+
+        self.communicator.add_broadcast_subscriber(
+            kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
+
+        for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
+            sent = self.communicator.broadcast_send(None, subject=subject)
+            self.communicator.await_response(sent)
+
+        # self.communicator.await_response(message1)
+
+        self.assertEqual(len(subjects), 2)
+        self.assertListEqual(['purchase.car', 'purchase.piano'], subjects)
+
+    def test_broadcast_filter_sender(self):
+        senders = []
+
+        def on_broadcast_1(body, sender=None, subject=None, correlation_id=None):
+            senders.append(sender)
+
+        self.communicator.add_broadcast_subscriber(
+            kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
+
+        for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
+            sent = self.communicator.broadcast_send(None, sender=sender)
+            self.communicator.await_response(sent)
+
+        self.assertEqual(len(senders), 2)
+        self.assertListEqual(['bob.jones', 'alice.jones'], senders)
+
+    def test_broadcast_filter_sender_and_subject(self):
+        senders_and_subects = []
+
+        def on_broadcast_1(body, sender=None, subject=None, correlation_id=None):
+            senders_and_subects.append((sender, subject))
+
+        filtered = kiwipy.BroadcastFilter(on_broadcast_1)
+        filtered.add_sender_filter("*.jones")
+        filtered.add_subject_filter("purchase.*")
+        self.communicator.add_broadcast_subscriber(filtered)
+
+        for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
+            for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
+                sent = self.communicator.broadcast_send(None, sender=sender, subject=subject)
+                self.communicator.await_response(sent)
+
+        # self.communicator.await_response(message1)
+
+        self.assertEqual(len(senders_and_subects), 4)
+        self.assertListEqual(
+            [
+                ('bob.jones', 'purchase.car'),
+                ('bob.jones', 'purchase.piano'),
+                ('alice.jones', 'purchase.car'),
+                ('alice.jones', 'purchase.piano'),
+            ],
+            senders_and_subects
+        )

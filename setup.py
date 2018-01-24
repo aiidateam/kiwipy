@@ -25,7 +25,7 @@ setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
     ],
-    keywords='communication messaging',
+    keywords='communication messaging rpc broadcast',
     # Abstract dependencies.  Concrete versions are listed in
     # requirements.txt
     # See https://caremad.io/2013/07/setup-vs-requirement/ for an explanation
@@ -38,6 +38,7 @@ setup(
     ],
     extras_require={
         'rmq': ['pika', 'tornado', 'pyyaml'],
+        ':python_version<"3.5"': ['typing'],
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['backports.tempfile']
     },
