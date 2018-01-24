@@ -73,25 +73,27 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         self.assertEqual(tasks[0], TASK)
 
     def test_broadcast_send(self):
-        MSG = 'Shout it out loud!'
+        SUBJECT = 'yo momma'
+        BODY = 'so fat'
+        SENDER_ID = 'me'
+        FULL_MSG = {'body': BODY, 'subject': SUBJECT, 'sender_id': SENDER_ID, 'correlation_id': None}
 
         message1 = kiwipy.Future()
         message2 = kiwipy.Future()
 
-        def on_broadcast_1(msg):
+        def on_broadcast_1(*args, **msg):
             message1.set_result(msg)
 
-        def on_broadcast_2(msg):
+        def on_broadcast_2(*args, **msg):
             message2.set_result(msg)
 
         self.communicator.add_broadcast_subscriber(on_broadcast_1)
         self.communicator.add_broadcast_subscriber(on_broadcast_2)
 
-        sent = self.communicator.broadcast_send(MSG)
+        sent = self.communicator.broadcast_send(**FULL_MSG)
         # Wait fot the send and receive
         self.communicator.await_response(sent)
         self.communicator.await_response(kiwipy.gather(message1, message2))
 
-        self.assertEqual(message1.result(), MSG)
-        self.assertEqual(message2.result(), MSG)
-
+        self.assertDictEqual(message1.result(), FULL_MSG)
+        self.assertDictEqual(message2.result(), FULL_MSG)

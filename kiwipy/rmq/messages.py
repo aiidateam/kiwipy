@@ -81,8 +81,18 @@ class RpcMessage(Message):
 
 
 class BroadcastMessage(Message):
-    def __init__(self, body):
-        self.body = body
+    BODY = 'body'
+    SENDER_ID = 'sender_id'
+    SUBJECT = 'subject'
+    CORRELATION_ID = 'correlation_id'
+
+    def __init__(self, body, sender_id=None, subject=None, correlation_id=None):
+        self.message = {
+            BroadcastMessage.BODY: body,
+            BroadcastMessage.SENDER_ID: sender_id,
+            BroadcastMessage.SUBJECT: subject,
+            BroadcastMessage.CORRELATION_ID: correlation_id,
+        }
         self._future = kiwipy.Future()
 
     @property
@@ -90,7 +100,7 @@ class BroadcastMessage(Message):
         return self._future
 
     def send(self, publisher):
-        delivery_future = publisher.publish_msg(self.body, defaults.BROADCAST_TOPIC)
+        delivery_future = publisher.publish_msg(self.message, defaults.BROADCAST_TOPIC)
         kiwipy.chain(delivery_future, self.future)
         return self.future
 
