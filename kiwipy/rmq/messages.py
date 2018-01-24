@@ -82,14 +82,14 @@ class RpcMessage(Message):
 
 class BroadcastMessage(Message):
     BODY = 'body'
-    SENDER_ID = 'sender_id'
+    SENDER = 'sender'
     SUBJECT = 'subject'
     CORRELATION_ID = 'correlation_id'
 
-    def __init__(self, body, sender_id=None, subject=None, correlation_id=None):
+    def __init__(self, body, sender=None, subject=None, correlation_id=None):
         self.message = {
             BroadcastMessage.BODY: body,
-            BroadcastMessage.SENDER_ID: sender_id,
+            BroadcastMessage.SENDER: sender,
             BroadcastMessage.SUBJECT: subject,
             BroadcastMessage.CORRELATION_ID: correlation_id,
         }

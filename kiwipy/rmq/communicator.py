@@ -37,10 +37,10 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
         self.action_message(message)
         return message.future
 
-    def broadcast_send(self, msg, sender_id=None, subject=None, correlation_id=None):
+    def broadcast_send(self, msg, sender=None, subject=None, correlation_id=None):
         message = messages.BroadcastMessage(
             body=msg,
-            sender_id=sender_id,
+            sender=sender,
             subject=subject,
             correlation_id=correlation_id)
         self.action_message(message)
@@ -295,8 +295,8 @@ class RmqCommunicator(kiwipy.Communicator):
         """
         return self._message_publisher.rpc_send(recipient_id, msg)
 
-    def broadcast_send(self, body, sender_id=None, subject=None, correlation_id=None):
-        return self._message_publisher.broadcast_send(body, sender_id, subject, correlation_id)
+    def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
+        return self._message_publisher.broadcast_send(body, sender, subject, correlation_id)
 
     def task_send(self, msg):
         return self._task_publisher.task_send(msg)

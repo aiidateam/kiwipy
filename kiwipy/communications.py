@@ -90,7 +90,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         return future.result()
 
     @abc.abstractmethod
-    def broadcast_send(self, body, sender_id=None, subject=None, correlation_id=None):
+    def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         pass
 
     @abc.abstractmethod
@@ -171,9 +171,9 @@ class CommunicatorHelper(Communicator):
                 future.set_exception(RemoteException(sys.exc_info()))
             return future
 
-    def fire_broadcast(self, body, sender_id=None, subject=None, correlation_id=None):
+    def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):
         for subscriber in self._broadcast_subscribers:
-            subscriber(body=body, sender_id=sender_id, subject=subject, correlation_id=correlation_id)
+            subscriber(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
         future = futures.Future()
         future.set_result(True)
         return future
