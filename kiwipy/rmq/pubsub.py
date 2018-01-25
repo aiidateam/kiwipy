@@ -63,7 +63,7 @@ class RmqConnector(object):
                  loop=None):
         self._url = amqp_url
         self._reconnect_timeout = auto_reconnect_timeout
-        self._loop = loop
+        self._loop = loop if loop is not None else loops.new_event_loop()
         self._channels = []
 
         self._event_helper = kiwipy.EventHelper(ConnectionListener)
@@ -82,11 +82,13 @@ class RmqConnector(object):
         behavior of this adapter.
         """
         LOGGER.info('Connecting to %s', self._url)
-        pika.TornadoConnection(pika.URLParameters(self._url),
-                               on_open_callback=self._on_connection_open,
-                               on_close_callback=self._on_connection_closed,
-                               stop_ioloop_on_close=False,
-                               custom_ioloop=self._loop)
+        if self._connection is None:
+            self._connection = pika.TornadoConnection(
+                pika.URLParameters(self._url),
+                on_open_callback=self._on_connection_open,
+                on_close_callback=self._on_connection_closed,
+                stop_ioloop_on_close=False,
+                custom_ioloop=self._loop)
 
     def close(self):
         """Stop the example by closing the channel and connection. We
@@ -167,6 +169,7 @@ class RmqConnector(object):
 
         """
         self._channels = []
+        self._connection = None
 
         reconnecting = False
         if not self._stopping and self._reconnect_timeout is not None:
@@ -223,3 +226,4 @@ class RmqConnector(object):
         if self._connection is not None:
             LOGGER.info('Closing connection')
             self._connection.close()
+            self._connection = None

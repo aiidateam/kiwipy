@@ -75,7 +75,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
     def rpc_send(self, recipient_id, msg):
         """
         Initiate a remote procedure call on a recipient.  This method
-        returns a futre representing the outcome of the call.
+        returns a future representing the outcome of the call.
 
         :param recipient_id: The recipient identifier
         :param msg: The body of the message

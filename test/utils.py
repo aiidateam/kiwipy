@@ -22,9 +22,6 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
     def destroy_communicator(self, communicator):
         pass
 
-    def wait_for_message(self, future):
-        return future.result()
-
     def test_rcp_send_receive(self):
         MESSAGE = "sup yo'"
         RESPONSE = "nuthin bra"

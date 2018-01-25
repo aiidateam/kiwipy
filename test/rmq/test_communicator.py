@@ -27,10 +27,6 @@ class TestCommunicator(CommunicatorTester, utils.TestCaseWithLoop):
             testing_mode=True
         )
 
-        self.connector.connect()
-        # Run the loop until until both are ready
-        rmq.run_until_complete(communicator.initialised_future())
-
         return communicator
 
     def destroy_communicator(self, communicator):

@@ -2,6 +2,7 @@ import abc
 from collections import deque, namedtuple
 from future.utils import with_metaclass
 import kiwipy
+from past.builtins import basestring
 import pika
 import uuid
 import yaml
@@ -13,7 +14,7 @@ from . import utils
 
 class Publisher(with_metaclass(abc.ABCMeta)):
     @abc.abstractmethod
-    def publish_msg(self, body, routing_key, correlation_id=None):
+    def publish_msg(self, body, routing_key, correlation_id=None, ttl=None):
         """
         Publish a message with a routing key and optional correlation id
 
@@ -66,7 +67,12 @@ class RpcMessage(Message):
     def send(self, publisher):
         self._publisher = publisher
         routing_key = "{}.{}".format(defaults.RPC_TOPIC, self.recipient_id)
-        delivery_future = publisher.publish_msg(self.body, routing_key, self.correlation_id, mandatory=True)
+        delivery_future = publisher.publish_msg(
+            self.body,
+            routing_key,
+            self.correlation_id,
+            ttl=3600,
+            mandatory=False)
         self._publisher.await_response(self.correlation_id, self.on_response)
         if delivery_future is not None:
             delivery_future.add_done_callback(self.on_delivered)
@@ -213,14 +219,17 @@ class BasePublisherWithReplyQueue(
 
     def action_message(self, message):
         """
-        Execute an action that involves communication.
+        Execute a message that involves communication.  This could mean that the
+        message gets queued first and then sent as soon as the connection is open.
+        In any case the method returns a future for the message.
 
         :param message: The message to execute
         :return: A future corresponding to action
         :rtype: :class:`kiwi.Future`
         """
+        self._connector.connect()
         if self.initialised_future().done():
-            self._send_message(message)
+            message.send(self)
         else:
             self._queued_messages.append(message)
         return message.future
@@ -228,7 +237,11 @@ class BasePublisherWithReplyQueue(
     def await_response(self, correlation_id, callback):
         self._awaiting_response[correlation_id] = callback
 
-    def publish_msg(self, msg, routing_key, correlation_id=None, mandatory=False):
+    def publish_msg(self, msg, routing_key, correlation_id=None, mandatory=False, ttl=None):
+        # pika (and AMQP) expects the ttl to be a string
+        if ttl is not None and not isinstance(ttl, basestring):
+            ttl = str(ttl)
+
         return self.do_publish(
             correlation_id,
             exchange=self._exchange_name,
@@ -238,7 +251,7 @@ class BasePublisherWithReplyQueue(
                 correlation_id=correlation_id,
                 delivery_mode=1,
                 content_type='text/json',
-                # expiration="600"
+                expiration=ttl,
             ),
             body=self._encode(msg),
             mandatory=mandatory
@@ -307,17 +320,9 @@ class BasePublisherWithReplyQueue(
                 pass  # Keep waiting
 
     def _send_queued_messages(self):
-        for msg in self._queued_messages:
-            self._send_message(msg)
+        for message in self._queued_messages:
+            message.send(self)
         self._queued_messages = []
-
-    def _send_message(self, message):
-        """
-        The central method through which all messages actually get sent
-        :param message: The message to send
-        :type message: :class:`Message`
-        """
-        message.send(self)
 
     # region RMQ communications
     def _reset_channel(self):
@@ -329,9 +334,15 @@ class BasePublisherWithReplyQueue(
             self._delivery_info = deque()
 
         self.reinitialising()
+
+        def do_send(x):
+            self._send_queued_messages()
+
         # Send messages when ready
+        # self.initialised_future().add_done_callback(
+        #     lambda x: self._send_queued_messages())
         self.initialised_future().add_done_callback(
-            lambda x: self._send_queued_messages())
+            do_send)
 
     @utils.initialiser()
     def on_channel_open(self, channel):

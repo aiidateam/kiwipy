@@ -77,9 +77,14 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
         connector.add_connection_listener(self)
         if connector.is_connected:
             self._open_channel(connector.connection())
+        else:
+            connector.connect()
 
     def add_rpc_subscriber(self, subscriber, identifier):
         self._rpc_subscribers[identifier] = subscriber
+        # Need to make sure we're initialised so that we are up
+        # and listening for RPC calls
+        self._connector.ensure_completes(self.initialised_future())
 
     def remove_rpc_subscriber(self, subscriber):
         for identifier, sub in self._rpc_subscribers:
@@ -90,6 +95,9 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
 
     def add_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.append(subscriber)
+        # Need to make sure we're initialised so that we are up
+        # and listening for broadcast calls
+        self._connector.ensure_completes(self.initialised_future())
 
     def remove_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.remove(subscriber)

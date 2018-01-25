@@ -80,6 +80,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
     def add_task_subscriber(self, subscriber):
         self._subscribers.append(subscriber)
+        # Need to make sure we're initialised so that we are up
+        # and listening for tasks
+        self._connector.ensure_completes(self.initialised_future())
 
     def remove_task_subscriber(self, subscriber):
         self._subscribers.remove(subscriber)
