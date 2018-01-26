@@ -87,53 +87,72 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         self.communicator.add_broadcast_subscriber(on_broadcast_1)
         self.communicator.add_broadcast_subscriber(on_broadcast_2)
 
-        sent = self.communicator.broadcast_send(**FULL_MSG)
+        self.communicator.broadcast_send(**FULL_MSG)
         # Wait fot the send and receive
-        self.communicator.await_response(sent)
-        self.communicator.await_response(kiwipy.gather(message1, message2))
+        self.communicator.await(kiwipy.gather(message1, message2))
 
         self.assertDictEqual(message1.result(), FULL_MSG)
         self.assertDictEqual(message2.result(), FULL_MSG)
 
     def test_broadcast_filter_subject(self):
         subjects = []
+        EXPECTED_SUBJECTS = ['purchase.car', 'purchase.piano']
+
+        done = kiwipy.Future()
 
         def on_broadcast_1(body, sender=None, subject=None, correlation_id=None):
             subjects.append(subject)
+            if len(subjects) == len(EXPECTED_SUBJECTS):
+                done.set_result(True)
 
         self.communicator.add_broadcast_subscriber(
             kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
 
         for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
-            sent = self.communicator.broadcast_send(None, subject=subject)
-            self.communicator.await_response(sent)
+            self.communicator.broadcast_send(None, subject=subject)
 
-        # self.communicator.await_response(message1)
+        self.communicator.await(done)
 
         self.assertEqual(len(subjects), 2)
-        self.assertListEqual(['purchase.car', 'purchase.piano'], subjects)
+        self.assertListEqual(EXPECTED_SUBJECTS, subjects)
 
     def test_broadcast_filter_sender(self):
+        EXPECTED_SENDERS = ['bob.jones', 'alice.jones']
         senders = []
+
+        done = kiwipy.Future()
 
         def on_broadcast_1(body, sender=None, subject=None, correlation_id=None):
             senders.append(sender)
+            if len(senders) == len(EXPECTED_SENDERS):
+                done.set_result(True)
 
         self.communicator.add_broadcast_subscriber(
             kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
 
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
-            sent = self.communicator.broadcast_send(None, sender=sender)
-            self.communicator.await_response(sent)
+            self.communicator.broadcast_send(None, sender=sender)
+
+        self.communicator.await(done)
 
         self.assertEqual(len(senders), 2)
-        self.assertListEqual(['bob.jones', 'alice.jones'], senders)
+        self.assertListEqual(EXPECTED_SENDERS, senders)
 
     def test_broadcast_filter_sender_and_subject(self):
-        senders_and_subects = []
+        senders_and_subects = set()
+        EXPECTED = {
+            ('bob.jones', 'purchase.car'),
+            ('bob.jones', 'purchase.piano'),
+            ('alice.jones', 'purchase.car'),
+            ('alice.jones', 'purchase.piano'),
+        }
+
+        done = kiwipy.Future()
 
         def on_broadcast_1(body, sender=None, subject=None, correlation_id=None):
-            senders_and_subects.append((sender, subject))
+            senders_and_subects.add((sender, subject))
+            if len(senders_and_subects) == len(EXPECTED):
+                done.set_result(True)
 
         filtered = kiwipy.BroadcastFilter(on_broadcast_1)
         filtered.add_sender_filter("*.jones")
@@ -142,18 +161,9 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
 
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
             for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
-                sent = self.communicator.broadcast_send(None, sender=sender, subject=subject)
-                self.communicator.await_response(sent)
+                self.communicator.broadcast_send(None, sender=sender, subject=subject)
 
-        # self.communicator.await_response(message1)
+        self.communicator.await(done)
 
         self.assertEqual(len(senders_and_subects), 4)
-        self.assertListEqual(
-            [
-                ('bob.jones', 'purchase.car'),
-                ('bob.jones', 'purchase.piano'),
-                ('alice.jones', 'purchase.car'),
-                ('alice.jones', 'purchase.piano'),
-            ],
-            senders_and_subects
-        )
+        self.assertSetEqual(EXPECTED, senders_and_subects)

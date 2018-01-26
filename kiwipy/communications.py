@@ -68,7 +68,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
 
     def task_send_and_wait(self, msg):
         future = self.task_send(msg)
-        self.await_response(future)
+        self.await(future)
         return future.result()
 
     @abc.abstractmethod
@@ -86,7 +86,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
 
     def rpc_send_and_wait(self, recipient_id, msg):
         future = self.rpc_send(recipient_id, msg)
-        self.await_response(future)
+        self.await(future)
         return future.result()
 
     @abc.abstractmethod
@@ -94,7 +94,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         pass
 
     @abc.abstractmethod
-    def await_response(self, future):
+    def await(self, future):
         pass
 
 
