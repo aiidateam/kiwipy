@@ -220,7 +220,6 @@ class RmqCommunicator(kiwipy.Communicator):
                  task_queue=defaults.TASK_QUEUE,
                  encoder=yaml.dump,
                  decoder=yaml.load,
-                 blocking_mode=True,
                  testing_mode=False):
         """
 
@@ -240,6 +239,9 @@ class RmqCommunicator(kiwipy.Communicator):
 
         self._connector = connector
 
+        # Create a shared publish connection
+        self._publish_connection = pika.BlockingConnection(connector.get_connection_params())
+
         self._message_subscriber = RmqSubscriber(
             connector,
             exchange_name,
@@ -251,6 +253,7 @@ class RmqCommunicator(kiwipy.Communicator):
             exchange_name=exchange_name,
             encoder=encoder,
             decoder=decoder,
+            publish_connection=self._publish_connection
         )
         self._task_subscriber = tasks.RmqTaskSubscriber(
             connector,
@@ -266,7 +269,8 @@ class RmqCommunicator(kiwipy.Communicator):
             task_queue_name=task_queue,
             encoder=encoder,
             decoder=decoder,
-            testing_mode=testing_mode
+            testing_mode=testing_mode,
+            publish_connection=self._publish_connection
         )
 
     def close(self):
@@ -274,6 +278,7 @@ class RmqCommunicator(kiwipy.Communicator):
         self._message_subscriber.close()
         self._task_publisher.close()
         self._task_subscriber.close()
+        self._publish_connection.close()
 
     def initialised_future(self):
         return kiwipy.gather(
@@ -319,6 +324,3 @@ class RmqCommunicator(kiwipy.Communicator):
 
     def await(self, future):
         return self._connector.run_until_complete(future)
-
-    def start(self):
-        pass

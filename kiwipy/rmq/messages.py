@@ -193,7 +193,20 @@ class BasePublisherWithReplyQueue(
                  exchange_params=None,
                  encoder=yaml.dump,
                  decoder=yaml.load,
-                 confirm_deliveries=True):
+                 confirm_deliveries=True,
+                 publish_connection=None):
+        """
+
+        :param connector:
+        :param exchange_name:
+        :param exchange_params:
+        :param encoder:
+        :param decoder:
+        :param confirm_deliveries:
+        :param publish_connection: A blocking connection used for publishing
+            messages to the exchange
+        :type publish_connection: :class:`pika.BlockingConnection`
+        """
         super(BasePublisherWithReplyQueue, self).__init__()
 
         if exchange_params is None:
@@ -211,8 +224,9 @@ class BasePublisherWithReplyQueue(
 
         self._reply_queue_name = "{}-{}".format(self._exchange_name, str(uuid.uuid4()))
 
-        self._publish_channel = self.create_publish_channel(
-            pika.BlockingConnection( connector.get_connection_params()))
+        if publish_connection is None:
+            publish_connection = pika.BlockingConnection(connector.get_connection_params())
+        self._publish_channel = self.create_publish_channel(publish_connection)
 
         self._reset_channel()
         self._connector = connector

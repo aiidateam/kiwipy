@@ -172,7 +172,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                  decoder=yaml.load,
                  confirm_deliveries=True,
                  testing_mode=False,
-                 ):
+                 publish_connection=None):
         super(RmqTaskPublisher, self).__init__(
             connector,
             exchange_name=exchange_name,
@@ -180,7 +180,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
             encoder=encoder,
             decoder=decoder,
             confirm_deliveries=confirm_deliveries,
-        )
+            publish_connection=publish_connection)
         self._task_queue_name = task_queue_name
         self._testing_mode = testing_mode
 
