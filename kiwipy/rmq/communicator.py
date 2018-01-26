@@ -44,7 +44,6 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
             subject=subject,
             correlation_id=correlation_id)
         self.action_message(message)
-        return message.future
 
 
 class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
@@ -223,6 +222,20 @@ class RmqCommunicator(kiwipy.Communicator):
                  decoder=yaml.load,
                  blocking_mode=True,
                  testing_mode=False):
+        """
+
+        :param connector: The RMQ connector object
+        :param exchange_name: The name of the RMQ message exchange to use
+        :type exchange_name: str
+        :param task_exchange: The name of the RMQ task exchange to use
+        :type task_exchange: str
+        :param task_queue: The name of the task queue to use
+        :type task_queue: str
+        :param encoder: The encoder to call for encoding a message
+        :param decoder: The decoder to call for decoding a message
+        :param testing_mode: Run in testing mode: all queues and exchanges
+            will be temporary
+        """
         super(RmqCommunicator, self).__init__()
 
         self._connector = connector
@@ -238,7 +251,6 @@ class RmqCommunicator(kiwipy.Communicator):
             exchange_name=exchange_name,
             encoder=encoder,
             decoder=decoder,
-            blocking_mode=blocking_mode
         )
         self._task_subscriber = tasks.RmqTaskSubscriber(
             connector,
@@ -254,7 +266,6 @@ class RmqCommunicator(kiwipy.Communicator):
             task_queue_name=task_queue,
             encoder=encoder,
             decoder=decoder,
-            blocking_mode=blocking_mode,
             testing_mode=testing_mode
         )
 
@@ -306,9 +317,8 @@ class RmqCommunicator(kiwipy.Communicator):
     def task_send(self, msg):
         return self._task_publisher.task_send(msg)
 
-    def await_response(self, future):
+    def await(self, future):
         return self._connector.run_until_complete(future)
 
     def start(self):
         pass
-

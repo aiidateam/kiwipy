@@ -27,40 +27,6 @@ def run_until_complete(future, loop=None):
     return future.result()
 
 
-class LoopManager(object):
-    def __init__(self, loop=None):
-        """
-        :param loop: The event loop
-        :type loop: :class:`ioloop.IOLoop`
-        """
-        self._loop = loop if loop is not None else new_event_loop()
-        self._running_future = None
-
-    def loop(self):
-        return self._loop
-
-    def start(self):
-        self._loop.start()
-
-    def stop(self):
-        self._loop.stop()
-
-    def run_until_complete(self, future):
-        assert self._running_future is None, "Loop already running!"
-        try:
-            self._running_future = _ElasticFuture(future)
-            return run_until_complete(self._running_future, self._loop)
-        finally:
-            self._running_future = None
-
-    def ensure_completes(self, future):
-        if self._running_future:
-            self._running_future.add(future)
-            return False
-        else:
-            return self.run_until_complete(future)
-
-
 class _ElasticFuture(kiwipy.Future):
     def __init__(self, primary):
         super(_ElasticFuture, self).__init__()

@@ -33,7 +33,7 @@ class RmqConnector(object):
     def __init__(self, amqp_url,
                  auto_reconnect_timeout=None,
                  loop=None):
-        self._url = amqp_url
+        self._connection_params = pika.URLParameters(amqp_url)
         self._reconnect_timeout = auto_reconnect_timeout
         self._loop = loop if loop is not None else loops.new_event_loop()
         self._channels = []
@@ -46,6 +46,9 @@ class RmqConnector(object):
     def is_connected(self):
         return self._connection is not None and self._connection.is_open
 
+    def get_connection_params(self):
+        return self._connection_params
+
     def connect(self):
         """This method connects to RabbitMQ, returning the connection handle.
         When the connection is established, the on_connection_open method
@@ -53,10 +56,10 @@ class RmqConnector(object):
         sure you set stop_ioloop_on_close to False, which is not the default
         behavior of this adapter.
         """
-        LOGGER.info('Connecting to %s', self._url)
+        LOGGER.info('Connecting to %s', self.get_connection_params())
         if self._connection is None:
             self._connection = pika.TornadoConnection(
-                pika.URLParameters(self._url),
+                self._connection_params,
                 on_open_callback=self._on_connection_open,
                 on_close_callback=self._on_connection_closed,
                 stop_ioloop_on_close=False,
