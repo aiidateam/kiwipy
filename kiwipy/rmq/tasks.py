@@ -30,16 +30,10 @@ class TaskMessage(messages.Message):
     def send(self, publisher):
         if self.correlation_id is None:
             self.correlation_id = str(uuid.uuid4())
-        delivery_future = publisher.publish_msg(self.body, None, self.correlation_id)
-        if delivery_future:
-            delivery_future.add_done_callback(self.on_delivered)
+        publisher.publish_msg(self.body, None, self.correlation_id)
 
         publisher.await_response(self.correlation_id, self.on_response)
         return self.future
-
-    def on_delivered(self, future):
-        if future.exception():
-            kiwipy.copy_future(future, self.future)
 
     def on_response(self, done_future):
         kiwipy.copy_future(done_future, self.future)
@@ -177,9 +171,8 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                  encoder=yaml.dump,
                  decoder=yaml.load,
                  confirm_deliveries=True,
-                 blocking_mode=True,
                  testing_mode=False,
-                 ):
+                 publish_connection=None):
         super(RmqTaskPublisher, self).__init__(
             connector,
             exchange_name=exchange_name,
@@ -187,8 +180,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
             encoder=encoder,
             decoder=decoder,
             confirm_deliveries=confirm_deliveries,
-            blocking_mode=blocking_mode,
-        )
+            publish_connection=publish_connection)
         self._task_queue_name = task_queue_name
         self._testing_mode = testing_mode
 

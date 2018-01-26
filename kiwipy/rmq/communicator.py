@@ -44,7 +44,6 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
             subject=subject,
             correlation_id=correlation_id)
         self.action_message(message)
-        return message.future
 
 
 class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
@@ -221,15 +220,28 @@ class RmqCommunicator(kiwipy.Communicator):
                  task_queue=defaults.TASK_QUEUE,
                  encoder=yaml.dump,
                  decoder=yaml.load,
-                 blocking_mode=True,
                  testing_mode=False):
+        """
+
+        :param connector: The RMQ connector object
+        :param exchange_name: The name of the RMQ message exchange to use
+        :type exchange_name: str
+        :param task_exchange: The name of the RMQ task exchange to use
+        :type task_exchange: str
+        :param task_queue: The name of the task queue to use
+        :type task_queue: str
+        :param encoder: The encoder to call for encoding a message
+        :param decoder: The decoder to call for decoding a message
+        :param testing_mode: Run in testing mode: all queues and exchanges
+            will be temporary
+        """
         super(RmqCommunicator, self).__init__()
 
         self._connector = connector
 
-        # WARNING: Always have the corresponding subscriber BEFORE the publisher.
-        # This way they are ready and listening by the time the user has a chance
-        # to publish a message.  Otherwise you may get delivery failures (NO_ROUTE)
+        # Create a shared publish connection
+        self._publish_connection = pika.BlockingConnection(connector.get_connection_params())
+
         self._message_subscriber = RmqSubscriber(
             connector,
             exchange_name,
@@ -241,7 +253,7 @@ class RmqCommunicator(kiwipy.Communicator):
             exchange_name=exchange_name,
             encoder=encoder,
             decoder=decoder,
-            blocking_mode=blocking_mode
+            publish_connection=self._publish_connection
         )
         self._task_subscriber = tasks.RmqTaskSubscriber(
             connector,
@@ -257,8 +269,8 @@ class RmqCommunicator(kiwipy.Communicator):
             task_queue_name=task_queue,
             encoder=encoder,
             decoder=decoder,
-            blocking_mode=blocking_mode,
-            testing_mode=testing_mode
+            testing_mode=testing_mode,
+            publish_connection=self._publish_connection
         )
 
     def close(self):
@@ -266,6 +278,7 @@ class RmqCommunicator(kiwipy.Communicator):
         self._message_subscriber.close()
         self._task_publisher.close()
         self._task_subscriber.close()
+        self._publish_connection.close()
 
     def initialised_future(self):
         return kiwipy.gather(
@@ -309,5 +322,5 @@ class RmqCommunicator(kiwipy.Communicator):
     def task_send(self, msg):
         return self._task_publisher.task_send(msg)
 
-    def await_response(self, future):
+    def await(self, future):
         return self._connector.run_until_complete(future)
