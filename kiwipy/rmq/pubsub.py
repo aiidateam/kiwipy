@@ -1,45 +1,17 @@
-from functools import partial
-import kiwipy
-import pika
-import pika.exceptions
 import logging
 import traceback
+from functools import partial
 
+import pika
+import pika.exceptions
+
+import kiwipy
+from kiwipy.rmq.loops import _ElasticFuture
 from . import loops
 
 __all__ = ['RmqConnector', 'ConnectionListener']
 
 LOGGER = logging.getLogger(__name__)
-
-
-class _ElasticFuture(kiwipy.Future):
-    def __init__(self, primary):
-        super(_ElasticFuture, self).__init__()
-        self._primary = primary
-        self._nchildren = 0
-        self._nfinished = 0
-
-        primary.add_done_callback(self._primary_done)
-
-    def add(self, future):
-        if self.done():
-            raise kiwipy.InvalidStateError("Already done")
-        future.add_done_callback(self._completed)
-        self._nchildren += 1
-
-    def _primary_done(self, primary):
-        if self._children_done() or primary.exception() or primary.cancelled():
-            kiwipy.copy_future(primary, self)
-
-    def _completed(self, unused_future):
-        if not self.done():
-            # Check if we're all done
-            self._nfinished += 1
-            if self._children_done() and self._primary.done():
-                kiwipy.copy_future(self._primary, self)
-
-    def _children_done(self):
-        return self._nfinished == self._nchildren
 
 
 class ConnectionListener(object):

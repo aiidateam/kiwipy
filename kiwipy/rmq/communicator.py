@@ -227,9 +227,6 @@ class RmqCommunicator(kiwipy.Communicator):
 
         self._connector = connector
 
-        # WARNING: Always have the corresponding subscriber BEFORE the publisher.
-        # This way they are ready and listening by the time the user has a chance
-        # to publish a message.  Otherwise you may get delivery failures (NO_ROUTE)
         self._message_subscriber = RmqSubscriber(
             connector,
             exchange_name,
@@ -311,3 +308,7 @@ class RmqCommunicator(kiwipy.Communicator):
 
     def await_response(self, future):
         return self._connector.run_until_complete(future)
+
+    def start(self):
+        pass
+
