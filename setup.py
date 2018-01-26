@@ -20,10 +20,13 @@ setup(
     author_email='martin.uhrin@gmail.com',
     license=__license__,
     classifiers=[
+        'Development Status :: 4 - Beta',
         'License :: OSI Approved :: MIT License',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
     keywords='communication messaging rpc broadcast',
     # Abstract dependencies.  Concrete versions are listed in
