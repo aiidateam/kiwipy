@@ -1,6 +1,10 @@
 
+
 # kiwipy
 
+| master | [![Build Status](https://travis-ci.org/muhrin/kiwipy.svg?branch=master)](https://travis-ci.org/muhrin/kiwipy)|
+|--|--|
+| dev |[![Build Status](https://travis-ci.org/muhrin/kiwipy.svg?branch=master)](https://travis-ci.org/muhrin/kiwipy)|
 
 kiwipy is a library that makes remote messaging using RabbitMQ (and any other protocol for which a backend is written) EASY.  I don't know about you but I find RabbitMQ HARD.  It's all too easy to make a configuration mistake which is then difficult to debug.  With kiwipy, there's none of this, just messaging, made simple, with all the nice properties and guarantees of AMQP.
 
