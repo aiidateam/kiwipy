@@ -13,5 +13,5 @@ class LocalCommunicator(communications.CommunicatorHelper):
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         return self.fire_broadcast(body, sender=sender, subject=subject, correlation_id=correlation_id)
 
-    def await(self, future):
+    def await(self, future=None):
         return future.result()

@@ -5,7 +5,7 @@ import sys
 from . import futures
 
 __all__ = ['Communicator', 'CommunicatorHelper',
-           'RemoteException', 'DeliveryFailed', 'TaskRejected',
+           'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError'
            ]
 
 
@@ -16,6 +16,11 @@ class RemoteException(Exception):
 
 class DeliveryFailed(Exception):
     """ Failed to deliver a message """
+    pass
+
+
+class UnroutableError(DeliveryFailed):
+    """ The messages was unroutable """
     pass
 
 
@@ -94,7 +99,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         pass
 
     @abc.abstractmethod
-    def await(self, future):
+    def await(self, future=None):
         pass
 
 
@@ -177,4 +182,3 @@ class CommunicatorHelper(Communicator):
         future = futures.Future()
         future.set_result(True)
         return future
-
