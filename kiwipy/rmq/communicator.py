@@ -2,6 +2,7 @@ from functools import partial
 import kiwipy
 import logging
 import pika
+import pika.exceptions
 import yaml
 
 from . import defaults
@@ -320,7 +321,10 @@ class RmqCommunicator(kiwipy.Communicator):
         return self._message_publisher.broadcast_send(body, sender, subject, correlation_id)
 
     def task_send(self, msg):
-        return self._task_publisher.task_send(msg)
+        try:
+            return self._task_publisher.task_send(msg)
+        except (pika.exceptions.UnroutableError) as e:
+            raise kiwipy.UnroutableError(str(e))
 
     def await(self, future=None):
         if future is not None:

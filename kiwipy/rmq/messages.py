@@ -217,7 +217,6 @@ class BasePublisherWithReplyQueue(
         self._response_decode = decoder
         self._confirm_deliveries = confirm_deliveries
 
-        self._queued_messages = []
         self._awaiting_response = {}
         self._returned_messages = set()
 
@@ -250,11 +249,7 @@ class BasePublisherWithReplyQueue(
         :return: A future corresponding to action
         :rtype: :class:`kiwi.Future`
         """
-        self._connector.connect()
-        if self.initialised_future().done():
-            message.send(self)
-        else:
-            self._queued_messages.append(message)
+        message.send(self)
         return message.future
 
     def await_response(self, correlation_id, callback):
@@ -293,7 +288,7 @@ class BasePublisherWithReplyQueue(
         properties.correlation_id = correlation_id
 
         # self._channel.basic_publish(*args, **kwargs)
-        self._publish_channel.basic_publish(*args, **kwargs)
+        self._publish_channel.publish(*args, **kwargs)
         delivery_future = None
 
         if self._confirm_deliveries:
@@ -340,11 +335,6 @@ class BasePublisherWithReplyQueue(
             else:
                 pass  # Keep waiting
 
-    def _send_queued_messages(self):
-        for message in self._queued_messages:
-            message.send(self)
-        self._queued_messages = []
-
     # region RMQ communications
     def _reset_channel(self):
         """ Reset all channel specific members """
@@ -354,9 +344,6 @@ class BasePublisherWithReplyQueue(
             self._delivery_info = deque()
 
         self.reinitialising()
-
-        # Send messages when ready
-        self.initialised_future().add_done_callback(lambda x: self._send_queued_messages())
 
     @utils.initialiser()
     def on_channel_open(self, channel):
