@@ -94,7 +94,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         pass
 
     @abc.abstractmethod
-    def await(self, future):
+    def await(self, future=None):
         pass
 
 

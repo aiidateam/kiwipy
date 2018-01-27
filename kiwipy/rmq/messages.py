@@ -79,8 +79,7 @@ class RpcMessage(Message):
             self.body,
             routing_key,
             self.correlation_id,
-            ttl=3600,
-            mandatory=False)
+            mandatory=True)
         self._publisher.await_response(self.correlation_id, self.on_response)
         return self.future
 

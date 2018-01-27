@@ -322,5 +322,9 @@ class RmqCommunicator(kiwipy.Communicator):
     def task_send(self, msg):
         return self._task_publisher.task_send(msg)
 
-    def await(self, future):
-        return self._connector.run_until_complete(future)
+    def await(self, future=None):
+        if future is not None:
+            return self._connector.run_until_complete(future)
+        else:
+            self._connector._loop.start()
+

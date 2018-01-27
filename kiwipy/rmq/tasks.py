@@ -30,7 +30,11 @@ class TaskMessage(messages.Message):
     def send(self, publisher):
         if self.correlation_id is None:
             self.correlation_id = str(uuid.uuid4())
-        publisher.publish_msg(self.body, None, self.correlation_id)
+        publisher.publish_msg(
+            self.body,
+            routing_key=None,  # Set by the publisher
+            correlation_id=self.correlation_id,
+            mandatory=True,)
 
         publisher.await_response(self.correlation_id, self.on_response)
         return self.future
@@ -205,10 +209,13 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
     def _on_task_queue_bindok(self, unused_frame):
         pass
 
-    def publish_msg(self, task, routing_key, correlation_id):
+    def publish_msg(self, task, routing_key, correlation_id=None, mandatory=False, ttl=None):
         if routing_key is not None:
             _LOGGER.warn(
                 "Routing key '{}' passed but is ignored for all tasks".format(routing_key))
+        # pika (and AMQP) expects the ttl to be a string
+        if ttl is not None and not isinstance(ttl, basestring):
+            ttl = str(ttl)
 
         return self.do_publish(
             correlation_id,
@@ -220,6 +227,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                 correlation_id=correlation_id
             ),
             body=self._encode(task),
+            mandatory=mandatory,
         )
 
     def task_send(self, msg):
