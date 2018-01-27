@@ -13,5 +13,4 @@ def callback(task):
 
 
 communicator.add_task_subscriber(callback)
-
 communicator.await()

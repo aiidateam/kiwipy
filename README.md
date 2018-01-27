@@ -45,7 +45,7 @@ communicator = RmqCommunicator(RmqConnector('amqp://localhost'))
 communicator.add_rpc_subscriber(fib, 'fib')
 communicator.await()
 ```
-[(rmq_rpc_server.py source)](https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_server.py)
+[(rmq_rpc_server.py source)](https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_rpc_server.py)
 
 
 ## Worker

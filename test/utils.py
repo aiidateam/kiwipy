@@ -22,7 +22,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
     def destroy_communicator(self, communicator):
         pass
 
-    def test_rcp_send_receive(self):
+    def test_rpc_send_receive(self):
         MESSAGE = "sup yo'"
         RESPONSE = "nuthin bra"
 
