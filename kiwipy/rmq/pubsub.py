@@ -24,7 +24,7 @@ class ConnectionListener(object):
 
 class RmqConnector(object):
     """
-    An basic RMQ client that opens a connection and one channel.
+    A basic RMQ client that opens a connection and one channel.
     If an auto reconnect timeout is given it will try to keep the connection
     open by reopening if it is closed.
     """

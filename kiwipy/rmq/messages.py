@@ -287,7 +287,6 @@ class BasePublisherWithReplyQueue(
 
         properties.correlation_id = correlation_id
 
-        # self._channel.basic_publish(*args, **kwargs)
         self._publish_channel.publish(*args, **kwargs)
         delivery_future = None
 

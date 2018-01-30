@@ -315,7 +315,10 @@ class RmqCommunicator(kiwipy.Communicator):
         :param msg: The body of the message
         :return: A future corresponding to the outcome of the call
         """
-        return self._message_publisher.rpc_send(recipient_id, msg)
+        try:
+            return self._message_publisher.rpc_send(recipient_id, msg)
+        except pika.exceptions.UnroutableError as e:
+            raise kiwipy.UnroutableError(str(e))
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         return self._message_publisher.broadcast_send(body, sender, subject, correlation_id)
@@ -323,12 +326,13 @@ class RmqCommunicator(kiwipy.Communicator):
     def task_send(self, msg):
         try:
             return self._task_publisher.task_send(msg)
-        except (pika.exceptions.UnroutableError) as e:
+        except pika.exceptions.UnroutableError as e:
             raise kiwipy.UnroutableError(str(e))
+        except pika.exceptions.NackError as e:
+            raise kiwipy.TaskRejected(str(e))
 
     def await(self, future=None):
         if future is not None:
             return self._connector.run_until_complete(future)
         else:
             self._connector._loop.start()
-
