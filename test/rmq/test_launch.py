@@ -31,11 +31,8 @@ class TestTaskControllerAndRunner(utils.TestCaseWithLoop):
             task_queue_name=self.queue_name,
             testing_mode=True)
 
-        self.connector.connect()
-        # Run the loop until until both are ready
-        rmq.run_until_complete(
-            kiwipy.gather(self.subscriber.initialised_future(),
-                          self.publisher.initialised_future()))
+        self.loop.run_sync(lambda: self.subscriber.init())
+        self.loop.run_sync(lambda: self.publisher.init())
 
     def tearDown(self):
         # Close the connector before calling super because it will
@@ -44,4 +41,3 @@ class TestTaskControllerAndRunner(utils.TestCaseWithLoop):
         super(TestTaskControllerAndRunner, self).tearDown()
 
     # TODO: Test publisher/subscriber
-

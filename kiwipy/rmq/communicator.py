@@ -3,6 +3,7 @@ import kiwipy
 import logging
 import pika
 import pika.exceptions
+from tornado.gen import coroutine
 import yaml
 
 from . import defaults
@@ -47,7 +48,7 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
         self.action_message(message)
 
 
-class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
+class RmqSubscriber(pubsub.ConnectionListener):
     def __init__(self, connector,
                  exchange_name=defaults.TASK_EXCHANGE,
                  decoder=yaml.load,
@@ -71,20 +72,11 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
         self._rpc_subscribers = {}
         self._broadcast_subscribers = []
 
-        self._reset_channel()
-
         self._connector = connector
-        connector.add_connection_listener(self)
-        if connector.is_connected:
-            self._open_channel(connector.connection())
-        else:
-            connector.connect()
+        self._active = False
 
     def add_rpc_subscriber(self, subscriber, identifier):
         self._rpc_subscribers[identifier] = subscriber
-        # Need to make sure we're initialised so that we are up
-        # and listening for RPC calls
-        self._connector.ensure_completes(self.initialised_future())
 
     def remove_rpc_subscriber(self, subscriber):
         for identifier, sub in self._rpc_subscribers:
@@ -95,15 +87,12 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
 
     def add_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.append(subscriber)
-        # Need to make sure we're initialised so that we are up
-        # and listening for broadcast calls
-        self._connector.ensure_completes(self.initialised_future())
 
     def remove_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.remove(subscriber)
 
     def on_connection_opened(self, connector, connection):
-        self._open_channel(connection)
+        self.init()
 
     def close(self):
         self._connector.remove_connection_listener(self)
@@ -113,59 +102,47 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
         self._connector = None
 
     # region RMQ methods
-    def _reset_channel(self):
-        self.reinitialising()
 
-    @utils.initialiser()
-    def _open_channel(self, connection):
-        """ We have a connection, now create a channel """
-        self._connector.open_channel(self._on_channel_open)
+    @coroutine
+    def init(self):
+        if self._channel:
+            # Already connected
+            return
 
-    @utils.initialiser()
-    def _on_channel_open(self, channel):
-        """ We have a channel, now declare the exchange """
-        self._channel = channel
-        channel.exchange_declare(
-            self._on_exchange_declareok, exchange=self._exchange_name, **EXCHANGE_PROPERTIES)
+        connector = self._connector
+        channel = yield connector.open_channel()
+        channel.add_on_close_callback(self._on_channel_closed)
+        yield connector.exchange_declare(channel, exchange=self._exchange_name, **EXCHANGE_PROPERTIES)
 
-    @utils.initialiser()
-    def _on_exchange_declareok(self, unused_frame):
-        """
-        The exchange is up, now create an temporary, exclusive queue for us
-        to receive messages on.
-        """
         # RPC queue
-        self._channel.queue_declare(self._on_rpc_queue_declareok, exclusive=True, auto_delete=True)
-        # Broadcast queue
-        self._channel.queue_declare(self._on_broadcast_queue_declareok, exclusive=True, auto_delete=True)
-
-    @utils.initialiser()
-    def _on_rpc_queue_declareok(self, frame):
-        """
-        The queue as been declared, now bind it to the exchange using the
-        routing keys we're listening for.
-        """
-        queue_name = frame.method.queue
-        self._channel.queue_bind(
-            partial(self._on_rpc_bindok, queue_name), queue_name, self._exchange_name,
+        frame = yield connector.queue_declare(channel, exclusive=True, auto_delete=True)
+        rpc_queue = frame.method.queue
+        result = yield connector.queue_bind(
+            channel,
+            queue=rpc_queue,
+            exchange=self._exchange_name,
             routing_key='{}.*'.format(defaults.RPC_TOPIC))
+        channel.basic_consume(self._on_rpc, queue=rpc_queue)
 
-    @utils.initialiser()
-    def _on_rpc_bindok(self, queue_name, unused_frame):
-        """ The queue has been bound, we can start consuming. """
-        self._channel.basic_consume(self._on_rpc, queue=queue_name)
-
-    @utils.initialiser()
-    def _on_broadcast_queue_declareok(self, frame):
-        queue_name = frame.method.queue
-        self._channel.queue_bind(
-            partial(self._on_broadcast_bindok, queue_name), queue_name, self._exchange_name,
+        # Broadcast queue
+        frame = yield connector.queue_declare(channel, exclusive=True, auto_delete=True)
+        broadcast_queue = frame.method.queue
+        yield connector.queue_bind(
+            channel,
+            queue=broadcast_queue,
+            exchange=self._exchange_name,
             routing_key=defaults.BROADCAST_TOPIC)
+        channel.basic_consume(self._on_broadcast, queue=broadcast_queue)
 
-    @utils.initialiser()
-    def _on_broadcast_bindok(self, queue_name, unused_frame):
-        """ The queue has been bound, we can start consuming. """
-        self._channel.basic_consume(self._on_broadcast, queue=queue_name)
+        self._channel = channel
+        # Have we been called externally?  In which case activate
+        if not self._active:
+            self._connector.add_connection_listener(self)
+            self._active = True
+
+    def _on_channel_closed(self, ch, reply_code, reply_text):
+        assert self._channel is ch
+        self._channel = None
 
     # end region
 
@@ -197,10 +174,10 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
             try:
                 receiver(**msg)
             except BaseException:
-                import sys
+                import traceback
                 _LOGGER.error("Exception in broadcast receiver!\n"
                               "msg: {}\n"
-                              "traceback:\n{}".format(msg, sys.exc_info()))
+                              "traceback:\n{}".format(msg, traceback.format_exc()))
 
     def _send_response(self, ch, reply_to, correlation_id, response):
         ch.basic_publish(
@@ -239,6 +216,7 @@ class RmqCommunicator(kiwipy.Communicator):
         super(RmqCommunicator, self).__init__()
 
         self._connector = connector
+        self._loop = connector._loop
 
         # Create a shared publish connection
         self._publish_connection = pika.BlockingConnection(connector.get_connection_params())
@@ -274,20 +252,18 @@ class RmqCommunicator(kiwipy.Communicator):
             publish_connection=self._publish_connection
         )
 
+    def init(self):
+        self._loop.run_sync(self._message_subscriber.init)
+        self._loop.run_sync(self._task_subscriber.init)
+        self._loop.run_sync(self._message_publisher.init)
+        self._loop.run_sync(self._task_publisher.init)
+
     def close(self):
         self._message_publisher.close()
         self._message_subscriber.close()
         self._task_publisher.close()
         self._task_subscriber.close()
         self._publish_connection.close()
-
-    def initialised_future(self):
-        return kiwipy.gather(
-            self._message_publisher.initialised_future(),
-            self._message_subscriber.initialised_future(),
-            self._task_publisher.initialised_future(),
-            self._task_subscriber.initialised_future()
-        )
 
     def add_rpc_subscriber(self, subscriber, identifier):
         self._message_subscriber.add_rpc_subscriber(subscriber, identifier)
@@ -315,7 +291,10 @@ class RmqCommunicator(kiwipy.Communicator):
         :param msg: The body of the message
         :return: A future corresponding to the outcome of the call
         """
-        return self._message_publisher.rpc_send(recipient_id, msg)
+        try:
+            return self._message_publisher.rpc_send(recipient_id, msg)
+        except pika.exceptions.UnroutableError as e:
+            raise kiwipy.UnroutableError(str(e))
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         return self._message_publisher.broadcast_send(body, sender, subject, correlation_id)
@@ -323,12 +302,10 @@ class RmqCommunicator(kiwipy.Communicator):
     def task_send(self, msg):
         try:
             return self._task_publisher.task_send(msg)
-        except (pika.exceptions.UnroutableError) as e:
+        except pika.exceptions.UnroutableError as e:
             raise kiwipy.UnroutableError(str(e))
+        except pika.exceptions.NackError as e:
+            raise kiwipy.TaskRejected(str(e))
 
-    def await(self, future=None):
-        if future is not None:
-            return self._connector.run_until_complete(future)
-        else:
-            self._connector._loop.start()
-
+    def await(self, future=None, timeout=None):
+        return self._loop.run_sync(lambda: future, timeout=timeout)

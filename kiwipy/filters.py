@@ -38,7 +38,7 @@ class BroadcastFilter(object):
         elif isinstance(filter_value, typing.re.Pattern):
             return filter_value.match
         else:
-            return filter_value
+            return lambda val: val == filter_value
 
     def _make_regex(self, filter_str):
         """

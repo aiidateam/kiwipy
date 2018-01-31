@@ -99,7 +99,7 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         pass
 
     @abc.abstractmethod
-    def await(self, future=None):
+    def await(self, future=None, timeout=None):
         pass
 
 

@@ -4,6 +4,7 @@ from future.utils import with_metaclass
 import kiwipy
 from past.builtins import basestring
 import pika
+from tornado.gen import coroutine
 import uuid
 import yaml
 
@@ -110,7 +111,7 @@ class BroadcastMessage(Message):
         publisher.publish_msg(self.message, defaults.BROADCAST_TOPIC)
 
 
-class BaseConnectionWithExchange(utils.InitialisationMixin, pubsub.ConnectionListener):
+class BaseConnectionWithExchange(pubsub.ConnectionListener):
     """
     An RMQ connection with an exchange
     """
@@ -130,14 +131,11 @@ class BaseConnectionWithExchange(utils.InitialisationMixin, pubsub.ConnectionLis
         self._connector = connector
         self._exchange_name = exchange_name
         self._exchange_params = exchange_params
-
-        self._reset_channel()
-        connector.add_connection_listener(self)
-        if connector.is_connected:
-            connector.open_channel(self.on_channel_open)
+        self._channel = None
+        self._active = False
 
     def on_connection_opened(self, connector, connection):
-        connector.open_channel(self.on_channel_open)
+        self.init()
 
     def get_exchange_name(self):
         return self._exchange_name
@@ -153,32 +151,36 @@ class BaseConnectionWithExchange(utils.InitialisationMixin, pubsub.ConnectionLis
         self._channel = None
 
     # region RMQ communications
-    def _reset_channel(self):
-        """ Reset all channel specific members """
-        self._channel = None
-        self.reinitialising()
 
-    @utils.initialiser()
-    def on_channel_open(self, channel):
-        self._channel = channel
+    @coroutine
+    def init(self):
+        if self._channel:
+            return
+        if not self._active:
+            self._active = True
+            self._connector.add_connection_listener(self)
+
+        connector = self._connector
+        channel = yield connector.open_channel()
         channel.add_on_close_callback(self._on_channel_close)
-        channel.exchange_declare(
-            self.on_exchange_declareok, exchange=self.get_exchange_name(),
+
+        yield connector.exchange_declare(
+            channel,
+            exchange=self.get_exchange_name(),
             **self._exchange_params)
 
-    def _on_channel_close(self, channel, reply_code, reply_text):
-        self._reset_channel()
+        self._channel = channel
 
-    @utils.initialiser()
-    def on_exchange_declareok(self, unused_frame):
-        pass
+    def _on_channel_close(self, channel, reply_code, reply_text):
+        self._channel = None
+
+    # endregion
 
 
 DeliveryInfo = namedtuple('DeliveryInfo', ['tag', 'correlation_id', 'future'])
 
 
-class BasePublisherWithReplyQueue(
-    utils.InitialisationMixin, pubsub.ConnectionListener, Publisher):
+class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
     """
 
     """
@@ -211,26 +213,27 @@ class BasePublisherWithReplyQueue(
         if exchange_params is None:
             exchange_params = self.DEFAULT_EXCHANGE_PARAMS
 
-        self._exchange_name = exchange_name
+        self._exchange = exchange_name
         self._exchange_params = exchange_params
         self._encode = encoder
         self._response_decode = decoder
         self._confirm_deliveries = confirm_deliveries
+        if self._confirm_deliveries:
+            self._num_published = 0
+            self._delivery_info = deque()
 
         self._awaiting_response = {}
         self._returned_messages = set()
 
-        self._reply_queue_name = "{}-{}".format(self._exchange_name, str(uuid.uuid4()))
+        self._reply_queue = "{}-reply-{}".format(self._exchange, str(uuid.uuid4()))
 
         if publish_connection is None:
             publish_connection = pika.BlockingConnection(connector.get_connection_params())
         self._publish_channel = self.create_publish_channel(publish_connection)
 
-        self._reset_channel()
+        self._active = False
+        self._channel = None
         self._connector = connector
-        connector.add_connection_listener(self)
-        if connector.is_connected:
-            connector.open_channel(self.on_channel_open)
 
     def create_publish_channel(self, connection):
         channel = connection.channel()
@@ -262,10 +265,10 @@ class BasePublisherWithReplyQueue(
 
         return self.do_publish(
             correlation_id,
-            exchange=self._exchange_name,
+            exchange=self._exchange,
             routing_key=routing_key,
             properties=pika.BasicProperties(
-                reply_to=self._reply_queue_name,
+                reply_to=self._reply_queue,
                 correlation_id=correlation_id,
                 delivery_mode=1,
                 content_type='text/json',
@@ -287,7 +290,6 @@ class BasePublisherWithReplyQueue(
 
         properties.correlation_id = correlation_id
 
-        # self._channel.basic_publish(*args, **kwargs)
         self._publish_channel.publish(*args, **kwargs)
         delivery_future = None
 
@@ -299,7 +301,7 @@ class BasePublisherWithReplyQueue(
         return delivery_future
 
     def on_connection_opened(self, connector, connection):
-        connector.open_channel(self.on_channel_open)
+        self.init()
 
     def close(self):
         self._connector.remove_connection_listener(self)
@@ -309,10 +311,10 @@ class BasePublisherWithReplyQueue(
         self._connector = None
 
     def get_reply_queue_name(self):
-        return self._reply_queue_name
+        return self._reply_queue
 
     def get_exchange_name(self):
-        return self._exchange_name
+        return self._exchange
 
     def get_channel(self):
         return self._channel
@@ -336,42 +338,40 @@ class BasePublisherWithReplyQueue(
                 pass  # Keep waiting
 
     # region RMQ communications
-    def _reset_channel(self):
+
+    @coroutine
+    def init(self):
+        if self._channel:
+            # Already connected
+            return
+        if not self._active:
+            self._active = True
+            self._connector.add_connection_listener(self)
+
+        connector = self._connector
+        channel = yield connector.open_channel()
+        self._channel = channel
+        channel.add_on_close_callback(self._on_channel_close)
+
+        yield connector.exchange_declare(
+            channel,
+            exchange=self.get_exchange_name(),
+            **self._exchange_params)
+
+        # Declare the reply queue
+        yield connector.queue_declare(
+            channel,
+            queue=self._reply_queue,
+            exclusive=True,
+            auto_delete=True)
+
+        self._channel.basic_consume(self._on_response, no_ack=True, queue=self._reply_queue)
+
+    def _on_channel_close(self, channel, reply_code, reply_text):
         """ Reset all channel specific members """
         self._channel = None
         if self._confirm_deliveries:
             self._num_published = 0
             self._delivery_info = deque()
 
-        self.reinitialising()
-
-    @utils.initialiser()
-    def on_channel_open(self, channel):
-        self._channel = channel
-        channel.add_on_close_callback(self._on_channel_close)
-        channel.exchange_declare(
-            self.on_exchange_declareok, exchange=self.get_exchange_name(),
-            **self._exchange_params)
-
-        # Declare the reply queue
-        channel.queue_declare(
-            self._on_reply_queue_declareok,
-            queue=self._reply_queue_name,
-            exclusive=True,
-            auto_delete=True)
-
-    def _on_channel_close(self, channel, reply_code, reply_text):
-        self._reset_channel()
-
-    @utils.initialiser()
-    def on_exchange_declareok(self, frame):
-        pass
-
-    @utils.initialiser()
-    def _on_reply_queue_declareok(self, frame):
-        self._reply_queue_name = frame.method.queue
-        self._channel.basic_consume(
-            self._on_response, no_ack=True, queue=self._reply_queue_name)
-
-
-        # endregion
+    # endregion

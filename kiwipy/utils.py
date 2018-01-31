@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 __all__ = ['EventHelper']
 
@@ -33,8 +34,8 @@ class EventHelper(object):
         for l in self.listeners:
             try:
                 getattr(l, event_function.__name__)(*args, **kwargs)
-            except Exception as e:
+            except Exception :
                 _LOGGER.error(
-                    "Listener {} produced an exception:\n{}".format(l, e))
+                    "Listener {} produced an exception:\n{}".format(l, traceback.format_exc()))
 
 
