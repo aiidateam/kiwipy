@@ -197,10 +197,10 @@ class RmqSubscriber(utils.InitialisationMixin, pubsub.ConnectionListener):
             try:
                 receiver(**msg)
             except BaseException:
-                import sys
+                import traceback
                 _LOGGER.error("Exception in broadcast receiver!\n"
                               "msg: {}\n"
-                              "traceback:\n{}".format(msg, sys.exc_info()))
+                              "traceback:\n{}".format(msg, traceback.format_exc()))
 
     def _send_response(self, ch, reply_to, correlation_id, response):
         ch.basic_publish(
