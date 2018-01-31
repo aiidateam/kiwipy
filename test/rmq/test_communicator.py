@@ -27,6 +27,7 @@ class TestCommunicator(CommunicatorTester, utils.TestCaseWithLoop):
             testing_mode=True
         )
 
+        communicator.init()
         return communicator
 
     def destroy_communicator(self, communicator):

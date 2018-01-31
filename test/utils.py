@@ -89,7 +89,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
 
         self.communicator.broadcast_send(**FULL_MSG)
         # Wait fot the send and receive
-        self.communicator.await(kiwipy.gather(message1, message2))
+        self.communicator.await(kiwipy.gather(message1, message2), timeout=1.0)
 
         self.assertDictEqual(message1.result(), FULL_MSG)
         self.assertDictEqual(message2.result(), FULL_MSG)
@@ -111,7 +111,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
             self.communicator.broadcast_send(None, subject=subject)
 
-        self.communicator.await(done)
+        self.communicator.await(done, timeout=1.0)
 
         self.assertEqual(len(subjects), 2)
         self.assertListEqual(EXPECTED_SUBJECTS, subjects)
@@ -133,9 +133,9 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
             self.communicator.broadcast_send(None, sender=sender)
 
-        self.communicator.await(done)
+        self.communicator.await(done, timeout=1.0)
 
-        self.assertEqual(len(senders), 2)
+        self.assertEqual(2, len(senders))
         self.assertListEqual(EXPECTED_SENDERS, senders)
 
     def test_broadcast_filter_sender_and_subject(self):
@@ -163,7 +163,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
             for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
                 self.communicator.broadcast_send(None, sender=sender, subject=subject)
 
-        self.communicator.await(done)
+        self.communicator.await(done, timeout=1.0)
 
-        self.assertEqual(len(senders_and_subects), 4)
+        self.assertEqual(4, len(senders_and_subects))
         self.assertSetEqual(EXPECTED, senders_and_subects)
