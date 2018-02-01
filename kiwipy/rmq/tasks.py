@@ -125,7 +125,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             self._channel,
             queue=task_queue,
             durable=not self._testing_mode,
-            auto_delete=self._testing_mode)
+            auto_delete=self._testing_mode,
+            arguments={"x-expires": 60000}
+        )
         yield connector.queue_bind(
             self._channel,
             queue=task_queue,
@@ -215,9 +217,9 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
             encoder=encoder,
             decoder=decoder,
             confirm_deliveries=confirm_deliveries,
-            publish_connection=publish_connection)
+            publish_connection=publish_connection,
+            testing_mode=testing_mode)
         self._task_queue = task_queue_name
-        self._testing_mode = testing_mode
 
     def publish_msg(self, task, routing_key, correlation_id=None, mandatory=False, ttl=None):
         if routing_key is not None:

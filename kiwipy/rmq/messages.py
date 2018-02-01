@@ -117,7 +117,7 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
     """
     DEFAULT_EXCHANGE_PARAMS = {
         'exchange_type': 'topic',
-        'auto_delete': True
+        'auto_delete': True,
     }
 
     def __init__(self, connector,
@@ -204,7 +204,8 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
                  encoder=yaml.dump,
                  decoder=yaml.load,
                  confirm_deliveries=True,
-                 publish_connection=None):
+                 publish_connection=None,
+                 testing_mode=False):
         """
         :param connector:
         :param exchange_name:
@@ -229,13 +230,16 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         if self._confirm_deliveries:
             self._num_published = 0
             self._delivery_info = deque()
+        self._testing_mode = testing_mode
 
         self._awaiting_response = {}
 
         self._reply_queue = "{}-reply-{}".format(self._exchange, str(uuid.uuid4()))
 
+        self._own_publish_connection = None
         if publish_connection is None:
             publish_connection = pika.BlockingConnection(connector.get_connection_params())
+            self._own_publish_connection = publish_connection
         self._publish_channel = self.create_publish_channel(publish_connection)
 
         self._active = False
@@ -275,7 +279,9 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
             channel,
             queue=self._reply_queue,
             exclusive=True,
-            auto_delete=True)
+            auto_delete=self._testing_mode,
+            arguments={"x-expires": 60000}
+        )
 
         self._channel.basic_consume(self._on_response, no_ack=True, queue=self._reply_queue)
 
@@ -287,6 +293,9 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
             if self.channel() is not None and not self.channel().is_closed:
                 yield self._connector.close_channel(self.channel())
             self._channel = None
+            if self._own_publish_connection:
+                self._own_publish_connection.close()
+                self._own_publish_connection = None
 
     def create_publish_channel(self, connection):
         channel = connection.channel()
