@@ -28,7 +28,7 @@ class TaskTaskPublisher(utils.TestCaseWithLoop):
 
     def tearDown(self):
         super(TaskTaskPublisher, self).tearDown()
-        self.task_publisher.close()
+        self.task_publisher.disconnect()
 
     def test_send_no_subscribers(self):
         """ Test what happens when there are no task queues bound to the exchange """

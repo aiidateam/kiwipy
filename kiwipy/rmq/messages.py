@@ -134,26 +134,23 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
         self._channel = None
         self._active = False
 
+        self._is_closing = False
+
+    @property
+    def is_closing(self):
+        return self._is_closing
+
     def on_connection_opened(self, connector, connection):
-        self.init()
+        self.connect()
 
     def get_exchange_name(self):
         return self._exchange_name
 
-    def get_channel(self):
+    def channel(self):
         return self._channel
 
-    def close(self):
-        self._connector.remove_connection_listener(self)
-        if self._channel is not None:
-            self._connector.close_channel(self.get_channel())
-        self._connector = None
-        self._channel = None
-
-    # region RMQ communications
-
     @coroutine
-    def init(self):
+    def connect(self):
         if self._channel:
             return
         if not self._active:
@@ -170,6 +167,18 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
             **self._exchange_params)
 
         self._channel = channel
+
+    @coroutine
+    def disconnect(self):
+        if not self.is_closing:
+            self._is_closing = True
+            self._connector.remove_connection_listener(self)
+            if self.channel() is not None:
+                yield self._connector.close_channel(self.channel())
+                self._channel = None
+            self._connector = None
+
+    # region RMQ communications
 
     def _on_channel_close(self, channel, reply_code, reply_text):
         self._channel = None
@@ -197,7 +206,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
                  confirm_deliveries=True,
                  publish_connection=None):
         """
-
         :param connector:
         :param exchange_name:
         :param exchange_params:
@@ -223,7 +231,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
             self._delivery_info = deque()
 
         self._awaiting_response = {}
-        self._returned_messages = set()
 
         self._reply_queue = "{}-reply-{}".format(self._exchange, str(uuid.uuid4()))
 
@@ -235,11 +242,56 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         self._channel = None
         self._connector = connector
 
+        self._is_closing = False
+
+    @property
+    def is_closing(self):
+        return self._is_closing
+
+    @property
+    def is_connected(self):
+        return self._channel
+
+    @coroutine
+    def connect(self):
+        if self.is_connected:
+            return
+        if not self._active:
+            self._active = True
+            self._connector.add_connection_listener(self)
+
+        connector = self._connector
+        channel = yield connector.open_channel()
+        self._channel = channel
+        channel.add_on_close_callback(self._on_channel_close)
+
+        yield connector.exchange_declare(
+            channel,
+            exchange=self.get_exchange_name(),
+            **self._exchange_params)
+
+        # Declare the reply queue
+        yield connector.queue_declare(
+            channel,
+            queue=self._reply_queue,
+            exclusive=True,
+            auto_delete=True)
+
+        self._channel.basic_consume(self._on_response, no_ack=True, queue=self._reply_queue)
+
+    @coroutine
+    def disconnect(self):
+        if not self.is_closing:
+            self._is_closing = True
+            self._connector.remove_connection_listener(self)
+            if self.channel() is not None and not self.channel().is_closed:
+                yield self._connector.close_channel(self.channel())
+            self._channel = None
+
     def create_publish_channel(self, connection):
         channel = connection.channel()
         channel.confirm_delivery()
         channel.exchange_declare(exchange=self.get_exchange_name(), **self._exchange_params)
-
         return channel
 
     def action_message(self, message):
@@ -301,14 +353,7 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         return delivery_future
 
     def on_connection_opened(self, connector, connection):
-        self.init()
-
-    def close(self):
-        self._connector.remove_connection_listener(self)
-        if self.get_channel() is not None:
-            self._connector.close_channel(self.get_channel())
-        self._channel = None
-        self._connector = None
+        self.connect()
 
     def get_reply_queue_name(self):
         return self._reply_queue
@@ -316,8 +361,10 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
     def get_exchange_name(self):
         return self._exchange
 
-    def get_channel(self):
+    def channel(self):
         return self._channel
+
+    # region RMQ communications
 
     def _on_response(self, ch, method, props, body):
         """ Called when we get a message on our response queue """
@@ -336,36 +383,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
                 callback(response_future)
             else:
                 pass  # Keep waiting
-
-    # region RMQ communications
-
-    @coroutine
-    def init(self):
-        if self._channel:
-            # Already connected
-            return
-        if not self._active:
-            self._active = True
-            self._connector.add_connection_listener(self)
-
-        connector = self._connector
-        channel = yield connector.open_channel()
-        self._channel = channel
-        channel.add_on_close_callback(self._on_channel_close)
-
-        yield connector.exchange_declare(
-            channel,
-            exchange=self.get_exchange_name(),
-            **self._exchange_params)
-
-        # Declare the reply queue
-        yield connector.queue_declare(
-            channel,
-            queue=self._reply_queue,
-            exclusive=True,
-            auto_delete=True)
-
-        self._channel.basic_consume(self._on_response, no_ack=True, queue=self._reply_queue)
 
     def _on_channel_close(self, channel, reply_code, reply_text):
         """ Reset all channel specific members """
