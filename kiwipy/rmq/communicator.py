@@ -92,19 +92,13 @@ class RmqSubscriber(pubsub.ConnectionListener):
         self._broadcast_subscribers.remove(subscriber)
 
     def on_connection_opened(self, connector, connection):
-        self.init()
+        self.connect()
 
-    def close(self):
-        self._connector.remove_connection_listener(self)
-        if self._channel is not None:
-            self._connector.close_channel(self._channel)
-        self._channel = None
-        self._connector = None
-
-    # region RMQ methods
+    def channel(self):
+        return self._channel
 
     @coroutine
-    def init(self):
+    def connect(self):
         if self._channel:
             # Already connected
             return
@@ -139,6 +133,15 @@ class RmqSubscriber(pubsub.ConnectionListener):
         if not self._active:
             self._connector.add_connection_listener(self)
             self._active = True
+
+    @coroutine
+    def disconnect(self):
+        self._connector.remove_connection_listener(self)
+        if self.channel() is not None:
+            yield self._connector.close_channel(self.channel())
+            self._channel = None
+
+    # region RMQ methods
 
     def _on_channel_closed(self, ch, reply_code, reply_text):
         assert self._channel is ch
@@ -253,16 +256,17 @@ class RmqCommunicator(kiwipy.Communicator):
         )
 
     def init(self):
-        self._loop.run_sync(self._message_subscriber.init)
-        self._loop.run_sync(self._task_subscriber.init)
-        self._loop.run_sync(self._message_publisher.init)
-        self._loop.run_sync(self._task_publisher.init)
+        self._loop.run_sync(self._message_subscriber.connect)
+        self._loop.run_sync(self._task_subscriber.connect)
+        self._loop.run_sync(self._message_publisher.connect)
+        self._loop.run_sync(self._task_publisher.connect)
 
-    def close(self):
-        self._message_publisher.close()
-        self._message_subscriber.close()
-        self._task_publisher.close()
-        self._task_subscriber.close()
+    def disconnect(self):
+        self._loop.run_sync(self._message_publisher.disconnect)
+        self._loop.run_sync(self._message_subscriber.disconnect)
+        self._loop.run_sync(self._task_publisher.disconnect)
+        self._loop.run_sync(self._task_subscriber.disconnect)
+        self._loop.run_sync(self._connector.disconnect)
         self._publish_connection.close()
 
     def add_rpc_subscriber(self, subscriber, identifier):

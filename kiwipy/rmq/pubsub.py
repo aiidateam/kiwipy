@@ -43,13 +43,13 @@ class RmqConnector(object):
         self._connection_params = pika.URLParameters(amqp_url)
         self._reconnect_timeout = auto_reconnect_timeout
         self._loop = loop if loop is not None else loops.new_event_loop()
-        self._channels = []
 
         self._event_helper = kiwipy.EventHelper(ConnectionListener)
         self._running_future = None
         self._stopping = False
 
-        self._connection_future = kiwipy.Future()
+        self._connecting_future = kiwipy.Future()
+        self._disconnecting_future = None
 
         self._state = ConnectorState.DISCONNECTED
 
@@ -67,6 +67,9 @@ class RmqConnector(object):
         sure you set stop_ioloop_on_close to False, which is not the default
         behavior of this adapter.
         """
+        if self._state is ConnectorState.CONNECTED:
+            return self._connecting_future
+
         LOGGER.info('Connecting to %s', self.get_connection_params())
         if self._state is ConnectorState.DISCONNECTED:
             self._state = ConnectorState.CONNECTING
@@ -77,21 +80,19 @@ class RmqConnector(object):
                 stop_ioloop_on_close=False,
                 custom_ioloop=self._loop)
 
-        return self._connection_future
+        return self._connecting_future
 
-    def close(self):
-        """Stop the example by closing the channel and connection. We
-        set a flag here so that we stop scheduling new messages to be
-        published. The IOLoop is started because this method is
-        invoked by the Try/Catch below when KeyboardInterrupt is caught.
-        Starting the IOLoop again will allow the publisher to cleanly
-        disconnect from RabbitMQ.
+    def disconnect(self):
+        """This method closes the connection to RabbitMQ."""
+        if self._state is not ConnectorState.DISCONNECTED:
+            LOGGER.info('Closing connection')
+            self._disconnecting_future = kiwipy.Future()
+            self._connection.close()
+            self._connection = None
+            self._connecting_future = None
+            self._state = ConnectorState.DISCONNECTED
 
-        """
-        LOGGER.info('Stopping')
-        self._stopping = True
-        self._close_channels()
-        self._close_connection()
+        return self._disconnecting_future
 
     def open_channel(self):
         connection_future = self.connect()
@@ -105,12 +106,15 @@ class RmqConnector(object):
         Channel.Open RPC command.
         """
         LOGGER.info('Creating a new channel')
-        connection.channel(on_open_callback=partial(self._on_channel_open, future))
+        connection.channel(on_open_callback=future.set_result)
         return future
 
     def close_channel(self, channel):
-        self._channels.remove(channel)
+        LOGGER.info("Closing channel {}".format(channel))
+        future = kiwipy.Future()
+        channel.add_on_close_callback(lambda *args: future.set_result(args))
         channel.close()
+        return future
 
     def exchange_declare(self, channel, nowait=False, **kwargs):
         params = dict(kwargs)
@@ -173,7 +177,7 @@ class RmqConnector(object):
         """
         LOGGER.info('Connection opened')
         self._connection = connection
-        self._connection_future.set_result(connection)
+        self._connecting_future.set_result(connection)
         self._state = ConnectorState.CONNECTED
 
         self._event_helper.fire_event(ConnectionListener.on_connection_opened, self, connection)
@@ -188,13 +192,10 @@ class RmqConnector(object):
         :param str reply_text: The server provided reply_text if given
 
         """
-        self._channels = []
         self._connection = None
-        self._state = ConnectorState.DISCONNECTED
-        self._connection_future = None
 
-        if not self._stopping and self._reconnect_timeout is not None:
-            self._connection_future = kiwipy.Future()
+        if self._state is not ConnectorState.DISCONNECTED and self._reconnect_timeout is not None:
+            self._connecting_future = kiwipy.Future()
             self._state = ConnectorState.WAITING_TO_RECONNECT
             LOGGER.warning(
                 "Connection closed, reopening in {} seconds: ({}) {}".format(
@@ -202,24 +203,14 @@ class RmqConnector(object):
                 ))
             self._connection.add_timeout(self._reconnect_timeout, self._reconnect)
         else:
-            self._connection_future = None
+            self._state = ConnectorState.DISCONNECTED
+            self._connecting_future = None
+            if self._disconnecting_future:
+                self._disconnecting_future.set_result(True)
 
         self._event_helper.fire_event(
             ConnectionListener.on_connection_closed, self,
             self._state == ConnectorState.WAITING_TO_RECONNECT)
-
-    def _on_channel_open(self, future, channel):
-        self._channels.append(channel)
-        channel.add_on_close_callback(self._on_channel_closed)
-        future.set_result(channel)
-
-    def _on_channel_closed(self, channel, reply_code, reply_text):
-        try:
-            self._channels.remove(channel)
-            LOGGER.info("Channel '{}' closed.  Code '{}', text '{}'".format(
-                channel.channel_number, reply_code, reply_text))
-        except ValueError:
-            pass
 
     def _reconnect(self):
         """Will be invoked by the IOLoop timer if the connection is
@@ -229,18 +220,3 @@ class RmqConnector(object):
         if not self._stopping:
             # Create a new connection
             self.connect()
-
-    def _close_channels(self):
-        LOGGER.info('Closing channels')
-        for ch in self._channels:
-            try:
-                ch.close()
-            except pika.exceptions.ChannelAlreadyClosing:
-                pass
-
-    def _close_connection(self):
-        """This method closes the connection to RabbitMQ."""
-        if self._connection is not None:
-            LOGGER.info('Closing connection')
-            self._connection.close()
-            self._connection = None

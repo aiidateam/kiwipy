@@ -31,8 +31,8 @@ class TestTaskControllerAndRunner(utils.TestCaseWithLoop):
             task_queue_name=self.queue_name,
             testing_mode=True)
 
-        self.loop.run_sync(lambda: self.subscriber.init())
-        self.loop.run_sync(lambda: self.publisher.init())
+        self.loop.run_sync(lambda: self.subscriber.connect())
+        self.loop.run_sync(lambda: self.publisher.connect())
 
     def tearDown(self):
         # Close the connector before calling super because it will
