@@ -204,7 +204,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
                  encoder=yaml.dump,
                  decoder=yaml.load,
                  confirm_deliveries=True,
-                 publish_connection=None,
                  testing_mode=False):
         """
         :param connector:
@@ -235,12 +234,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         self._awaiting_response = {}
 
         self._reply_queue = "{}-reply-{}".format(self._exchange, str(uuid.uuid4()))
-
-        self._own_publish_connection = None
-        if publish_connection is None:
-            publish_connection = pika.BlockingConnection(connector.get_connection_params())
-            self._own_publish_connection = publish_connection
-        self._publish_channel = self.create_publish_channel(publish_connection)
 
         self._active = False
         self._channel = None
@@ -293,9 +286,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
             if self.channel() is not None and not self.channel().is_closed:
                 yield self._connector.close_channel(self.channel())
             self._channel = None
-            if self._own_publish_connection:
-                self._own_publish_connection.close()
-                self._own_publish_connection = None
 
     def create_publish_channel(self, connection):
         channel = connection.channel()
@@ -351,7 +341,9 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
 
         properties.correlation_id = correlation_id
 
-        self._publish_channel.publish(*args, **kwargs)
+        with self._connector.blocking_channel() as publish_channel:
+            publish_channel.publish(*args, **kwargs)
+
         delivery_future = None
 
         if self._confirm_deliveries:

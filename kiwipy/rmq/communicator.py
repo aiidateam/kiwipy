@@ -221,9 +221,6 @@ class RmqCommunicator(kiwipy.Communicator):
         self._connector = connector
         self._loop = connector._loop
 
-        # Create a shared publish connection
-        self._publish_connection = pika.BlockingConnection(connector.get_connection_params())
-
         self._message_subscriber = RmqSubscriber(
             connector,
             exchange_name,
@@ -235,7 +232,6 @@ class RmqCommunicator(kiwipy.Communicator):
             exchange_name=exchange_name,
             encoder=encoder,
             decoder=decoder,
-            publish_connection=self._publish_connection
         )
         self._task_subscriber = tasks.RmqTaskSubscriber(
             connector,
@@ -252,7 +248,6 @@ class RmqCommunicator(kiwipy.Communicator):
             encoder=encoder,
             decoder=decoder,
             testing_mode=testing_mode,
-            publish_connection=self._publish_connection
         )
 
     def init(self):
@@ -267,7 +262,6 @@ class RmqCommunicator(kiwipy.Communicator):
         self._loop.run_sync(self._task_publisher.disconnect)
         self._loop.run_sync(self._task_subscriber.disconnect)
         self._loop.run_sync(self._connector.disconnect)
-        self._publish_connection.close()
 
     def add_rpc_subscriber(self, subscriber, identifier):
         self._message_subscriber.add_rpc_subscriber(subscriber, identifier)

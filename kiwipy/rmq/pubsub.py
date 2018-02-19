@@ -1,10 +1,9 @@
+from contextlib import contextmanager
 from enum import Enum
 import logging
-from functools import partial
 import pika
 import pika.exceptions
 import kiwipy
-from tornado import gen
 
 from . import loops
 
@@ -56,6 +55,18 @@ class RmqConnector(object):
     @property
     def is_connected(self):
         return self._connection is not None and self._connection.is_open
+
+    def get_blocking_connection(self):
+        return pika.BlockingConnection(self._connection_params)
+
+    @contextmanager
+    def blocking_channel(self, confirm_delivery=True):
+        conn = self.get_blocking_connection()
+        channel = conn.channel()
+        if confirm_delivery:
+            channel.confirm_delivery()
+        yield channel
+        channel.close()
 
     def get_connection_params(self):
         return self._connection_params
