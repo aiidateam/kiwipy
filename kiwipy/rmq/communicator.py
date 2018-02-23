@@ -220,6 +220,7 @@ class RmqCommunicator(kiwipy.Communicator):
 
         self._connector = connector
         self._loop = connector._loop
+        self._connected = False
 
         self._message_subscriber = RmqSubscriber(
             connector,
@@ -250,11 +251,16 @@ class RmqCommunicator(kiwipy.Communicator):
             testing_mode=testing_mode,
         )
 
-    def init(self):
+    def connect(self):
+        if self._connected:
+            return
+
         self._loop.run_sync(self._message_subscriber.connect)
         self._loop.run_sync(self._task_subscriber.connect)
         self._loop.run_sync(self._message_publisher.connect)
         self._loop.run_sync(self._task_publisher.connect)
+
+        self._connected = True
 
     def disconnect(self):
         self._loop.run_sync(self._message_publisher.disconnect)

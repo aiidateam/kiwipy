@@ -27,7 +27,7 @@ class TestCommunicator(CommunicatorTester, utils.TestCaseWithLoop):
             testing_mode=True
         )
 
-        communicator.init()
+        communicator.connect()
         return communicator
 
     def destroy_communicator(self, communicator):
@@ -50,7 +50,7 @@ class TestCommunicatorDroppyConnection(utils.TestCaseWithLoop):
             testing_mode=True
         )
 
-        self._communicator.init()
+        self._communicator.connect()
 
     def tearDown(self):
         self._communicator.disconnect()

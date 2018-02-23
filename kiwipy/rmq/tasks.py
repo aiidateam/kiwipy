@@ -143,11 +143,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 task = self._decode(body)
                 result = subscriber(task)
                 if isinstance(result, kiwipy.Future):
-                    self._pending_tasks.append(
-                        PendingTask(self, result,
-                                    method.delivery_tag,
-                                    props.correlation_id,
-                                    props.reply_to))
+                    pending = PendingTask(self, result, method.delivery_tag, props.correlation_id, props.reply_to)
+                    self._pending_tasks.append(pending)
                 else:
                     # Finished
                     self._task_finished(
