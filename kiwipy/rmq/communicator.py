@@ -312,4 +312,6 @@ class RmqCommunicator(kiwipy.Communicator):
             raise kiwipy.TaskRejected(str(e))
 
     def await(self, future=None, timeout=None):
+        # Ensure we're connected
+        self.connect()
         return self._loop.run_sync(lambda: future, timeout=timeout)
