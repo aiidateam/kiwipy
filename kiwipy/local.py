@@ -1,4 +1,7 @@
+import time
+
 from . import communications
+from . import futures
 
 __all__ = ['LocalCommunicator']
 
@@ -14,4 +17,9 @@ class LocalCommunicator(communications.CommunicatorHelper):
         return self.fire_broadcast(body, sender=sender, subject=subject, correlation_id=correlation_id)
 
     def await(self, future=None, timeout=None):
-        return future.result()
+        if not future.done():
+            time.sleep(timeout)
+        try:
+            return future.result()
+        except futures.InvalidStateError:
+            raise communications.TimeoutError("Timed out waiting for result")

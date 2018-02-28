@@ -4,6 +4,7 @@ import logging
 import pika
 import pika.exceptions
 from tornado.gen import coroutine
+import tornado.ioloop
 import yaml
 
 from . import defaults
@@ -78,12 +79,11 @@ class RmqSubscriber(pubsub.ConnectionListener):
     def add_rpc_subscriber(self, subscriber, identifier):
         self._rpc_subscribers[identifier] = subscriber
 
-    def remove_rpc_subscriber(self, subscriber):
-        for identifier, sub in self._rpc_subscribers:
-            if sub is subscriber:
-                self._rpc_subscribers.pop(identifier)
-                return
-        raise ValueError("Unknown subscriber '{}'".format(subscriber))
+    def remove_rpc_subscriber(self, identifier):
+        try:
+            self._rpc_subscribers.pop(identifier)
+        except KeyError:
+            raise ValueError("Unknown subscriber '{}'".format(identifier))
 
     def add_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.append(subscriber)
@@ -272,8 +272,8 @@ class RmqCommunicator(kiwipy.Communicator):
     def add_rpc_subscriber(self, subscriber, identifier):
         self._message_subscriber.add_rpc_subscriber(subscriber, identifier)
 
-    def remove_rpc_subscriber(self, subscriber):
-        self._message_subscriber.remove_rpc_subscriber(subscriber)
+    def remove_rpc_subscriber(self, identifier):
+        self._message_subscriber.remove_rpc_subscriber(identifier)
 
     def add_task_subscriber(self, subscriber):
         self._task_subscriber.add_task_subscriber(subscriber)
@@ -314,4 +314,7 @@ class RmqCommunicator(kiwipy.Communicator):
     def await(self, future=None, timeout=None):
         # Ensure we're connected
         self.connect()
-        return self._loop.run_sync(lambda: future, timeout=timeout)
+        try:
+            return self._loop.run_sync(lambda: future, timeout=timeout)
+        except tornado.ioloop.TimeoutError as e:
+            raise kiwipy.TimeoutError(str(e))

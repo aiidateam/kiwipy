@@ -5,7 +5,8 @@ import sys
 from . import futures
 
 __all__ = ['Communicator', 'CommunicatorHelper',
-           'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError'
+           'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError',
+           'TimeoutError'
            ]
 
 
@@ -29,6 +30,11 @@ class TaskRejected(Exception):
     pass
 
 
+class TimeoutError(Exception):
+    """ Waiting for a future timed out """
+    pass
+
+
 class Communicator(with_metaclass(abc.ABCMeta)):
     """
     The interface for a communicator used to both send and receive various
@@ -40,7 +46,13 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         pass
 
     @abc.abstractmethod
-    def remove_rpc_subscriber(self, subscriber):
+    def remove_rpc_subscriber(self, identifier):
+        """
+        Remove an RPC subscriber given the identifier.  Raises a `ValueError` if there
+        is no such subscriber.
+
+        :param identifier: The RPC subscriber identifier
+        """
         pass
 
     @abc.abstractmethod
@@ -89,9 +101,9 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         """
         pass
 
-    def rpc_send_and_wait(self, recipient_id, msg):
+    def rpc_send_and_wait(self, recipient_id, msg, timeout=None):
         future = self.rpc_send(recipient_id, msg)
-        self.await(future)
+        self.await(future, timeout=timeout)
         return future.result()
 
     @abc.abstractmethod
@@ -112,12 +124,11 @@ class CommunicatorHelper(Communicator):
     def add_rpc_subscriber(self, subscriber, identifier):
         self._rpc_subscribers[identifier] = subscriber
 
-    def remove_rpc_subscriber(self, subscriber):
-        for identifier, sub in self._rpc_subscribers.items():
-            if sub is subscriber:
-                self._rpc_subscribers.pop(identifier)
-                return
-        raise ValueError("Unknown subscriber '{}'".format(subscriber))
+    def remove_rpc_subscriber(self, identifier):
+        try:
+            self._rpc_subscribers.pop(identifier)
+        except KeyError:
+            raise ValueError("Unknown subscriber '{}'".format(identifier))
 
     def add_task_subscriber(self, subscriber):
         """
@@ -163,7 +174,7 @@ class CommunicatorHelper(Communicator):
         try:
             subscriber = self._rpc_subscribers[recipient_id]
         except KeyError:
-            raise ValueError("Unknown recipient '{}'".format(recipient_id))
+            raise UnroutableError("Unknown rpc recipient '{}'".format(recipient_id))
         else:
             future = futures.Future()
             try:
