@@ -41,7 +41,7 @@ setup(
     ],
     extras_require={
         'rmq': ['pika', 'tornado', 'pyyaml'],
-        'dev': ['pytest', 'ipython', 'twine'],
+        'dev': ['pytest', 'pytest-cov', 'ipython', 'twine'],
         ':python_version<"3.5"': ['typing'],
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['backports.tempfile']

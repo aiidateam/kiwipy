@@ -4,6 +4,8 @@ import kiwipy
 
 
 class CommunicatorTester(with_metaclass(abc.ABCMeta)):
+    WAIT_TIMEOUT = 0.5
+
     def setUp(self):
         super(CommunicatorTester, self).setUp()
         self.communicator = self.create_communicator()
@@ -89,7 +91,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
 
         self.communicator.broadcast_send(**FULL_MSG)
         # Wait fot the send and receive
-        self.communicator.await(kiwipy.gather(message1, message2), timeout=1.0)
+        self.communicator.await(kiwipy.gather(message1, message2), timeout=self.WAIT_TIMEOUT)
 
         self.assertDictEqual(message1.result(), FULL_MSG)
         self.assertDictEqual(message2.result(), FULL_MSG)
@@ -111,7 +113,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
             self.communicator.broadcast_send(None, subject=subject)
 
-        self.communicator.await(done, timeout=1.0)
+        self.communicator.await(done, timeout=self.WAIT_TIMEOUT)
 
         self.assertEqual(len(subjects), 2)
         self.assertListEqual(EXPECTED_SUBJECTS, subjects)
@@ -133,7 +135,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
             self.communicator.broadcast_send(None, sender=sender)
 
-        self.communicator.await(done, timeout=1.0)
+        self.communicator.await(done, timeout=self.WAIT_TIMEOUT)
 
         self.assertEqual(2, len(senders))
         self.assertListEqual(EXPECTED_SENDERS, senders)
@@ -163,7 +165,38 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
             for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
                 self.communicator.broadcast_send(None, sender=sender, subject=subject)
 
-        self.communicator.await(done, timeout=1.0)
+        self.communicator.await(done, timeout=self.WAIT_TIMEOUT)
 
         self.assertEqual(4, len(senders_and_subects))
         self.assertSetEqual(EXPECTED, senders_and_subects)
+
+    def test_add_remove_broadcast_subscriber(self):
+        broadcast_received = kiwipy.Future()
+
+        def broadcast_subscriber(body, sender=None, subject=None, correlation_id=None):
+            broadcast_received.set_result(True)
+
+        # Check we're getting messages
+        self.communicator.add_broadcast_subscriber(broadcast_subscriber)
+        self.communicator.broadcast_send(None)
+        self.assertTrue(self.communicator.await(broadcast_received, timeout=self.WAIT_TIMEOUT))
+
+        self.communicator.remove_broadcast_subscriber(broadcast_subscriber)
+        # Check that we're unsubscribed
+        broadcast_received = kiwipy.Future()
+        with self.assertRaises(kiwipy.TimeoutError):
+            self.communicator.await(broadcast_received, timeout=self.WAIT_TIMEOUT)
+
+    def test_add_remove_rpc_subscriber(self):
+        def rpc_subscriber(msg):
+            return True
+
+        # Check we're getting messages
+        self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
+        result = self.communicator.rpc_send_and_wait(rpc_subscriber.__name__, None, timeout=self.WAIT_TIMEOUT)
+        self.assertTrue(result)
+
+        self.communicator.remove_rpc_subscriber(rpc_subscriber.__name__)
+        # Check that we're unsubscribed
+        with self.assertRaises(kiwipy.UnroutableError):
+            self.communicator.rpc_send_and_wait(rpc_subscriber.__name__, None, timeout=self.WAIT_TIMEOUT)
