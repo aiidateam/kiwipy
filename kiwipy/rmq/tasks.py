@@ -117,7 +117,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         yield super(RmqTaskSubscriber, self).connect()
         connector = self._connector
-        self.channel().basic_qos(prefetch_count=1)
+        self.channel().basic_qos()
 
         # Set up task queue
         task_queue = self._task_queue
@@ -143,8 +143,11 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 task = self._decode(body)
                 result = subscriber(task)
                 if isinstance(result, kiwipy.Future):
-                    pending = PendingTask(self, result, method.delivery_tag, props.correlation_id, props.reply_to)
-                    self._pending_tasks.append(pending)
+                    self._pending_tasks.append(
+                        PendingTask(self, result,
+                                    method.delivery_tag,
+                                    props.correlation_id,
+                                    props.reply_to))
                 else:
                     # Finished
                     self._task_finished(
