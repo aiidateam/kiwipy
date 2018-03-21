@@ -198,5 +198,5 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
 
         self.communicator.remove_rpc_subscriber(rpc_subscriber.__name__)
         # Check that we're unsubscribed
-        with self.assertRaises(kiwipy.UnroutableError):
+        with self.assertRaises((kiwipy.UnroutableError, kiwipy.TimeoutError)):
             self.communicator.rpc_send_and_wait(rpc_subscriber.__name__, None, timeout=self.WAIT_TIMEOUT)
