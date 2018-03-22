@@ -149,6 +149,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
     # end region
 
+    @coroutine
     def _on_rpc(self, ch, method, props, body):
         identifier = method.routing_key[len('{}.'.format(defaults.RPC_TOPIC)):]
         receiver = self._rpc_subscribers.get(identifier, None)
@@ -164,6 +165,14 @@ class RmqSubscriber(pubsub.ConnectionListener):
                 result = receiver(msg)
                 if isinstance(result, kiwipy.Future):
                     response = utils.pending_response()
+                    self._send_response(ch, props.reply_to, props.correlation_id, response)
+                    try:
+                        response = yield result
+                        response = utils.result_response(response)
+                    except kiwipy.CancelledError as e:
+                        response = utils.cancelled_response()
+                    except BaseException as e:
+                        response = utils.exception_response(e)
                 else:
                     response = utils.result_response(result)
             except BaseException as e:
