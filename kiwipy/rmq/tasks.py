@@ -117,7 +117,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         yield super(RmqTaskSubscriber, self).connect()
         connector = self._connector
-        self.channel().basic_qos(prefetch_count=1)
+        self.channel().basic_qos()
 
         # Set up task queue
         task_queue = self._task_queue
