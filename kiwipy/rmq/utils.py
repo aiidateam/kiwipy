@@ -1,3 +1,4 @@
+import collections
 import functools
 import inspect
 import kiwipy
@@ -51,6 +52,9 @@ def response_result(response):
 
 
 def response_to_future(response, future=None):
+    if not isinstance(response, collections.Mapping):
+        raise TypeError("Response must be a mapping")
+
     if future is None:
         future = kiwipy.Future()
 

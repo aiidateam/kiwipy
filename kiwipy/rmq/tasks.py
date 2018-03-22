@@ -136,6 +136,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         self._consumer_tag = self.channel().basic_consume(self._on_task, task_queue)
 
+    @coroutine
     def _on_task(self, ch, method, props, body):
         handled = False
         for subscriber in self._subscribers:
@@ -143,15 +144,15 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 task = self._decode(body)
                 result = subscriber(task)
                 if isinstance(result, kiwipy.Future):
-                    pending = PendingTask(self, result, method.delivery_tag, props.correlation_id, props.reply_to)
-                    self._pending_tasks.append(pending)
+                    try:
+                        result = yield result
+                        response = utils.result_response(result)
+                    except kiwipy.CancelledError:
+                        response = utils.cancelled_response()
                 else:
-                    # Finished
-                    self._task_finished(
-                        method.delivery_tag,
-                        props.correlation_id,
-                        props.reply_to,
-                        utils.result_response(result))
+                    response = utils.result_response(result)
+
+                # Finished
                 handled = True
                 break
             except kiwipy.TaskRejected:
@@ -160,15 +161,12 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 raise
             except Exception as e:
                 import traceback
-                response = '{}\n{}'.format(e, traceback.format_exc())
-                self._task_finished(
-                    method.delivery_tag,
-                    props.correlation_id,
-                    props.reply_to,
-                    utils.exception_response(response))
+                response = utils.exception_response('{}\n{}'.format(e, traceback.format_exc()))
                 handled = True
 
-        if not handled:
+        if handled:
+            self._task_finished(method.delivery_tag, props.correlation_id, props.reply_to, response)
+        else:
             self._channel.basic_reject(delivery_tag=method.delivery_tag)
 
     def _task_finished(self, delivery_tag, correlation_id, reply_to, response):

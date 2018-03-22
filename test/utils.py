@@ -56,6 +56,27 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         self.assertEqual(tasks[0], TASK)
         self.assertEqual(result, RESULT)
 
+    def test_future_task(self):
+        TASK = 'The meaning?'
+        RESULT = 42
+        result_future = kiwipy.Future()
+
+        tasks = []
+
+        def on_task(task):
+            tasks.append(task)
+            return result_future
+
+        self.communicator.add_task_subscriber(on_task)
+        task_future = self.communicator.task_send(TASK)
+
+        result_future.set_result(42)
+
+        result = self.communicator.await(task_future)
+
+        self.assertEqual(tasks[0], TASK)
+        self.assertEqual(result, RESULT)
+
     def test_task_exception(self):
         TASK = 'The meaning?'
 
