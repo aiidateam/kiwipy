@@ -43,32 +43,6 @@ class TaskMessage(messages.Message):
         kiwipy.copy_future(done_future, self.future)
 
 
-class PendingTask(object):
-    def __init__(self, subscriber, future, delivery_tag, correlation_id, reply_to):
-        self._subscriber = subscriber
-        self._delivery_tag = delivery_tag
-        self._correlation_id = correlation_id
-        self._reply_to = reply_to
-        self._future = future
-        self._future.add_done_callback(self._on_task_done)
-
-    def ignore(self):
-        self._future.remove_done_callback(self._on_task_done)
-        self._future = None
-
-    def _on_task_done(self, future):
-        try:
-            response = utils.result_response(future.result())
-        except Exception as e:
-            response = utils.exception_response(e)
-
-        self._subscriber._task_finished(
-            self._delivery_tag,
-            self._correlation_id,
-            self._reply_to,
-            response)
-
-
 class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     """
     Listens for tasks coming in on the RMQ task queue
@@ -101,7 +75,6 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._encode = encoder
 
         self._subscribers = []
-        self._pending_tasks = []
 
     def add_task_subscriber(self, subscriber):
         self._subscribers.append(subscriber)
