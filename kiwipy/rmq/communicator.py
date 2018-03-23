@@ -3,6 +3,7 @@ import kiwipy
 import logging
 import pika
 import pika.exceptions
+import tornado.gen
 from tornado.gen import coroutine
 import tornado.ioloop
 import yaml
@@ -162,7 +163,10 @@ class RmqSubscriber(pubsub.ConnectionListener):
             msg = self._decode(body)
 
             try:
-                result = receiver(msg)
+                if tornado.gen.is_coroutine_function(receiver):
+                    result = yield receiver(msg)
+                else:
+                    result = receiver(msg)
                 if isinstance(result, kiwipy.Future):
                     response = utils.pending_response()
                     self._send_response(ch, props.reply_to, props.correlation_id, response)
@@ -180,11 +184,15 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
             self._send_response(ch, props.reply_to, props.correlation_id, response)
 
+    @coroutine
     def _on_broadcast(self, ch, method, props, body):
         msg = self._decode(body)
         for receiver in self._broadcast_subscribers:
             try:
-                receiver(**msg)
+                if tornado.gen.is_coroutine_function(receiver):
+                    yield receiver(**msg)
+                else:
+                    receiver(**msg)
             except BaseException:
                 import traceback
                 _LOGGER.error("Exception in broadcast receiver!\n"
