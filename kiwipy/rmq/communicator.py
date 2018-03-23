@@ -268,6 +268,13 @@ class RmqCommunicator(kiwipy.Communicator):
             testing_mode=testing_mode,
         )
 
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.disconnect()
+
     def connect(self):
         if self._connected:
             return
@@ -330,6 +337,8 @@ class RmqCommunicator(kiwipy.Communicator):
 
     def await(self, future=None, timeout=None):
         # Ensure we're connected
+        if future is None:
+            future = kiwipy.Future()
         self.connect()
         try:
             return self._loop.run_sync(lambda: future, timeout=timeout)
