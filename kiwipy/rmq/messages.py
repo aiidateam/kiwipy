@@ -212,9 +212,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         :param encoder:
         :param decoder:
         :param confirm_deliveries:
-        :param publish_connection: A blocking connection used for publishing
-            messages to the exchange
-        :type publish_connection: :class:`pika.BlockingConnection`
         """
         super(BasePublisherWithReplyQueue, self).__init__()
 
