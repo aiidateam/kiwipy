@@ -77,10 +77,14 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._subscribers = []
 
     def add_task_subscriber(self, subscriber):
+        if not self._subscribers:
+            self._consumer_tag = self.channel().basic_consume(self._on_task, self._task_queue)
         self._subscribers.append(subscriber)
 
     def remove_task_subscriber(self, subscriber):
         self._subscribers.remove(subscriber)
+        if not self._subscribers:
+            self.channel().basic_cancel(self._consumer_tag)
 
     @coroutine
     def connect(self):
@@ -106,8 +110,6 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             queue=task_queue,
             exchange=self._exchange_name,
             routing_key=task_queue)
-
-        self._consumer_tag = self.channel().basic_consume(self._on_task, task_queue)
 
     @coroutine
     def _on_task(self, ch, method, props, body):
