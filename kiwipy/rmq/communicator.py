@@ -167,7 +167,8 @@ class RmqSubscriber(pubsub.ConnectionListener):
                     result = yield receiver(msg)
                 else:
                     result = receiver(msg)
-                if isinstance(result, kiwipy.Future):
+
+                if isinstance(result, tornado.concurrent.Future):
                     response = utils.pending_response()
                     self._send_response(ch, props.reply_to, props.correlation_id, response)
                     try:
