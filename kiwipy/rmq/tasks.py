@@ -137,7 +137,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             except Exception as e:
                 import traceback
                 response = utils.exception_response('{}\n{}'.format(e, traceback.format_exc()))
-                handled = True
+                self._task_finished(method.delivery_tag, props.correlation_id, props.reply_to, response)
+                raise
 
         if handled:
             self._task_finished(method.delivery_tag, props.correlation_id, props.reply_to, response)
