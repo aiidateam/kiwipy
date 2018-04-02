@@ -109,7 +109,10 @@ class RmqSubscriber(pubsub.ConnectionListener):
         frame = yield connector.queue_declare(
             channel,
             exclusive=True,
-            arguments={"x-expires": 60000})
+            arguments={
+                "x-message-ttl": defaults.MESSAGE_TTL,
+                "x-expires": defaults.QUEUE_EXPIRES
+            })
         rpc_queue = frame.method.queue
         result = yield connector.queue_bind(
             channel,
@@ -122,7 +125,10 @@ class RmqSubscriber(pubsub.ConnectionListener):
         frame = yield connector.queue_declare(
             channel,
             exclusive=True,
-            arguments={"x-expires": 60000})
+            arguments={
+                "x-message-ttl": defaults.MESSAGE_TTL,
+                "x-expires": defaults.QUEUE_EXPIRES
+            })
         broadcast_queue = frame.method.queue
         yield connector.queue_bind(
             channel,

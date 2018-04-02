@@ -103,8 +103,10 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             queue=task_queue,
             durable=not self._testing_mode,
             auto_delete=self._testing_mode,
-            arguments={"x-expires": 60000}
+            arguments={"x-message-ttl": defaults.TASK_MESSAGE_TTL}
         )
+        # x-expires means how long does the queue stay alive after no clients
+        # x-message-ttl means what is the default ttl for a message arriving in the queue
         yield connector.queue_bind(
             self._channel,
             queue=task_queue,
