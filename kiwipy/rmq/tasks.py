@@ -75,6 +75,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._encode = encoder
 
         self._subscribers = []
+        self._pending_tasks = []
 
     def add_task_subscriber(self, subscriber):
         if not self._subscribers:
@@ -85,6 +86,13 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._subscribers.remove(subscriber)
         if not self._subscribers:
             self.channel().basic_cancel(self._consumer_tag)
+
+    def on_connection_closed(self, connector, reconnecting):
+        for task in self._pending_tasks:
+            try:
+                task.cancel()
+            except kiwipy.InvalidStateError:
+                pass
 
     @coroutine
     def connect(self):
@@ -121,11 +129,15 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 task = self._decode(body)
                 result = subscriber(task)
                 if isinstance(result, kiwipy.Future):
+                    task_future = result
                     try:
-                        result = yield result
+                        self._pending_tasks.append(task_future)
+                        result = yield task_future
                         response = utils.result_response(result)
                     except kiwipy.CancelledError:
                         response = utils.cancelled_response()
+                    finally:
+                        self._pending_tasks.remove(task_future)
                 else:
                     response = utils.result_response(result)
 
