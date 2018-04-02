@@ -55,6 +55,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                  encoder=yaml.dump,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
+                 prefetch_size=defaults.TASK_PREFETCH_SIZE,
+                 prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  ):
         """
         :param connector: An RMQ connector
@@ -73,6 +75,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._testing_mode = testing_mode
         self._decode = decoder
         self._encode = encoder
+        self._prefetch_size = prefetch_size
+        self._prefetch_count = prefetch_count
 
         self._subscribers = []
         self._pending_tasks = []
@@ -102,7 +106,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         yield super(RmqTaskSubscriber, self).connect()
         connector = self._connector
-        self.channel().basic_qos()
+        self.channel().basic_qos(
+            prefetch_count=self._prefetch_count,
+            prefetch_size=self._prefetch_size)
 
         # Set up task queue
         task_queue = self._task_queue

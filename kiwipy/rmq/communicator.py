@@ -18,7 +18,6 @@ __all__ = ['RmqCommunicator']
 
 _LOGGER = logging.getLogger(__name__)
 
-
 # The exchange properties use by the publisher and subscriber.  These have to match
 # which is why they're declare her
 EXCHANGE_PROPERTIES = {
@@ -227,6 +226,8 @@ class RmqCommunicator(kiwipy.Communicator):
                  task_queue=defaults.TASK_QUEUE,
                  encoder=yaml.dump,
                  decoder=yaml.load,
+                 task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+                 task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  testing_mode=False):
         """
 
@@ -266,6 +267,8 @@ class RmqCommunicator(kiwipy.Communicator):
             task_queue_name=task_queue,
             encoder=encoder,
             decoder=decoder,
+            prefetch_size=task_prefetch_size,
+            prefetch_count=task_prefetch_count,
             testing_mode=testing_mode,
         )
         self._task_publisher = tasks.RmqTaskPublisher(
