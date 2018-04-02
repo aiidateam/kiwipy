@@ -3,3 +3,4 @@ TASK_QUEUE = 'kiwipy.tasks'
 MESSAGE_EXCHANGE = 'kiwipy.messages'
 BROADCAST_TOPIC = '[broadcast]'
 RPC_TOPIC = '[rpc]'
+DEFAULT_TTL = 60000

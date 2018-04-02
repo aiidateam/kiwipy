@@ -117,7 +117,6 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
     """
     DEFAULT_EXCHANGE_PARAMS = {
         'exchange_type': 'topic',
-        'auto_delete': True,
     }
 
     def __init__(self, connector,
@@ -195,7 +194,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
     """
     DEFAULT_EXCHANGE_PARAMS = {
         'exchange_type': 'topic',
-        'auto_delete': True
     }
 
     def __init__(self, connector,
