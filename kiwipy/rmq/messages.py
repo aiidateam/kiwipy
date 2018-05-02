@@ -117,7 +117,6 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
     """
     DEFAULT_EXCHANGE_PARAMS = {
         'exchange_type': 'topic',
-        'auto_delete': True,
     }
 
     def __init__(self, connector,
@@ -195,7 +194,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
     """
     DEFAULT_EXCHANGE_PARAMS = {
         'exchange_type': 'topic',
-        'auto_delete': True
     }
 
     def __init__(self, connector,
@@ -212,9 +210,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         :param encoder:
         :param decoder:
         :param confirm_deliveries:
-        :param publish_connection: A blocking connection used for publishing
-            messages to the exchange
-        :type publish_connection: :class:`pika.BlockingConnection`
         """
         super(BasePublisherWithReplyQueue, self).__init__()
 
@@ -273,7 +268,7 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
             queue=self._reply_queue,
             exclusive=True,
             auto_delete=self._testing_mode,
-            arguments={"x-expires": 60000}
+            arguments={"x-expires": defaults.REPLY_QUEUE_EXPIRES}
         )
 
         self._channel.basic_consume(self._on_response, no_ack=True, queue=self._reply_queue)

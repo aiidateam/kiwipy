@@ -43,32 +43,6 @@ class TaskMessage(messages.Message):
         kiwipy.copy_future(done_future, self.future)
 
 
-class PendingTask(object):
-    def __init__(self, subscriber, future, delivery_tag, correlation_id, reply_to):
-        self._subscriber = subscriber
-        self._delivery_tag = delivery_tag
-        self._correlation_id = correlation_id
-        self._reply_to = reply_to
-        self._future = future
-        self._future.add_done_callback(self._on_task_done)
-
-    def ignore(self):
-        self._future.remove_done_callback(self._on_task_done)
-        self._future = None
-
-    def _on_task_done(self, future):
-        try:
-            response = utils.result_response(future.result())
-        except Exception as e:
-            response = utils.exception_response(e)
-
-        self._subscriber._task_finished(
-            self._delivery_tag,
-            self._correlation_id,
-            self._reply_to,
-            response)
-
-
 class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     """
     Listens for tasks coming in on the RMQ task queue
@@ -81,6 +55,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                  encoder=yaml.dump,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
+                 prefetch_size=defaults.TASK_PREFETCH_SIZE,
+                 prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  ):
         """
         :param connector: An RMQ connector
@@ -99,15 +75,28 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._testing_mode = testing_mode
         self._decode = decoder
         self._encode = encoder
+        self._prefetch_size = prefetch_size
+        self._prefetch_count = prefetch_count
 
         self._subscribers = []
         self._pending_tasks = []
 
     def add_task_subscriber(self, subscriber):
+        if not self._subscribers:
+            self._consumer_tag = self.channel().basic_consume(self._on_task, self._task_queue)
         self._subscribers.append(subscriber)
 
     def remove_task_subscriber(self, subscriber):
         self._subscribers.remove(subscriber)
+        if not self._subscribers:
+            self.channel().basic_cancel(self._consumer_tag)
+
+    def on_connection_closed(self, connector, reconnecting):
+        for task in self._pending_tasks:
+            try:
+                task.cancel()
+            except kiwipy.InvalidStateError:
+                pass
 
     @coroutine
     def connect(self):
@@ -117,7 +106,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         yield super(RmqTaskSubscriber, self).connect()
         connector = self._connector
-        self.channel().basic_qos(prefetch_count=1)
+        self.channel().basic_qos(
+            prefetch_count=self._prefetch_count,
+            prefetch_size=self._prefetch_size)
 
         # Set up task queue
         task_queue = self._task_queue
@@ -126,16 +117,17 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             queue=task_queue,
             durable=not self._testing_mode,
             auto_delete=self._testing_mode,
-            arguments={"x-expires": 60000}
+            arguments={"x-message-ttl": defaults.TASK_MESSAGE_TTL}
         )
+        # x-expires means how long does the queue stay alive after no clients
+        # x-message-ttl means what is the default ttl for a message arriving in the queue
         yield connector.queue_bind(
             self._channel,
             queue=task_queue,
             exchange=self._exchange_name,
             routing_key=task_queue)
 
-        self._consumer_tag = self.channel().basic_consume(self._on_task, task_queue)
-
+    @coroutine
     def _on_task(self, ch, method, props, body):
         handled = False
         for subscriber in self._subscribers:
@@ -143,15 +135,19 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 task = self._decode(body)
                 result = subscriber(task)
                 if isinstance(result, kiwipy.Future):
-                    pending = PendingTask(self, result, method.delivery_tag, props.correlation_id, props.reply_to)
-                    self._pending_tasks.append(pending)
+                    task_future = result
+                    try:
+                        self._pending_tasks.append(task_future)
+                        result = yield task_future
+                        response = utils.result_response(result)
+                    except kiwipy.CancelledError:
+                        response = utils.cancelled_response()
+                    finally:
+                        self._pending_tasks.remove(task_future)
                 else:
-                    # Finished
-                    self._task_finished(
-                        method.delivery_tag,
-                        props.correlation_id,
-                        props.reply_to,
-                        utils.result_response(result))
+                    response = utils.result_response(result)
+
+                # Finished
                 handled = True
                 break
             except kiwipy.TaskRejected:
@@ -160,15 +156,13 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 raise
             except Exception as e:
                 import traceback
-                response = '{}\n{}'.format(e, traceback.format_exc())
-                self._task_finished(
-                    method.delivery_tag,
-                    props.correlation_id,
-                    props.reply_to,
-                    utils.exception_response(response))
-                handled = True
+                response = utils.exception_response('{}\n{}'.format(e, traceback.format_exc()))
+                self._task_finished(method.delivery_tag, props.correlation_id, props.reply_to, response)
+                raise
 
-        if not handled:
+        if handled:
+            self._task_finished(method.delivery_tag, props.correlation_id, props.reply_to, response)
+        else:
             self._channel.basic_reject(delivery_tag=method.delivery_tag)
 
     def _task_finished(self, delivery_tag, correlation_id, reply_to, response):

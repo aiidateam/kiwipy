@@ -88,7 +88,6 @@ class RmqConnector(object):
                 self._connection_params,
                 on_open_callback=self._on_connection_open,
                 on_close_callback=self._on_connection_closed,
-                stop_ioloop_on_close=False,
                 custom_ioloop=self._loop)
 
         return self._connecting_future
@@ -204,6 +203,8 @@ class RmqConnector(object):
 
         """
         self._connection = None
+
+        LOGGER.info("The connection was closed: ({}) {}".format(reply_code, reply_text))
 
         if self._state is not ConnectorState.DISCONNECTED and self._reconnect_timeout is not None:
             self._connecting_future = kiwipy.Future()

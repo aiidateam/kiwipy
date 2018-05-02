@@ -155,17 +155,25 @@ class CommunicatorHelper(Communicator):
 
     def fire_task(self, msg):
         future = futures.Future()
+        handled = False
 
         for subscriber in self._task_subscribers:
             try:
                 result = subscriber(msg)
-                future.set_result(result)
+                if isinstance(result, futures.Future):
+                    future = result
+                else:
+                    future.set_result(result)
+
+                handled = True
                 break
             except TaskRejected:
                 pass
             except Exception:
                 future.set_exception(RemoteException(sys.exc_info()))
-        if not future.done():
+                handled = True
+
+        if not handled:
             future.set_exception(TaskRejected("Rejected by all subscribers"))
 
         return future

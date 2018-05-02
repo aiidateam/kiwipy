@@ -1,8 +1,6 @@
 from kiwipy.rmq import *
 import time
 
-communicator = RmqCommunicator(RmqConnector('amqp://localhost'))
-
 print(' [*] Waiting for messages. To exit press CTRL+C')
 
 
@@ -12,5 +10,6 @@ def callback(task):
     print(" [x] Done")
 
 
-communicator.add_task_subscriber(callback)
-communicator.await()
+with RmqCommunicator(RmqConnector('amqp://localhost')) as communicator:
+    communicator.add_task_subscriber(callback)
+    communicator.await()

@@ -3,6 +3,7 @@ import kiwipy
 import logging
 import pika
 import pika.exceptions
+import tornado.gen
 from tornado.gen import coroutine
 import tornado.ioloop
 import yaml
@@ -17,15 +18,10 @@ __all__ = ['RmqCommunicator']
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def declare_exchange(channel, name, done_callback):
-    channel.exchange_declare(
-        done_callback, exchange=name, exchange_type='topic', auto_delete=True)
-
-
+# The exchange properties use by the publisher and subscriber.  These have to match
+# which is why they're declare her
 EXCHANGE_PROPERTIES = {
     'exchange_type': 'topic',
-    'auto_delete': True
 }
 
 
@@ -109,7 +105,13 @@ class RmqSubscriber(pubsub.ConnectionListener):
         yield connector.exchange_declare(channel, exchange=self._exchange_name, **EXCHANGE_PROPERTIES)
 
         # RPC queue
-        frame = yield connector.queue_declare(channel, exclusive=True, auto_delete=True)
+        frame = yield connector.queue_declare(
+            channel,
+            exclusive=True,
+            arguments={
+                "x-message-ttl": defaults.MESSAGE_TTL,
+                "x-expires": defaults.QUEUE_EXPIRES
+            })
         rpc_queue = frame.method.queue
         result = yield connector.queue_bind(
             channel,
@@ -119,7 +121,13 @@ class RmqSubscriber(pubsub.ConnectionListener):
         channel.basic_consume(self._on_rpc, queue=rpc_queue)
 
         # Broadcast queue
-        frame = yield connector.queue_declare(channel, exclusive=True, auto_delete=True)
+        frame = yield connector.queue_declare(
+            channel,
+            exclusive=True,
+            arguments={
+                "x-message-ttl": defaults.MESSAGE_TTL,
+                "x-expires": defaults.QUEUE_EXPIRES
+            })
         broadcast_queue = frame.method.queue
         yield connector.queue_bind(
             channel,
@@ -149,6 +157,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
     # end region
 
+    @coroutine
     def _on_rpc(self, ch, method, props, body):
         identifier = method.routing_key[len('{}.'.format(defaults.RPC_TOPIC)):]
         receiver = self._rpc_subscribers.get(identifier, None)
@@ -161,9 +170,21 @@ class RmqSubscriber(pubsub.ConnectionListener):
             msg = self._decode(body)
 
             try:
-                result = receiver(msg)
-                if isinstance(result, kiwipy.Future):
+                if tornado.gen.is_coroutine_function(receiver):
+                    result = yield receiver(msg)
+                else:
+                    result = receiver(msg)
+
+                if isinstance(result, tornado.concurrent.Future):
                     response = utils.pending_response()
+                    self._send_response(ch, props.reply_to, props.correlation_id, response)
+                    try:
+                        response = yield result
+                        response = utils.result_response(response)
+                    except kiwipy.CancelledError as e:
+                        response = utils.cancelled_response()
+                    except BaseException as e:
+                        response = utils.exception_response(e)
                 else:
                     response = utils.result_response(result)
             except BaseException as e:
@@ -171,11 +192,15 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
             self._send_response(ch, props.reply_to, props.correlation_id, response)
 
+    @coroutine
     def _on_broadcast(self, ch, method, props, body):
         msg = self._decode(body)
         for receiver in self._broadcast_subscribers:
             try:
-                receiver(**msg)
+                if tornado.gen.is_coroutine_function(receiver):
+                    yield receiver(**msg)
+                else:
+                    receiver(**msg)
             except BaseException:
                 import traceback
                 _LOGGER.error("Exception in broadcast receiver!\n"
@@ -201,6 +226,8 @@ class RmqCommunicator(kiwipy.Communicator):
                  task_queue=defaults.TASK_QUEUE,
                  encoder=yaml.dump,
                  decoder=yaml.load,
+                 task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+                 task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  testing_mode=False):
         """
 
@@ -240,6 +267,8 @@ class RmqCommunicator(kiwipy.Communicator):
             task_queue_name=task_queue,
             encoder=encoder,
             decoder=decoder,
+            prefetch_size=task_prefetch_size,
+            prefetch_count=task_prefetch_count,
             testing_mode=testing_mode,
         )
         self._task_publisher = tasks.RmqTaskPublisher(
@@ -250,6 +279,13 @@ class RmqCommunicator(kiwipy.Communicator):
             decoder=decoder,
             testing_mode=testing_mode,
         )
+
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.disconnect()
 
     def connect(self):
         if self._connected:
@@ -313,6 +349,8 @@ class RmqCommunicator(kiwipy.Communicator):
 
     def await(self, future=None, timeout=None):
         # Ensure we're connected
+        if future is None:
+            future = kiwipy.Future()
         self.connect()
         try:
             return self._loop.run_sync(lambda: future, timeout=timeout)

@@ -3,6 +3,5 @@ import sys
 
 message = ' '.join(sys.argv[1:]) or "Hello World!"
 
-communicator = RmqCommunicator(RmqConnector('amqp://localhost'))
-communicator.task_send(message)
-communicator.disconnect()
+with RmqCommunicator(RmqConnector('amqp://localhost')) as communicator:
+    communicator.task_send(message)
