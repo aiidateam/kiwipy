@@ -65,8 +65,11 @@ class RmqConnector(object):
         channel = conn.channel()
         if confirm_delivery:
             channel.confirm_delivery()
-        yield channel
-        channel.close()
+        try:
+            yield channel
+        finally:
+            channel.close()
+            conn.close()
 
     def get_connection_params(self):
         return self._connection_params
