@@ -4,8 +4,7 @@ backports.weakref==1.0.post1
 certifi==2018.1.18
 enum34==1.1.6; python_version < '3.4'
 future==0.16.0
-kiwipy==0.1.0
-pika==0.11.2
+pika==0.12.0
 PyYAML==3.12
 singledispatch==3.4.0.3
 six==1.11.0
