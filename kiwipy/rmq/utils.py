@@ -4,6 +4,7 @@ import inspect
 import kiwipy
 import os
 import socket
+from tornado import concurrent
 
 # The key used in messages to give information about the host that send a message
 HOST_KEY = 'host'
@@ -33,8 +34,19 @@ def result_response(result):
     return {RESULT_KEY: result}
 
 
-def exception_response(exception):
-    return {EXCEPTION_KEY: str(exception)}
+def exception_response(exception, trace=None):
+    """
+    Create an exception response dictionary
+    :param exception: The exception to encode
+    :type exception: :class:`Exception`
+    :param trace: Optional traceback
+    :return: A response dictionary
+    :rtype: dict
+    """
+    msg = str(exception)
+    if trace is not None:
+        msg += "\n{}".format(trace)
+    return {EXCEPTION_KEY: msg}
 
 
 def cancelled_response(msg=None):
@@ -46,17 +58,23 @@ def pending_response(msg=None):
 
 
 def response_result(response):
-    future = kiwipy.Future()
+    future = concurrent.Future()
     response_to_future(response, future)
     return future.result()
 
 
 def response_to_future(response, future=None):
+    """
+    Take a response message and set the appropriate value on the given future
+    :param response:
+    :param future:
+    :return:
+    """
     if not isinstance(response, collections.Mapping):
         raise TypeError("Response must be a mapping")
 
     if future is None:
-        future = kiwipy.Future()
+        future = concurrent.Future()
 
     if CANCELLED_KEY in response:
         future.cancel()
@@ -64,61 +82,65 @@ def response_to_future(response, future=None):
         future.set_exception(kiwipy.RemoteException(response[EXCEPTION_KEY]))
     elif RESULT_KEY in response:
         future.set_result(response[RESULT_KEY])
-    elif not PENDING_KEY in response:
+    elif PENDING_KEY in response:
+        future.set_result(concurrent.Future())
+    else:
         raise ValueError("Unknown response type '{}'".format(response))
 
     return future
 
 
-def _get_initialisers(rmq_instance):
-    def is_initialiser(fn):
+def future_to_response(future):
+    """
+    Convert a future to a response dictionary
+    :param future: The future
+    :type future: :class:`kiwipy.Future`
+    :return: The response dictionary
+    :rtype: dict
+    """
+    if future.cancelled():
+        return cancelled_response()
+    try:
+        return result_response(future.result())
+    except Exception as e:
+        return exception_response(e)
+
+
+def tornado_to_kiwi_future(tornado_future):
+    """
+    :type tornado_future: :class:`tornado.concurrent.Future`
+    :rtype: :class:`kiwipy.Future`
+    """
+    kiwi_future = kiwipy.Future()
+
+    def done(done_future):
+        # Copy over the future
         try:
-            return inspect.ismethod(fn) and fn.__is_initailiser
-        except AttributeError:
-            return False
+            result = done_future.result()
+            if concurrent.is_future(result):
+                # Change the future type to a kiwi one
+                result = tornado_to_kiwi_future(result)
+            kiwi_future.set_result(result)
+        except kiwipy.CancelledError:
+            kiwi_future.cancel()
+        except Exception as e:
+            kiwi_future.set_exception(e)
 
-    return inspect.getmembers(rmq_instance, predicate=is_initialiser)
-
-
-def initialiser():
-    def wrapper(wrapped):
-        @functools.wraps(wrapped)
-        def init_fn(self, *a, **kw):
-            if not self._in_init_method:
-                self._in_init_method = True
-                try:
-                    wrapped(self, *a, **kw)
-                except Exception:
-                    import sys
-                    self._initialising.set_exc_info(sys.exc_info())
-                else:
-                    self._initialised(wrapped)
-                finally:
-                    self._in_init_method = False
-            else:
-                wrapped(self, *a, **kw)
-
-        init_fn.__is_initailiser = True
-        return init_fn
-
-    return wrapper
+    tornado_future.add_done_callback(done)
+    return kiwi_future
 
 
-class InitialisationMixin(object):
-    def __init__(self, *args, **kwargs):
-        super(InitialisationMixin, self).__init__(*args, **kwargs)
-        # Make a set of the intiialiser method names
-        self._initialisers = set(method[0] for method in _get_initialisers(self))
-        self._initialising = kiwipy.Future()
-        self._in_init_method = False
+def kiwi_to_tornado_future(kiwi_future):
+    tornado_future = concurrent.Future()
 
-    def initialised_future(self):
-        return self._initialising
+    def done(done_future):
+        if done_future.cancelled():
+            tornado_future.cancel()
+        try:
+            tornado_future.set_result(done_future.result())
+        except Exception as e:
+            tornado_future.set_exception(e)
 
-    def reinitialising(self):
-        self._initialising = kiwipy.Future()
+    kiwi_future.add_done_callback(done)
 
-    def _initialised(self, fn):
-        self._initialisers.remove(fn.__name__)
-        if not self._initialisers:
-            self._initialising.set_result(True)
+    return tornado_future
