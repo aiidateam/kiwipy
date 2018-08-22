@@ -105,8 +105,8 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener):
     def __init__(self, connection,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
-                 encoder=yaml.dump,
-                 decoder=yaml.load,
+                 encoder=defaults.encoder,
+                 decoder=defaults.decoder,
                  confirm_deliveries=True,
                  testing_mode=False):
         """
@@ -194,9 +194,6 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener):
         message.send(self)
         return message.future
 
-    def await_response(self, correlation_id, callback):
-        self._awaiting_response[correlation_id] = callback
-
     @gen.coroutine
     def publish(self, message, routing_key, mandatory=True, immediate=False):
         result = yield self._exchange.publish(
@@ -210,7 +207,7 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener):
     def publish_expect_response(self, message, routing_key, mandatory=True, immediate=False, response_timeout=None):
         # If there is no correlation id we have to set on so that we know what the response will be to
         if not message.correlation_id:
-            message.correlation_id = str(uuid.uuid4())
+            message.correlation_id = str(uuid.uuid4()).encode()
         correlation_id = message.correlation_id
 
         response_future = concurrent.Future()
@@ -238,7 +235,7 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener):
         try:
             response_future = self._awaiting_response.pop(correlation_id)
         except KeyError:
-            _LOGGER.error("Got a response:\n%s", message)
+            _LOGGER.error("Got a response for an unknown id '%s':\n%s", correlation_id, message)
         else:
             response = self._response_decode(message.body)
             utils.response_to_future(response, response_future)

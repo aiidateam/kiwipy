@@ -1,3 +1,6 @@
+from functools import partial
+import yaml
+
 TASK_EXCHANGE = 'kiwipy.tasks'
 TASK_QUEUE = 'kiwipy.tasks'
 MESSAGE_EXCHANGE = 'kiwipy.messages'
@@ -9,3 +12,6 @@ REPLY_QUEUE_EXPIRES = 60000
 TASK_MESSAGE_TTL = 60000 * 60 * 24 * 7  # One week
 TASK_PREFETCH_SIZE = 0
 TASK_PREFETCH_COUNT = 0
+
+encoder = partial(yaml.dump, encoding='utf-8')
+decoder = yaml.load

@@ -27,8 +27,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     def __init__(self, connection,
                  task_queue_name=defaults.TASK_QUEUE,
                  testing_mode=False,
-                 decoder=yaml.load,
-                 encoder=yaml.dump,
+                 decoder=defaults.decoder,
+                 encoder=defaults.encoder,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
                  prefetch_size=defaults.TASK_PREFETCH_SIZE,
@@ -205,8 +205,8 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                  task_queue_name=defaults.TASK_QUEUE,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
-                 encoder=yaml.dump,
-                 decoder=yaml.load,
+                 encoder=defaults.encoder,
+                 decoder=defaults.decoder,
                  confirm_deliveries=True,
                  testing_mode=False):
         super(RmqTaskPublisher, self).__init__(

@@ -6,13 +6,12 @@ import pika
 import pika.exceptions
 import threading
 import topika
-from tornado import gen, concurrent, ioloop
+from tornado import gen, concurrent
 import yaml
 
 from . import defaults
 from . import tasks
 from . import messages
-from . import pubsub
 from . import utils
 
 __all__ = ['RmqCommunicator', 'RmqThreadCommunicator']
@@ -68,8 +67,8 @@ class RmqSubscriber(object):
 
     def __init__(self, connection,
                  exchange_name=defaults.TASK_EXCHANGE,
-                 decoder=yaml.load,
-                 encoder=yaml.dump):
+                 decoder=defaults.decoder,
+                 encoder=defaults.encoder):
         """
         Subscribes and listens for process control messages and acts on them
         by calling the corresponding methods of the process manager.
@@ -224,8 +223,8 @@ class RmqCommunicator(object):
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  task_exchange=defaults.TASK_EXCHANGE,
                  task_queue=defaults.TASK_QUEUE,
-                 encoder=yaml.dump,
-                 decoder=yaml.load,
+                 encoder=defaults.encoder,
+                 decoder=defaults.decoder,
                  task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
                  task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  testing_mode=False):
@@ -365,8 +364,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  task_exchange=defaults.TASK_EXCHANGE,
                  task_queue=defaults.TASK_QUEUE,
-                 encoder=yaml.dump,
-                 decoder=yaml.load,
+                 encoder=defaults.encoder,
+                 decoder=defaults.decoder,
                  task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
                  task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  testing_mode=False):
