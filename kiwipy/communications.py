@@ -83,10 +83,10 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         :rtype: :class:`kiwi.Future`
         """
 
-    def task_send_and_wait(self, msg):
-        future = self.task_send(msg)
-        self.await(future)
-        return future.result()
+    def task_send_and_wait(self, msg, timeout=None):
+        fut = self.task_send(msg)
+        self.wait_for(fut, timeout=timeout)
+        return fut.result()
 
     @abc.abstractmethod
     def rpc_send(self, recipient_id, msg):
@@ -102,16 +102,16 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         pass
 
     def rpc_send_and_wait(self, recipient_id, msg, timeout=None):
-        future = self.rpc_send(recipient_id, msg)
-        self.await(future, timeout=timeout)
-        return future.result()
+        fut = self.rpc_send(recipient_id, msg)
+        self.wait_for(fut, timeout=timeout)
+        return fut.result()
 
     @abc.abstractmethod
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         pass
 
     @abc.abstractmethod
-    def await(self, future=None, timeout=None):
+    def wait_for(self, future, timeout=None):
         pass
 
 
@@ -140,7 +140,7 @@ class CommunicatorHelper(Communicator):
 
     def remove_task_subscriber(self, subscriber):
         """
-        Deregister a task subscriber
+        Remove a task subscriber
 
         :param subscriber: The task callback function
         """
@@ -160,11 +160,7 @@ class CommunicatorHelper(Communicator):
         for subscriber in self._task_subscribers:
             try:
                 result = subscriber(msg)
-                if isinstance(result, futures.Future):
-                    future = result
-                else:
-                    future.set_result(result)
-
+                future.set_result(result)
                 handled = True
                 break
             except TaskRejected:
@@ -172,6 +168,7 @@ class CommunicatorHelper(Communicator):
             except Exception:
                 future.set_exception(RemoteException(sys.exc_info()))
                 handled = True
+                break
 
         if not handled:
             future.set_exception(TaskRejected("Rejected by all subscribers"))

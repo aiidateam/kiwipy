@@ -4,9 +4,8 @@ backports.weakref==1.0.post1
 certifi==2018.1.18
 enum34==1.1.6; python_version < '3.4'
 future==0.16.0
-pika==0.12.0
+futures==3.2.0; python_version == '2.7'
 PyYAML==3.12
-singledispatch==3.4.0.3
-six==1.11.0
+https://github.com/pika/pika/archive/c00648bf40635c8e8032814f30d2488df44961ec.zip#egg=pika-1.0.0b1
+topika==0.1.0
 tornado==4.5.3
-typing==3.6.4

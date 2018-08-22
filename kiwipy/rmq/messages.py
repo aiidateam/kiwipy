@@ -2,9 +2,10 @@ import abc
 from collections import deque, namedtuple
 from future.utils import with_metaclass
 import kiwipy
+import logging
 from past.builtins import basestring
-import pika
-from tornado.gen import coroutine
+from tornado import gen, concurrent
+import topika
 import uuid
 import yaml
 
@@ -12,135 +13,59 @@ from . import pubsub
 from . import defaults
 from . import utils
 
-
-class Publisher(with_metaclass(abc.ABCMeta)):
-    @abc.abstractmethod
-    def publish_msg(self, body, routing_key, correlation_id=None, ttl=None):
-        """
-        Publish a message with a routing key. A correlation id and time-to-live
-        can optionally be supplied.
-
-        :param body: The body of the message
-        :param routing_key: The routing key
-        :type routing_key: str
-        :param correlation_id: The correlation id
-        :type correlation_id: str
-        :param ttl: A time-to-live for the message in seconds
-        :type ttl: str or float
-        """
-        pass
-
-    @abc.abstractmethod
-    def await_response(self, correlation_id, callback):
-        """
-        Away a response for a message with a given correlation id and call the
-        callback with the response message
-
-        :param correlation_id: The message correlation id
-        :param callback: The callback function that will be given the message
-            body as the sole parameter
-        """
-        pass
+_LOGGER = logging.getLogger(__name__)
 
 
-class Message(with_metaclass(abc.ABCMeta)):
-    @abc.abstractproperty
-    def future(self):
-        pass
-
-    @abc.abstractmethod
-    def send(self, publisher):
-        """
-        Send the message using the supplied publisher
-        :return:
-        """
-        pass
-
-
-class RpcMessage(Message):
-    """
-    A Remote Procedure Call message that waits for a response from the recipient.
-    """
-
-    def __init__(self, recipient_id, body):
-        self.recipient_id = recipient_id
-        self.body = body
-        self.correlation_id = str(uuid.uuid4())
-        self._future = kiwipy.Future()
-        self._publisher = None
-
-    @property
-    def future(self):
-        return self._future
-
-    def send(self, publisher):
-        self._publisher = publisher
-        routing_key = "{}.{}".format(defaults.RPC_TOPIC, self.recipient_id)
-        publisher.publish_msg(
-            self.body,
-            routing_key,
-            self.correlation_id,
-            mandatory=True)
-        self._publisher.await_response(self.correlation_id, self.on_response)
-        return self.future
-
-    def on_response(self, done_future):
-        kiwipy.copy_future(done_future, self.future)
-
-
-class BroadcastMessage(Message):
+class BroadcastMessage(object):
     BODY = 'body'
     SENDER = 'sender'
     SUBJECT = 'subject'
     CORRELATION_ID = 'correlation_id'
 
-    def __init__(self, body, sender=None, subject=None, correlation_id=None):
-        self.message = {
+    @staticmethod
+    def create(body, sender=None, subject=None, correlation_id=None):
+        message_dict = {
             BroadcastMessage.BODY: body,
             BroadcastMessage.SENDER: sender,
             BroadcastMessage.SUBJECT: subject,
             BroadcastMessage.CORRELATION_ID: correlation_id,
         }
-        self._future = kiwipy.Future()
-
-    @property
-    def future(self):
-        return self._future
-
-    def send(self, publisher):
-        publisher.publish_msg(self.message, defaults.BROADCAST_TOPIC)
+        return message_dict
 
 
-class BaseConnectionWithExchange(pubsub.ConnectionListener):
+class BaseConnectionWithExchange(object):
     """
-    An RMQ connection with an exchange
+    An RMQ connection with a channel and exchange
     """
     DEFAULT_EXCHANGE_PARAMS = {
-        'exchange_type': 'topic',
+        'type': topika.ExchangeType.TOPIC
     }
 
-    def __init__(self, connector,
+    def __init__(self, connection,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None):
+        """
+        :type connection: :class:`topika.Connection`
+        :type exchange_name: str
+        :type exchange_params: dict or NoneType
+        """
         super(BaseConnectionWithExchange, self).__init__()
 
         if exchange_params is None:
             exchange_params = self.DEFAULT_EXCHANGE_PARAMS
 
-        self._connector = connector
+        self._connection = connection
         self._exchange_name = exchange_name
         self._exchange_params = exchange_params
-        self._channel = None
-        self._active = False
+        self._loop = self._connection.loop
 
+        self._channel = None  # type: topika.Channel
+        self._exchange = None  # type: topika.Exchange
         self._is_closing = False
 
     @property
     def is_closing(self):
         return self._is_closing
-
-    def on_connection_opened(self, connector, connection):
-        self.connect()
 
     def get_exchange_name(self):
         return self._exchange_name
@@ -148,55 +73,36 @@ class BaseConnectionWithExchange(pubsub.ConnectionListener):
     def channel(self):
         return self._channel
 
-    @coroutine
+    @gen.coroutine
     def connect(self):
         if self._channel:
             return
-        if not self._active:
-            self._active = True
-            self._connector.add_connection_listener(self)
 
-        connector = self._connector
-        channel = yield connector.open_channel()
-        channel.add_on_close_callback(self._on_channel_close)
+        # Create the channel
+        self._channel = yield self._connection.channel()
+        # Create the exchange
+        self._exchange = yield self._channel.declare_exchange(
+            name=self.get_exchange_name(), **self._exchange_params)
 
-        yield connector.exchange_declare(
-            channel,
-            exchange=self.get_exchange_name(),
-            **self._exchange_params)
-
-        self._channel = channel
-
-    @coroutine
+    @gen.coroutine
     def disconnect(self):
         if not self.is_closing:
             self._is_closing = True
-            self._connector.remove_connection_listener(self)
             if self.channel() is not None:
-                yield self._connector.close_channel(self.channel())
+                yield self.channel().close()
                 self._channel = None
-            self._connector = None
-
-    # region RMQ communications
-
-    def _on_channel_close(self, channel, reply_code, reply_text):
-        self._channel = None
-
-    # endregion
+            self._connection = None
 
 
-DeliveryInfo = namedtuple('DeliveryInfo', ['tag', 'correlation_id', 'future'])
-
-
-class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
+class BasePublisherWithReplyQueue(pubsub.ConnectionListener):
     """
 
     """
     DEFAULT_EXCHANGE_PARAMS = {
-        'exchange_type': 'topic',
+        'type': topika.ExchangeType.TOPIC
     }
 
-    def __init__(self, connector,
+    def __init__(self, connection,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
                  encoder=yaml.dump,
@@ -204,7 +110,8 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
                  confirm_deliveries=True,
                  testing_mode=False):
         """
-        :param connector:
+        :param connection: The topika RMQ connection
+        :type connection: :class:`topika.connection.Connection`
         :param exchange_name:
         :param exchange_params:
         :param encoder:
@@ -216,7 +123,7 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         if exchange_params is None:
             exchange_params = self.DEFAULT_EXCHANGE_PARAMS
 
-        self._exchange = exchange_name
+        self._exchange_name = exchange_name
         self._exchange_params = exchange_params
         self._encode = encoder
         self._response_decode = decoder
@@ -228,11 +135,10 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
 
         self._awaiting_response = {}
 
-        self._reply_queue = "{}-reply-{}".format(self._exchange, str(uuid.uuid4()))
-
-        self._active = False
-        self._channel = None
-        self._connector = connector
+        self._connection = connection
+        self._channel = None  # type: topika.Channel
+        self._exchange = None  # type: topika.Exchange
+        self._reply_queue = None  # type: topika.Queue
 
         self._is_closing = False
 
@@ -244,49 +150,36 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
     def is_connected(self):
         return self._channel
 
-    @coroutine
+    @gen.coroutine
     def connect(self):
         if self.is_connected:
             return
-        if not self._active:
-            self._active = True
-            self._connector.add_connection_listener(self)
 
-        connector = self._connector
-        channel = yield connector.open_channel()
-        self._channel = channel
-        channel.add_on_close_callback(self._on_channel_close)
-
-        yield connector.exchange_declare(
-            channel,
-            exchange=self.get_exchange_name(),
-            **self._exchange_params)
+        self._channel = yield self._connection.channel(
+            publisher_confirms=self._confirm_deliveries, on_return_raises=True)
+        self._channel.add_close_callback(self._on_channel_close)
+        self._exchange = yield self._channel.declare_exchange(
+            name=self.get_exchange_name(), **self._exchange_params)
 
         # Declare the reply queue
-        yield connector.queue_declare(
-            channel,
-            queue=self._reply_queue,
+        reply_queue_name = "{}-reply-{}".format(self._exchange_name, str(uuid.uuid4()))
+        self._reply_queue = yield self._channel.declare_queue(
+            name=reply_queue_name,
             exclusive=True,
             auto_delete=self._testing_mode,
             arguments={"x-expires": defaults.REPLY_QUEUE_EXPIRES}
         )
 
-        self._channel.basic_consume(self._on_response, no_ack=True, queue=self._reply_queue)
+        yield self._reply_queue.bind(self._exchange, routing_key=reply_queue_name)
+        yield self._reply_queue.consume(self._on_response, no_ack=True)
 
-    @coroutine
+    @gen.coroutine
     def disconnect(self):
         if not self.is_closing:
             self._is_closing = True
-            self._connector.remove_connection_listener(self)
             if self.channel() is not None and not self.channel().is_closed:
-                yield self._connector.close_channel(self.channel())
+                yield self._channel.close()
             self._channel = None
-
-    def create_publish_channel(self, connection):
-        channel = connection.channel()
-        channel.confirm_delivery()
-        channel.exchange_declare(exchange=self.get_exchange_name(), **self._exchange_params)
-        return channel
 
     def action_message(self, message):
         """
@@ -304,85 +197,61 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
     def await_response(self, correlation_id, callback):
         self._awaiting_response[correlation_id] = callback
 
-    def publish_msg(self, msg, routing_key, correlation_id=None, mandatory=False, ttl=None):
-        # pika (and AMQP) expects the ttl to be a string
-        if ttl is not None and not isinstance(ttl, basestring):
-            ttl = str(ttl)
-
-        return self.do_publish(
-            correlation_id,
-            exchange=self._exchange,
+    @gen.coroutine
+    def publish(self, message, routing_key, mandatory=True, immediate=False):
+        result = yield self._exchange.publish(
+            message,
             routing_key=routing_key,
-            properties=pika.BasicProperties(
-                reply_to=self._reply_queue,
-                correlation_id=correlation_id,
-                delivery_mode=1,
-                content_type='text/json',
-                expiration=ttl,
-            ),
-            body=self._encode(msg),
-            mandatory=mandatory
-        )
+            mandatory=mandatory,
+            immediate=immediate)
+        raise gen.Return(result)
 
-    def do_publish(self, correlation_id, *args, **kwargs):
-        if self._confirm_deliveries and correlation_id is None:
-            # Give a temporary ID to be able to keep track of returned messages
-            correlation_id = str(uuid.uuid4())
+    @gen.coroutine
+    def publish_expect_response(self, message, routing_key, mandatory=True, immediate=False, response_timeout=None):
+        # If there is no correlation id we have to set on so that we know what the response will be to
+        if not message.correlation_id:
+            message.correlation_id = str(uuid.uuid4())
+        correlation_id = message.correlation_id
 
-        try:
-            properties = kwargs['properties']
-        except KeyError:
-            properties = pika.BasicProperties()
-
-        properties.correlation_id = correlation_id
-
-        with self._connector.blocking_channel() as publish_channel:
-            publish_channel.publish(*args, **kwargs)
-
-        delivery_future = None
-
-        if self._confirm_deliveries:
-            delivery_future = kiwipy.Future()
-            self._num_published += 1
-            self._delivery_info.append(DeliveryInfo(self._num_published, correlation_id, delivery_future))
-
-        return delivery_future
-
-    def on_connection_opened(self, connector, connection):
-        self.connect()
-
-    def get_reply_queue_name(self):
-        return self._reply_queue
+        response_future = concurrent.Future()
+        self._awaiting_response[correlation_id] = response_future
+        result = yield self.publish(message, routing_key=routing_key, mandatory=mandatory)
+        raise gen.Return((result, response_future))
 
     def get_exchange_name(self):
-        return self._exchange
+        return self._exchange_name
 
     def channel(self):
         return self._channel
 
     # region RMQ communications
 
-    def _on_response(self, ch, method, props, body):
-        """ Called when we get a message on our response queue """
-        correlation_id = props.correlation_id
-        try:
-            callback = self._awaiting_response[correlation_id]
-        except KeyError:
-            # TODO: Log
-            pass
-        else:
-            response = self._response_decode(body)
-            response_future = kiwipy.Future()
-            utils.response_to_future(response, response_future)
-            if response_future.done():
-                self._awaiting_response.pop(correlation_id)
-                callback(response_future)
-            else:
-                pass  # Keep waiting
+    @gen.coroutine
+    def _on_response(self, message):
+        """
+        Called when we get a message on our response queue
 
-    def _on_channel_close(self, channel, reply_code, reply_text):
+        :param message: The response message
+        :type message: :class:`topika.message.IncomingMessage`
+        """
+        correlation_id = message.correlation_id
+        try:
+            response_future = self._awaiting_response.pop(correlation_id)
+        except KeyError:
+            _LOGGER.error("Got a response:\n%s", message)
+        else:
+            response = self._response_decode(message.body)
+            utils.response_to_future(response, response_future)
+            try:
+                # If the response was a future it means we should another message that resolves
+                # that future
+                if concurrent.is_future(response_future.result()):
+                    self._awaiting_response[correlation_id] = response_future.result()
+            except Exception:
+                pass
+
+    def _on_channel_close(self, _closing_future):
         """ Reset all channel specific members """
-        self._channel = None
         if self._confirm_deliveries:
             self._num_published = 0
             self._delivery_info = deque()

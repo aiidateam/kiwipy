@@ -3,7 +3,10 @@ import uuid
 from functools import partial
 import kiwipy
 import pika
-from tornado.gen import coroutine
+import sys
+import topika
+from tornado import gen, concurrent
+import traceback
 import yaml
 
 from . import defaults
@@ -16,39 +19,12 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = ['RmqTaskSubscriber', 'RmqTaskPublisher']
 
 
-class TaskMessage(messages.Message):
-    def __init__(self, body, correlation_id=None):
-        super(TaskMessage, self).__init__()
-        self.correlation_id = correlation_id if correlation_id is not None else str(uuid.uuid4())
-        self.body = body
-        self._future = kiwipy.Future()
-
-    @property
-    def future(self):
-        return self._future
-
-    def send(self, publisher):
-        if self.correlation_id is None:
-            self.correlation_id = str(uuid.uuid4())
-        publisher.publish_msg(
-            self.body,
-            routing_key=None,  # Set by the publisher
-            correlation_id=self.correlation_id,
-            mandatory=True, )
-
-        publisher.await_response(self.correlation_id, self.on_response)
-        return self.future
-
-    def on_response(self, done_future):
-        kiwipy.copy_future(done_future, self.future)
-
-
 class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     """
     Listens for tasks coming in on the RMQ task queue
     """
 
-    def __init__(self, connector,
+    def __init__(self, connection,
                  task_queue_name=defaults.TASK_QUEUE,
                  testing_mode=False,
                  decoder=yaml.load,
@@ -59,132 +35,165 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                  prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  ):
         """
-        :param connector: An RMQ connector
-        :type connector: :class:`pubsub.RmqConnector`
+        :param connection: An RMQ connector
+        :type connection: :class:`topika.Connection`
         :param task_queue_name: The name of the queue to use
         :param decoder: A message decoder
         :param encoder: A response encoder
         """
         super(RmqTaskSubscriber, self).__init__(
-            connector,
+            connection,
             exchange_name=exchange_name,
             exchange_params=exchange_params
         )
 
-        self._task_queue = task_queue_name
+        self._task_queue_name = task_queue_name
         self._testing_mode = testing_mode
         self._decode = decoder
         self._encode = encoder
         self._prefetch_size = prefetch_size
         self._prefetch_count = prefetch_count
+        self._consumer_tag = None
 
+        self._task_queue = None  # type: topika.Queue
         self._subscribers = []
         self._pending_tasks = []
 
     def add_task_subscriber(self, subscriber):
-        if not self._subscribers:
-            self._consumer_tag = self.channel().basic_consume(self._on_task, self._task_queue)
         self._subscribers.append(subscriber)
 
     def remove_task_subscriber(self, subscriber):
         self._subscribers.remove(subscriber)
-        if not self._subscribers:
-            self.channel().basic_cancel(self._consumer_tag)
 
-    def on_connection_closed(self, connector, reconnecting):
-        for task in self._pending_tasks:
-            try:
-                task.cancel()
-            except kiwipy.InvalidStateError:
-                pass
-
-    @coroutine
+    @gen.coroutine
     def connect(self):
         if self.channel():
             # Already connected
             return
 
         yield super(RmqTaskSubscriber, self).connect()
-        connector = self._connector
-        self.channel().basic_qos(
+        yield self.channel().set_qos(
             prefetch_count=self._prefetch_count,
             prefetch_size=self._prefetch_size)
 
         # Set up task queue
-        task_queue = self._task_queue
-        yield connector.queue_declare(
-            self._channel,
-            queue=task_queue,
+        self._task_queue = yield self._channel.declare_queue(
+            name=self._task_queue_name,
             durable=not self._testing_mode,
             auto_delete=self._testing_mode,
             arguments={"x-message-ttl": defaults.TASK_MESSAGE_TTL}
         )
         # x-expires means how long does the queue stay alive after no clients
         # x-message-ttl means what is the default ttl for a message arriving in the queue
-        yield connector.queue_bind(
-            self._channel,
-            queue=task_queue,
-            exchange=self._exchange_name,
-            routing_key=task_queue)
+        yield self._task_queue.bind(
+            self._exchange,
+            routing_key=self._task_queue.name
+        )
 
-    @coroutine
-    def _on_task(self, ch, method, props, body):
-        handled = False
-        for subscriber in self._subscribers:
-            try:
-                task = self._decode(body)
-                result = subscriber(task)
-                if isinstance(result, kiwipy.Future):
-                    task_future = result
-                    try:
-                        self._pending_tasks.append(task_future)
-                        result = yield task_future
-                        response = utils.result_response(result)
-                    except kiwipy.CancelledError:
-                        response = utils.cancelled_response()
-                    finally:
-                        self._pending_tasks.remove(task_future)
+        self._consumer_tag = self._task_queue.consume(self._on_task)
+
+    @gen.coroutine
+    def _on_task(self, message):
+        """
+        :param message: The topika RMQ message
+        :type message: :class:`topika.IncomingMessage`
+        """
+        msg = None
+        with message.process(ignore_processed=True):
+            handled = False
+            task = self._decode(message.body)
+            for subscriber in self._subscribers:
+                try:
+                    result = subscriber(task)
+                except kiwipy.TaskRejected:
+                    continue
+                except KeyboardInterrupt:
+                    raise
+                except Exception as exc:
+                    _LOGGER.debug('There was an exception in task %s:\n%s', exc, traceback.format_exc())
+                    msg = self._build_response_message(utils.exception_response(sys.exc_info()[1:]), message)
+                    handled = True  # Finished
                 else:
-                    response = utils.result_response(result)
+                    # Create a reply message
+                    msg = self._create_task_reply(message, result)
+                    handled = True  # Finished
 
-                # Finished
-                handled = True
-                break
-            except kiwipy.TaskRejected:
-                pass
-            except KeyboardInterrupt:
-                raise
-            except Exception as e:
-                import traceback
-                response = utils.exception_response('{}\n{}'.format(e, traceback.format_exc()))
-                self._task_finished(method.delivery_tag, props.correlation_id, props.reply_to, response)
-                raise
+                if handled:
+                    message.ack()
+                    self._exchange.publish(msg, routing_key=message.reply_to)
+                    break  # Done, do break the loop
 
-        if handled:
-            self._task_finished(method.delivery_tag, props.correlation_id, props.reply_to, response)
+            if not handled:
+                # No one handled the task
+                message.reject(requeue=True)
+
+    def _create_task_reply(self, task_message, result):
+        """
+        Create the reply message based on the result of a task, if it's a future then
+        a further message will be scheduled for when that future finishes (and so on
+        if that future also resolves to a future)
+
+        :param task_message: The original task message
+        :param result: The result from the task
+        :return: The reply message
+        :rtype: :class:`topika.Message`
+        """
+        if isinstance(result, kiwipy.Future):
+            self._pending_tasks.append(result)
+
+            def task_done(future):
+                """
+                Process this future being done
+                :type future: :class:`kiwipy.Future`
+                """
+                if future not in self._pending_tasks:
+                    # Must have been 'cancelled'
+                    return
+
+                if future.cancelled():
+                    reply_msg = self._build_response_message(utils.cancelled_response(), task_message)
+                else:
+                    try:
+                        future_result = future.result()
+                    except Exception as e:
+                        reply_msg = self._build_response_message(utils.exception_response(e), task_message)
+                    else:
+                        reply_msg = self._create_task_reply(task_message, future_result)
+
+                # Clean up
+                self._pending_tasks.remove(future)
+
+                # Send the response to the sender
+                self._loop.add_callback(
+                    partial(self._exchange.publish, reply_msg,
+                            routing_key=task_message.reply_to))
+
+            result.add_done_callback(task_done)
+            body = utils.pending_response()
         else:
-            self._channel.basic_reject(delivery_tag=method.delivery_tag)
+            body = utils.result_response(result)
 
-    def _task_finished(self, delivery_tag, correlation_id, reply_to, response):
+        return self._build_response_message(body, task_message)
+
+    def _build_response_message(self, body, incoming_message):
         """
-        Send an acknowledgement of the task being actioned and a response to the
-        initiator.
+        Create a topika Message as a response to a task being deal with.
 
-        :param props: The message properties
-        :param method: The message method
-        :param response: The response to send to the initiator
+        :param body: The message body dictionary
+        :type body: dict
+        :param incoming_message: The original message we are responding to
+        :type incoming_message: :class:`topika.IncomingMessage`
+        :return: The response message
+        :rtype: :class:`topika.Message`
         """
-        self._channel.basic_ack(delivery_tag=delivery_tag)
-        self._send_response(correlation_id, reply_to, response)
+        # Add host info
+        body[utils.HOST_KEY] = utils.get_host_info()
+        message = topika.Message(
+            body=self._encode(body),
+            correlation_id=incoming_message.correlation_id
+        )
 
-    def _send_response(self, correlation_id, reply_to, response):
-        # Build full response
-        response[utils.HOST_KEY] = utils.get_host_info()
-        self.channel().basic_publish(
-            exchange='',
-            routing_key=reply_to,
-            body=self._encode(response),
-            properties=pika.BasicProperties(correlation_id=correlation_id))
+        return message
 
 
 class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
@@ -192,7 +201,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
     Publishes messages to the RMQ task queue and gets the response
     """
 
-    def __init__(self, connector,
+    def __init__(self, connection,
                  task_queue_name=defaults.TASK_QUEUE,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
@@ -201,37 +210,31 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                  confirm_deliveries=True,
                  testing_mode=False):
         super(RmqTaskPublisher, self).__init__(
-            connector,
+            connection,
             exchange_name=exchange_name,
             exchange_params=exchange_params,
             encoder=encoder,
             decoder=decoder,
             confirm_deliveries=confirm_deliveries,
             testing_mode=testing_mode)
-        self._task_queue = task_queue_name
+        self._task_queue_name = task_queue_name
 
-    def publish_msg(self, task, routing_key, correlation_id=None, mandatory=False, ttl=None):
-        if routing_key is not None:
-            _LOGGER.warn(
-                "Routing key '{}' passed but is ignored for all tasks".format(routing_key))
-        # pika (and AMQP) expects the ttl to be a string
-        if ttl is not None and not isinstance(ttl, basestring):
-            ttl = str(ttl)
-
-        return self.do_publish(
-            correlation_id,
-            exchange=self.get_exchange_name(),
-            routing_key=self._task_queue,
-            properties=pika.BasicProperties(
-                reply_to=self.get_reply_queue_name(),
-                delivery_mode=2,  # Persistent
-                correlation_id=correlation_id
-            ),
-            body=self._encode(task),
-            mandatory=mandatory,
-        )
-
+    @gen.coroutine
     def task_send(self, msg):
-        message = TaskMessage(msg)
-        self.action_message(message)
-        return message.future
+        """
+        Send a task for processing by a task subscriber
+        :param msg: The task payload
+        :return: A future representing the result of the task
+        :rtype: :class:`tornado.concurrent.Future`
+        """
+        task_msg = topika.Message(
+            body=self._encode(msg),
+            correlation_id=str(uuid.uuid4()),
+            reply_to=self._reply_queue.name
+        )
+        published, result_future = yield self.publish_expect_response(
+            task_msg,
+            routing_key=self._task_queue_name,
+            mandatory=True)
+        assert published, "The task was not published to the exchange"
+        raise gen.Return(result_future)

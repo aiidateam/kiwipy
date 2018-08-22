@@ -1,7 +1,7 @@
+import shortuuid
+import topika
+from tornado import gen
 import unittest
-import uuid
-
-import kiwipy
 
 from . import utils
 from ..utils import CommunicatorTester
@@ -16,48 +16,23 @@ except ImportError:
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
 class TestCommunicator(CommunicatorTester, utils.TestCaseWithLoop):
     def create_communicator(self):
-        self.connector = rmq.RmqConnector('amqp://guest:guest@localhost:5672/', loop=self.loop)
-        self.exchange = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
-        self.task_queue = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
+        exchange_name = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        task_queue_name = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
 
-        communicator = rmq.RmqCommunicator(
-            self.connector,
-            exchange_name=self.exchange,
-            task_queue=self.task_queue,
-            testing_mode=True
-        )
+        @gen.coroutine
+        def init():
+            connection = yield topika.connect_robust('amqp://guest:guest@localhost:5672/', loop=self.loop)
+            communicator = rmq.RmqThreadCommunicator(
+                connection,
+                exchange_name=exchange_name,
+                task_queue=task_queue_name,
+                testing_mode=True
+            )
+            raise gen.Return(communicator)
 
-        communicator.connect()
+        communicator = self.loop.run_sync(init)
+        communicator.start()
         return communicator
 
     def destroy_communicator(self, communicator):
-        communicator.disconnect()
-
-
-@unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
-class TestCommunicatorDroppyConnection(utils.TestCaseWithLoop):
-    def setUp(self):
-        super(TestCommunicatorDroppyConnection, self).setUp()
-
-        self.connector = rmq.RmqConnector('amqp://guest:guest@localhost:5672/', loop=self.loop)
-        self.exchange = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
-        self.task_queue = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
-
-        self._communicator = rmq.RmqCommunicator(
-            self.connector,
-            exchange_name=self.exchange,
-            task_queue=self.task_queue,
-            testing_mode=True
-        )
-
-        self._communicator.connect()
-
-    def tearDown(self):
-        self._communicator.disconnect()
-        self.connector.disconnect()
-
-        # Have to call super after because this closes the loop
-        super(TestCommunicatorDroppyConnection, self).tearDown()
-
-    def test_connect_disconnect(self):
-        self.loop.run_sync(lambda: self.connector.connect())
+        communicator.stop()

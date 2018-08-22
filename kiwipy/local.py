@@ -16,7 +16,7 @@ class LocalCommunicator(communications.CommunicatorHelper):
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         return self.fire_broadcast(body, sender=sender, subject=subject, correlation_id=correlation_id)
 
-    def await(self, future=None, timeout=None):
+    def wait_for(self, future=None, timeout=None):
         if not future.done():
             time.sleep(timeout)
         try:

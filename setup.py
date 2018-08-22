@@ -37,14 +37,23 @@ setup(
     # for a useful dicussion
     install_requires=[
         'tornado',
-        'future'
+        'future',
+        'topika'
     ],
     extras_require={
         'rmq': ['pika', 'tornado', 'pyyaml'],
-        'dev': ['pytest', 'pytest-cov', 'ipython', 'twine'],
+        'dev': [
+            'pip',
+            'pytest',
+            'pytest-cov',
+            'ipython',
+            'twine',
+            'shortuuid'
+        ],
         ':python_version<"3.5"': ['typing'],
         ':python_version<"3.4"': ['enum34'],
-        ':python_version<"3.2"': ['backports.tempfile']
+        ':python_version<"3.2"': ['backports.tempfile'],
+        ':python_version == "2.7"': ['futures']
     },
     packages=['kiwipy', 'kiwipy.rmq'],
     test_suite='test'
