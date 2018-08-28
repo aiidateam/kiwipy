@@ -22,7 +22,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             connection = yield topika.connect_robust('amqp://guest:guest@localhost:5672/', loop=self.loop)
             self.communicator = rmq.RmqCommunicator(
                 connection,
-                exchange_name=exchange_name,
+                message_exchange=exchange_name,
                 task_queue=task_queue_name,
                 testing_mode=True
             )

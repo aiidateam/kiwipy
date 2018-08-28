@@ -1,10 +1,8 @@
 import collections
-import functools
-import inspect
 import kiwipy
 import os
 import socket
-from tornado import concurrent
+from tornado import concurrent, gen
 
 # The key used in messages to give information about the host that send a message
 HOST_KEY = 'host'
@@ -144,3 +142,10 @@ def kiwi_to_tornado_future(kiwi_future):
     kiwi_future.add_done_callback(done)
 
     return tornado_future
+
+
+def ensure_coroutine(coro_or_fn):
+    if gen.is_coroutine_function(coro_or_fn):
+        return coro_or_fn
+    else:
+        return gen.coroutine(coro_or_fn)

@@ -1,13 +1,10 @@
-import abc
 from collections import deque, namedtuple
-from future.utils import with_metaclass
-import kiwipy
 import logging
 from past.builtins import basestring
 from tornado import gen, concurrent
 import topika
+import traceback
 import uuid
-import yaml
 
 from . import pubsub
 from . import defaults
@@ -237,15 +234,19 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener):
         except KeyError:
             _LOGGER.error("Got a response for an unknown id '%s':\n%s", correlation_id, message)
         else:
-            response = self._response_decode(message.body)
-            utils.response_to_future(response, response_future)
             try:
-                # If the response was a future it means we should another message that resolves
-                # that future
-                if concurrent.is_future(response_future.result()):
-                    self._awaiting_response[correlation_id] = response_future.result()
+                response = self._response_decode(message.body)
             except Exception:
-                pass
+                _LOGGER.error("Failed to decode message body:\n%s%s", message.body, traceback.format_exc())
+            else:
+                utils.response_to_future(response, response_future)
+                try:
+                    # If the response was a future it means we should another message that resolves
+                    # that future
+                    if concurrent.is_future(response_future.result()):
+                        self._awaiting_response[correlation_id] = response_future.result()
+                except Exception:
+                    pass
 
     def _on_channel_close(self, _closing_future):
         """ Reset all channel specific members """

@@ -98,13 +98,13 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         :param message: The topika RMQ message
         :type message: :class:`topika.IncomingMessage`
         """
-        msg = None
         with message.process(ignore_processed=True):
             handled = False
             task = self._decode(message.body)
             for subscriber in self._subscribers:
                 try:
-                    result = subscriber(task)
+                    subscriber = utils.ensure_coroutine(subscriber)
+                    result = yield subscriber(task)
                 except kiwipy.TaskRejected:
                     continue
                 except KeyboardInterrupt:

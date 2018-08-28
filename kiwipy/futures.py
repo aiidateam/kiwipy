@@ -1,4 +1,3 @@
-import tornado.concurrent
 from functools import partial
 import logging
 import platform

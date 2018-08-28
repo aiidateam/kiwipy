@@ -16,23 +16,15 @@ except ImportError:
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
 class TestCommunicator(CommunicatorTester, utils.TestCaseWithLoop):
     def create_communicator(self):
-        exchange_name = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_queue_name = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
 
-        @gen.coroutine
-        def init():
-            connection = yield topika.connect_robust('amqp://guest:guest@localhost:5672/', loop=self.loop)
-            communicator = rmq.RmqThreadCommunicator(
-                connection,
-                exchange_name=exchange_name,
-                task_queue=task_queue_name,
-                testing_mode=True
-            )
-            raise gen.Return(communicator)
-
-        communicator = self.loop.run_sync(init)
-        communicator.start()
-        return communicator
+        return rmq.RmqThreadCommunicator.connect(
+            connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
+            message_exchange=message_exchange,
+            task_queue=task_queue,
+            loop=self.loop,
+            testing_mode=True)
 
     def destroy_communicator(self, communicator):
         communicator.stop()

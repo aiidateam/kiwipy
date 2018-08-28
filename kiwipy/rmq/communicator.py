@@ -6,15 +6,14 @@ import pika
 import pika.exceptions
 import threading
 import topika
-from tornado import gen, concurrent
-import yaml
+from tornado import gen, concurrent, ioloop
 
 from . import defaults
 from . import tasks
 from . import messages
 from . import utils
 
-__all__ = ['RmqCommunicator', 'RmqThreadCommunicator']
+__all__ = ['RmqCommunicator', 'RmqThreadCommunicator', 'connect']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +65,7 @@ class RmqSubscriber(object):
     """
 
     def __init__(self, connection,
-                 exchange_name=defaults.TASK_EXCHANGE,
+                 message_exchange=defaults.MESSAGE_EXCHANGE,
                  decoder=defaults.decoder,
                  encoder=defaults.encoder):
         """
@@ -75,7 +74,7 @@ class RmqSubscriber(object):
 
         :param connection: The tokpia connection
         :type connection: :class:`topika.Connection`
-        :param exchange_name: The name of the exchange to use
+        :param message_exchange: The name of the exchange to use
         :param decoder:
         """
         super(RmqSubscriber, self).__init__()
@@ -83,7 +82,7 @@ class RmqSubscriber(object):
         self._connection = connection
         self._channel = None
         self._exchange = None
-        self._exchange_name = exchange_name
+        self._exchange_name = message_exchange
         self._decode = decoder
         self._response_encode = encoder
 
@@ -165,10 +164,8 @@ class RmqSubscriber(object):
                 msg = self._decode(message.body)
 
                 try:
-                    if gen.is_coroutine_function(receiver):
-                        result = yield receiver(msg)
-                    else:
-                        result = receiver(msg)
+                    receiver = utils.ensure_coroutine(receiver)
+                    result = yield receiver(msg)
 
                     if isinstance(result, concurrent.Future):
                         response = utils.pending_response()
@@ -193,10 +190,8 @@ class RmqSubscriber(object):
             msg = self._decode(message.body)
             for receiver in self._broadcast_subscribers:
                 try:
-                    if gen.is_coroutine_function(receiver):
-                        yield receiver(**msg)
-                    else:
-                        receiver(**msg)
+                    receiver = utils.ensure_coroutine(receiver)
+                    yield receiver(**msg)
                 except BaseException:
                     import traceback
                     _LOGGER.error("Exception in broadcast receiver!\n"
@@ -212,6 +207,7 @@ class RmqSubscriber(object):
             correlation_id=correlation_id
         )
         result = yield self._exchange.publish(message, routing_key=reply_to)
+        raise gen.Return(result)
 
 
 class RmqCommunicator(object):
@@ -220,7 +216,7 @@ class RmqCommunicator(object):
     """
 
     def __init__(self, connection,
-                 exchange_name=defaults.MESSAGE_EXCHANGE,
+                 message_exchange=defaults.MESSAGE_EXCHANGE,
                  task_exchange=defaults.TASK_EXCHANGE,
                  task_queue=defaults.TASK_QUEUE,
                  encoder=defaults.encoder,
@@ -231,8 +227,8 @@ class RmqCommunicator(object):
         """
         :param connection: The RMQ connector object
         :type connection: :class:`topika.Connection`
-        :param exchange_name: The name of the RMQ message exchange to use
-        :type exchange_name: str
+        :param message_exchange: The name of the RMQ message exchange to use
+        :type message_exchange: str
         :param task_exchange: The name of the RMQ task exchange to use
         :type task_exchange: str
         :param task_queue: The name of the task queue to use
@@ -250,13 +246,13 @@ class RmqCommunicator(object):
 
         self._message_subscriber = RmqSubscriber(
             connection,
-            exchange_name,
+            message_exchange=message_exchange,
             encoder=encoder,
             decoder=decoder
         )
         self._message_publisher = RmqPublisher(
             connection,
-            exchange_name=exchange_name,
+            exchange_name=message_exchange,
             encoder=encoder,
             decoder=decoder,
         )
@@ -360,18 +356,68 @@ class RmqCommunicator(object):
 
 
 class RmqThreadCommunicator(kiwipy.Communicator):
-    def __init__(self, connection,
-                 exchange_name=defaults.MESSAGE_EXCHANGE,
+    @classmethod
+    def connect(cls,
+                connection_params=None,
+                connection_factory=topika.connect_robust,
+                loop=None,
+                message_exchange=defaults.MESSAGE_EXCHANGE,
+                task_exchange=defaults.TASK_EXCHANGE,
+                task_queue=defaults.TASK_QUEUE,
+                task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+                task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+                encoder=defaults.encoder,
+                decoder=defaults.decoder,
+                testing_mode=False
+                ):
+        connection_params = connection_params or {}
+        # Create a new loop if one isn't supplied
+        loop = loop or ioloop.IOLoop()
+        connection_params['loop'] = loop
+
+        # Run the loop to create the connection
+        connection = loop.run_sync(lambda: connection_factory(**connection_params))
+        communicator = cls(connection,
+                           message_exchange=message_exchange,
+                           task_exchange=task_exchange,
+                           task_queue=task_queue,
+                           task_prefetch_size=task_prefetch_size,
+                           task_prefetch_count=task_prefetch_count,
+                           encoder=encoder,
+                           decoder=decoder,
+                           testing_mode=testing_mode)
+
+        # Start the communicator
+        communicator.start()
+        return communicator
+
+    def __init__(self,
+                 connection,
+                 message_exchange=defaults.MESSAGE_EXCHANGE,
                  task_exchange=defaults.TASK_EXCHANGE,
                  task_queue=defaults.TASK_QUEUE,
-                 encoder=defaults.encoder,
-                 decoder=defaults.decoder,
                  task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
                  task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+                 encoder=defaults.encoder,
+                 decoder=defaults.decoder,
                  testing_mode=False):
+        """
+        :param connection: The RMQ connector object
+        :type connection: :class:`topika.Connection`
+        :param message_exchange: The name of the RMQ message exchange to use
+        :type message_exchange: str
+        :param task_exchange: The name of the RMQ task exchange to use
+        :type task_exchange: str
+        :param task_queue: The name of the task queue to use
+        :type task_queue: str
+        :param encoder: The encoder to call for encoding a message
+        :param decoder: The decoder to call for decoding a message
+        :param testing_mode: Run in testing mode: all queues and exchanges
+            will be temporary
+        """
         self._communicator = RmqCommunicator(
             connection,
-            exchange_name=exchange_name,
+            message_exchange=message_exchange,
             task_exchange=task_exchange,
             task_queue=task_queue,
             encoder=encoder,
@@ -381,7 +427,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             testing_mode=testing_mode
         )
         self._loop = self._communicator.loop
-
         self._communicator_thread = None
 
     def start(self):
@@ -493,3 +538,30 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
         self._loop.add_callback(do_task)
         return send_future.result()
+
+
+def connect(connection_params=None,
+            connection_factory=topika.connect_robust,
+            loop=None,
+            message_exchange=defaults.MESSAGE_EXCHANGE,
+            task_exchange=defaults.TASK_EXCHANGE,
+            task_queue=defaults.TASK_QUEUE,
+            task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+            task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+            encoder=defaults.encoder,
+            decoder=defaults.decoder,
+            testing_mode=False
+            ):
+    return RmqThreadCommunicator.connect(
+        connection_params=connection_params,
+        connection_factory=connection_factory,
+        loop=loop,
+        message_exchange=message_exchange,
+        task_exchange=task_exchange,
+        task_queue=task_queue,
+        task_prefetch_size=task_prefetch_size,
+        task_prefetch_count=task_prefetch_count,
+        encoder=encoder,
+        decoder=decoder,
+        testing_mode=testing_mode
+    )
