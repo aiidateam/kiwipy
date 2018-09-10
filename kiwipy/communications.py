@@ -1,6 +1,7 @@
 import abc
 from future.utils import with_metaclass
 import sys
+import time
 
 from . import futures
 
@@ -83,11 +84,6 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         :rtype: :class:`kiwi.Future`
         """
 
-    def task_send_and_wait(self, msg, timeout=None):
-        fut = self.task_send(msg)
-        self.wait_for(fut, timeout=timeout)
-        return fut.result()
-
     @abc.abstractmethod
     def rpc_send(self, recipient_id, msg):
         """
@@ -101,18 +97,44 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         """
         pass
 
-    def rpc_send_and_wait(self, recipient_id, msg, timeout=None):
-        fut = self.rpc_send(recipient_id, msg)
-        self.wait_for(fut, timeout=timeout)
-        return fut.result()
-
     @abc.abstractmethod
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         pass
 
     @abc.abstractmethod
     def wait_for(self, future, timeout=None):
+        """
+        Wait for a future to complete
+
+        :param future: the future to be waited on
+        :param timeout: the timeout
+        :return:
+        """
         pass
+
+    def wait_for_many(self, *futs, timeout=None):
+        """
+        Wait for one or more futures to complete
+
+        :param futs: the futures
+        :param timeout: the timeout
+        """
+        start_time = time.time()
+        for future in futs:
+            if timeout is not None:
+                timeout = timeout - (time.time() - start_time) if timeout is not None else None
+                if timeout <= 0.:
+                    raise TimeoutError()
+            self.wait_for(future, timeout)
+
+    def create_future(self):
+        """
+        Create a new future with this communicator as the owner
+
+        :return: A new futrue
+        :rtype: :class:`kiwipy.Future`
+        """
+        return futures.Future(self)
 
 
 class CommunicatorHelper(Communicator):
@@ -154,7 +176,7 @@ class CommunicatorHelper(Communicator):
         self._broadcast_subscribers.remove(broadcast_subscriber)
 
     def fire_task(self, msg):
-        future = futures.Future()
+        future = self.create_future()
         handled = False
 
         for subscriber in self._task_subscribers:
@@ -181,7 +203,7 @@ class CommunicatorHelper(Communicator):
         except KeyError:
             raise UnroutableError("Unknown rpc recipient '{}'".format(recipient_id))
         else:
-            future = futures.Future()
+            future = self.create_future()
             try:
                 result = subscriber(msg)
                 if isinstance(result, futures.Future):
@@ -195,6 +217,6 @@ class CommunicatorHelper(Communicator):
     def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):
         for subscriber in self._broadcast_subscribers:
             subscriber(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
-        future = futures.Future()
+        future = self.create_future()
         future.set_result(True)
         return future

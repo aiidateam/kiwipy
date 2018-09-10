@@ -2,16 +2,13 @@ import logging
 import uuid
 from functools import partial
 import kiwipy
-import pika
 import sys
 import topika
 from tornado import gen, concurrent
 import traceback
-import yaml
 
 from . import defaults
 from . import messages
-from . import pubsub
 from . import utils
 
 _LOGGER = logging.getLogger(__name__)
@@ -138,13 +135,13 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         :return: The reply message
         :rtype: :class:`topika.Message`
         """
-        if isinstance(result, kiwipy.Future):
+        if isinstance(result, concurrent.Future):
             self._pending_tasks.append(result)
 
             def task_done(future):
                 """
                 Process this future being done
-                :type future: :class:`kiwipy.Future`
+                :type future: :class:`tornado.concurrent.Future`
                 """
                 if future not in self._pending_tasks:
                     # Must have been 'cancelled'

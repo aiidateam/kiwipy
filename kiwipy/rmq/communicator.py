@@ -212,7 +212,7 @@ class RmqSubscriber(object):
 
 class RmqCommunicator(object):
     """
-    A publisher and subscriber that implements the Communicator interface.
+    A publisher and subscriber using topika and a tornado event loop
     """
 
     def __init__(self, connection,
@@ -428,6 +428,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         )
         self._loop = self._communicator.loop
         self._communicator_thread = None
+        self._subscribers = {}
 
     def start(self):
         if self._communicator_thread is not None:
@@ -477,32 +478,46 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         return stop_future.result()
 
     def add_rpc_subscriber(self, subscriber, identifier):
-        return self._communicator.add_rpc_subscriber(subscriber, identifier)
+        return self._communicator.add_rpc_subscriber(_convert_callback(subscriber), identifier)
 
     def remove_rpc_subscriber(self, identifier):
         return self._communicator.remove_rpc_subscriber(identifier)
 
     def add_task_subscriber(self, subscriber):
-        return self._communicator.add_task_subscriber(subscriber)
+        converted = _convert_callback(subscriber)
+        self._communicator.add_task_subscriber(converted)
+        self._subscribers[subscriber] = converted
 
     def remove_task_subscriber(self, subscriber):
-        return self._communicator.remove_task_subscriber(subscriber)
+        try:
+            converted = self._subscribers.pop(subscriber)
+        except KeyError:
+            raise ValueError("Subscriber '{}' is unknown".format(subscriber))
+        else:
+            self._communicator.remove_task_subscriber(converted)
 
     def add_broadcast_subscriber(self, subscriber):
-        return self._communicator.add_broadcast_subscriber(subscriber)
+        converted = _convert_callback(subscriber)
+        self._communicator.add_broadcast_subscriber(converted)
+        self._subscribers[subscriber] = converted
 
     def remove_broadcast_subscriber(self, subscriber):
-        return self._communicator.remove_broadcast_subscriber(subscriber)
+        try:
+            converted = self._subscribers.pop(subscriber)
+        except KeyError:
+            raise ValueError("Subscriber '{}' is unknown".format(subscriber))
+        else:
+            self._communicator.remove_broadcast_subscriber(converted)
 
     def task_send(self, msg):
         self.start()
         future = self._send_message(partial(self._communicator.task_send, msg))
-        return utils.tornado_to_kiwi_future(future)
+        return utils.tornado_to_kiwi_future(future, self)
 
     def rpc_send(self, recipient_id, msg):
         self.start()
         future = self._send_message(partial(self._communicator.rpc_send, recipient_id, msg))
-        return utils.tornado_to_kiwi_future(future)
+        return utils.tornado_to_kiwi_future(future, self)
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         self.start()
@@ -565,3 +580,17 @@ def connect(connection_params=None,
         decoder=decoder,
         testing_mode=testing_mode
     )
+
+
+def _convert_callback(fn):
+    """
+    :param fn: The callback to convert
+    :return: A new function that conforms to that which a Communicator expects
+    """
+    def converted(*args, **kwargs):
+        result = fn(*args, **kwargs)
+        if isinstance(result, kiwipy.Future):
+            result = utils.kiwi_to_tornado_future(result)
+        return result
+
+    return converted

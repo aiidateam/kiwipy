@@ -61,12 +61,16 @@ class Future(object):
 
     __log_traceback = False
 
-    def __init__(self):
+    def __init__(self, communicator):
         """Initialize the future.
         The optional event_loop argument allows explicitly setting the event
         loop object used by the future. If it's not provided, the future uses
         the default event loop.
+
+        :param communicator: The communicator this future was created by
+        :type communicator: :class:`kiwipy.Communicator`
         """
+        self._communicator = communicator
         self._callbacks = []
 
     def _repr_info(self):
@@ -137,7 +141,7 @@ class Future(object):
         """
         return self._state != _PENDING
 
-    def result(self):
+    def result(self, timeout=None):
         """Return the result this future represents.
         If the future has been cancelled, raises CancelledError.  If the
         future's result isn't yet available, raises InvalidStateError.  If
@@ -146,13 +150,14 @@ class Future(object):
         if self._state == _CANCELLED:
             raise CancelledError
         if self._state != _FINISHED:
-            raise InvalidStateError('Result is not ready.')
+            self._communicator.wait_for(self, timeout)
+
         self.__log_traceback = False
         if self._exception is not None:
             raise self._exception
         return self._result
 
-    def exception(self):
+    def exception(self, timeout=None):
         """Return the exception that was set on this future.
         The exception (or None if no exception was set) is returned only if
         the future is done.  If the future has been cancelled, raises
@@ -162,7 +167,8 @@ class Future(object):
         if self._state == _CANCELLED:
             raise CancelledError
         if self._state != _FINISHED:
-            raise InvalidStateError('Exception is not set.')
+            self._communicator.wait_for(self, timeout)
+
         self.__log_traceback = False
         return self._exception
 

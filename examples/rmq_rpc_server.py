@@ -10,7 +10,7 @@ def fib(n):
         return fib(n - 1) + fib(n - 2)
 
 
-communicator = RmqCommunicator(RmqConnector('amqp://localhost'))
+communicator = RmqCommunicator.connect(connection_params={'url': 'amqp://localhost'})
 
 # Register an RPC subscriber with the name square
 communicator.add_rpc_subscriber(fib, 'fib')

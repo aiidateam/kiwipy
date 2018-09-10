@@ -1,8 +1,8 @@
 from kiwipy.rmq import *
 
-communicator = RmqCommunicator(RmqConnector('amqp://localhost'))
+communicator = RmqCommunicator.connect(connection_params={url: 'amqp://localhost'})
 
 # Send an RPC message
 print(" [x] Requesting fib(30)")
-response = communicator.rpc_send_and_wait('fib', 30)
+response = communicator.rpc_send('fib', 30).result()
 print(" [.] Got %r" % response)

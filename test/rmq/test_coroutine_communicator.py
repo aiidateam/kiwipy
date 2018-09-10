@@ -73,7 +73,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
         """
         TASK = 'The meaning?'
         RESULT = 42
-        result_future = kiwipy.Future()
+        result_future = concurrent.Future()
 
         tasks = []
 

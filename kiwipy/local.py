@@ -1,3 +1,4 @@
+import threading
 import time
 
 from . import communications
@@ -17,9 +18,8 @@ class LocalCommunicator(communications.CommunicatorHelper):
         return self.fire_broadcast(body, sender=sender, subject=subject, correlation_id=correlation_id)
 
     def wait_for(self, future, timeout=None):
-        if not future.done():
-            time.sleep(timeout)
-        try:
-            return future.result()
-        except futures.InvalidStateError:
+        event = threading.Event()
+        future.add_done_callback(lambda _: event.set())
+
+        if not event.wait(timeout):
             raise communications.TimeoutError("Timed out waiting for result")

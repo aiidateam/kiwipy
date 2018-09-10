@@ -6,7 +6,6 @@ import topika
 import traceback
 import uuid
 
-from . import pubsub
 from . import defaults
 from . import utils
 
@@ -91,7 +90,7 @@ class BaseConnectionWithExchange(object):
             self._connection = None
 
 
-class BasePublisherWithReplyQueue(pubsub.ConnectionListener):
+class BasePublisherWithReplyQueue(object):
     """
 
     """

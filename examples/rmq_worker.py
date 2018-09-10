@@ -10,6 +10,6 @@ def callback(task):
     print(" [x] Done")
 
 
-with RmqCommunicator(RmqConnector('amqp://localhost')) as communicator:
+with RmqCommunicator.connect(connection_params={'url': 'amqp://localhost'}) as communicator:
     communicator.add_task_subscriber(callback)
     communicator.await()

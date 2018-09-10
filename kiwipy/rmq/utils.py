@@ -104,12 +104,12 @@ def future_to_response(future):
         return exception_response(e)
 
 
-def tornado_to_kiwi_future(tornado_future):
+def tornado_to_kiwi_future(tornado_future, communicator):
     """
     :type tornado_future: :class:`tornado.concurrent.Future`
     :rtype: :class:`kiwipy.Future`
     """
-    kiwi_future = kiwipy.Future()
+    kiwi_future = communicator.create_future()
 
     def done(done_future):
         # Copy over the future
@@ -117,7 +117,7 @@ def tornado_to_kiwi_future(tornado_future):
             result = done_future.result()
             if concurrent.is_future(result):
                 # Change the future type to a kiwi one
-                result = tornado_to_kiwi_future(result)
+                result = tornado_to_kiwi_future(result, communicator)
             kiwi_future.set_result(result)
         except kiwipy.CancelledError:
             kiwi_future.cancel()
