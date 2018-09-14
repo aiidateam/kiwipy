@@ -101,7 +101,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             for subscriber in self._subscribers:
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
-                    result = yield subscriber(task)
+                    result = yield subscriber(self, task)
                 except kiwipy.TaskRejected:
                     continue
                 except KeyboardInterrupt:

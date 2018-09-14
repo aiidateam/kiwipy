@@ -15,7 +15,11 @@ class BroadcastFilter(object):
         if sender is not None:
             self.add_sender_filter(sender)
 
-    def __call__(self, body, sender=None, subject=None, correlation_id=None):
+    @property
+    def __name__(self):
+        return 'BroadcastFilter'
+
+    def __call__(self, communicator, body, sender=None, subject=None, correlation_id=None):
         if subject is not None and self._subject_filters and \
                 not any([check(subject) for check in self._subject_filters]):
             return
@@ -24,7 +28,7 @@ class BroadcastFilter(object):
                 not any([check(sender) for check in self._sender_filters]):
             return
 
-        self._subscriber(body, sender, subject, correlation_id)
+        self._subscriber(communicator, body, sender, subject, correlation_id)
 
     def add_subject_filter(self, subject_filter):
         self._subject_filters.append(self._ensure_filter(subject_filter))

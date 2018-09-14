@@ -4,7 +4,7 @@ import platform
 import sys
 import traceback
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
+__all__ = ['Future', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,16 +31,9 @@ _FINISHED = 'FINISHED'
 
 
 class Future(object):
-    """This class is *almost* compatible with concurrent.futures.Future.
-    Differences:
-    - This class is not thread-safe.
-    - result() and exception() do not take a timeout argument and
-      raise an exception when the future isn't done yet.
-    - Callbacks registered with add_done_callback() are always called
-      via the event loop's call_soon().
-    - This class is not compatible with the wait() and as_completed()
-      methods in the concurrent.futures package.
-    (In Python 3.4 or later we may be able to unify the implementations.)
+    """
+    A future implementation taken from asyncio but modified to suit our purposes.
+
     """
 
     # Class variables serving as defaults for instance variables.
@@ -72,14 +65,6 @@ class Future(object):
         """
         self._communicator = communicator
         self._callbacks = []
-
-    def _repr_info(self):
-        # TODO: Get implementation from asyncio Future
-        return "FUTURE"
-
-    def __repr__(self):
-        return '<{} {}>'.format(self.__class__.__name__,
-                                ' '.join(self._repr_info()))
 
     def __del__(self):
         if not self.__log_traceback:
@@ -272,44 +257,3 @@ def chain(a, b):
     """
 
     a.add_done_callback(lambda first: copy_future(first, b))
-
-
-def gather(*args):
-    if not args:
-        future = Future()
-        future.set_result([])
-        return future
-    return _GatheringFuture(*args)
-
-
-class _GatheringFuture(Future):
-    def __init__(self, *args):
-        super(_GatheringFuture, self).__init__()
-        self._children = list(args)
-        self._nchildren = len(self._children)
-        self._nfinished = 0
-        self._result = [None] * self._nchildren
-
-        for i, future in enumerate(self._children):
-            future.add_done_callback(partial(self._completed, i))
-
-    def cancel(self):
-        for child in self._children:
-            child.cancel()
-
-    def _completed(self, i, future):
-        if self.cancelled():
-            return
-
-        if future.cancelled():
-            self.cancel()
-        else:
-            if future.exception() is not None:
-                self._result[i] = future.exception()
-            else:
-                self._result[i] = future.result()
-
-            # Check if we're all done
-            self._nfinished += 1
-            if self._nfinished == self._nchildren:
-                self.set_result(self._result)

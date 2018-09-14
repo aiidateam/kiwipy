@@ -1,8 +1,11 @@
 import collections
+import inspect
 import kiwipy
 import os
 import socket
 from tornado import concurrent, gen
+
+__all__ = ['tornado_to_kiwi_future', 'kiwi_to_tornado_future']
 
 # The key used in messages to give information about the host that send a message
 HOST_KEY = 'host'
@@ -147,5 +150,9 @@ def kiwi_to_tornado_future(kiwi_future):
 def ensure_coroutine(coro_or_fn):
     if gen.is_coroutine_function(coro_or_fn):
         return coro_or_fn
-    else:
+    elif callable(coro_or_fn):
+        if inspect.isclass(coro_or_fn):
+            coro_or_fn = coro_or_fn.__call__
         return gen.coroutine(coro_or_fn)
+    else:
+        raise TypeError('coro_or_fn must be a callable')

@@ -37,7 +37,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
         messages = []
 
-        def on_receive(msg):
+        def on_receive(_comm, msg):
             messages.append(msg)
             return RESPONSE
 
@@ -55,7 +55,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
         tasks = []
 
-        def on_task(task):
+        def on_task(_comm, task):
             tasks.append(task)
             return RESULT
 
@@ -77,7 +77,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
         tasks = []
 
-        def on_task(task):
+        def on_task(_comm, task):
             tasks.append(task)
             return result_future
 
@@ -102,7 +102,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
         tasks = []
 
-        def on_task(task):
+        def on_task(_comm, task):
             tasks.append(task)
             raise RuntimeError("I cannea do it Captain!")
 
@@ -123,11 +123,11 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
         message1 = concurrent.Future()
         message2 = concurrent.Future()
 
-        def on_broadcast_1(*args, **msg):
-            message1.set_result(msg)
+        def on_broadcast_1(_comm, body, sender, subject, correlation_id):
+            message1.set_result({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
-        def on_broadcast_2(*args, **msg):
-            message2.set_result(msg)
+        def on_broadcast_2(_comm, body, sender, subject, correlation_id):
+            message2.set_result({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
         self.communicator.add_broadcast_subscriber(on_broadcast_1)
         self.communicator.add_broadcast_subscriber(on_broadcast_2)
@@ -146,7 +146,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
         done = concurrent.Future()
 
-        def on_broadcast_1(body, sender=None, subject=None, correlation_id=None):
+        def on_broadcast_1(_comm, _body, _sender=None, subject=None, _correlation_id=None):
             subjects.append(subject)
             if len(subjects) == len(EXPECTED_SUBJECTS):
                 done.set_result(True)
@@ -169,7 +169,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
         done = concurrent.Future()
 
-        def on_broadcast_1(body, sender=None, subject=None, correlation_id=None):
+        def on_broadcast_1(_comm, _body, sender=None, _subject=None, _correlation_id=None):
             senders.append(sender)
             if len(senders) == len(EXPECTED_SENDERS):
                 done.set_result(True)
@@ -197,7 +197,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
         done = concurrent.Future()
 
-        def on_broadcast_1(body, sender=None, subject=None, correlation_id=None):
+        def on_broadcast_1(_comm, _body, sender=None, subject=None, _correlation_id=None):
             senders_and_subects.add((sender, subject))
             if len(senders_and_subects) == len(EXPECTED):
                 done.set_result(True)
@@ -220,7 +220,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
     def test_add_remove_broadcast_subscriber(self):
         broadcast_received = concurrent.Future()
 
-        def broadcast_subscriber(body, sender=None, subject=None, correlation_id=None):
+        def broadcast_subscriber(_comm, _body, _sender=None, _subject=None, _correlation_id=None):
             broadcast_received.set_result(True)
 
         # Check we're getting messages
@@ -238,7 +238,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
     def test_add_remove_rpc_subscriber(self):
         """ Test adding, sending to, and then removing an RPC subscriber """
 
-        def rpc_subscriber(msg):
+        def rpc_subscriber(_comm, msg):
             return True
 
         # Check we're getting messages

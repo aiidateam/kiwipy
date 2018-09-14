@@ -5,8 +5,6 @@ import uuid
 
 import kiwipy.rmq
 
-from . import utils
-
 try:
     import pika
     import pika.exceptions

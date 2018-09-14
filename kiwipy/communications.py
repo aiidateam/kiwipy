@@ -7,8 +7,7 @@ from . import futures
 
 __all__ = ['Communicator', 'CommunicatorHelper',
            'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError',
-           'TimeoutError'
-           ]
+           'TimeoutError']
 
 
 class RemoteException(Exception):
@@ -31,9 +30,13 @@ class TaskRejected(Exception):
     pass
 
 
-class TimeoutError(Exception):
-    """ Waiting for a future timed out """
-    pass
+try:
+    TimeoutError = TimeoutError
+except NameError:
+    # Most likely python2
+    class TimeoutError(OSError):
+        """ Waiting for a future timed out """
+        pass
 
 
 class Communicator(with_metaclass(abc.ABCMeta)):
@@ -108,17 +111,21 @@ class Communicator(with_metaclass(abc.ABCMeta)):
 
         :param future: the future to be waited on
         :param timeout: the timeout
-        :return:
+        :type timeout: float
         """
         pass
 
-    def wait_for_many(self, *futs, timeout=None):
+    def wait_for_many(self, *futs, **kwargs):
         """
-        Wait for one or more futures to complete
+        Wait for multiple futures to complete, takes a single additional keyword argument,
+        timeout which can be a float.
 
         :param futs: the futures
-        :param timeout: the timeout
         """
+        timeout = kwargs.pop('timeout', None)
+        if kwargs:
+            raise ValueError('Unexpected keyword arguments supplied: {}'.format(kwargs))
+
         start_time = time.time()
         for future in futs:
             if timeout is not None:
@@ -181,7 +188,7 @@ class CommunicatorHelper(Communicator):
 
         for subscriber in self._task_subscribers:
             try:
-                result = subscriber(msg)
+                result = subscriber(self, msg)
                 future.set_result(result)
                 handled = True
                 break
@@ -205,7 +212,7 @@ class CommunicatorHelper(Communicator):
         else:
             future = self.create_future()
             try:
-                result = subscriber(msg)
+                result = subscriber(self, msg)
                 if isinstance(result, futures.Future):
                     futures.chain(result, future)
                 else:
@@ -216,7 +223,7 @@ class CommunicatorHelper(Communicator):
 
     def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):
         for subscriber in self._broadcast_subscribers:
-            subscriber(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
+            subscriber(self, body=body, sender=sender, subject=subject, correlation_id=correlation_id)
         future = self.create_future()
         future.set_result(True)
         return future

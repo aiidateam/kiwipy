@@ -165,7 +165,7 @@ class RmqSubscriber(object):
 
                 try:
                     receiver = utils.ensure_coroutine(receiver)
-                    result = yield receiver(msg)
+                    result = yield receiver(self, msg)
 
                     if isinstance(result, concurrent.Future):
                         response = utils.pending_response()
@@ -191,7 +191,8 @@ class RmqSubscriber(object):
             for receiver in self._broadcast_subscribers:
                 try:
                     receiver = utils.ensure_coroutine(receiver)
-                    yield receiver(**msg)
+                    yield receiver(self, msg[messages.BroadcastMessage.BODY], msg[messages.BroadcastMessage.SENDER],
+                                   msg[messages.BroadcastMessage.SUBJECT], msg[messages.BroadcastMessage.CORRELATION_ID])
                 except BaseException:
                     import traceback
                     _LOGGER.error("Exception in broadcast receiver!\n"
@@ -281,6 +282,9 @@ class RmqCommunicator(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
+
+    def __str__(self):
+        return "RMQCommunicator ({})".format(self._connection)
 
     @property
     def loop(self):
@@ -451,7 +455,9 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             self._loop.start()
             self._communicator_thread = None
 
-        self._communicator_thread = threading.Thread(target=run_loop)
+        self._communicator_thread = threading.Thread(
+            target=run_loop, name="Communications thread for '{}'".format(self._communicator))
+        self._communicator_thread.daemon = True
         self._communicator_thread.start()
         return start_future.result()
 
@@ -478,13 +484,13 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         return stop_future.result()
 
     def add_rpc_subscriber(self, subscriber, identifier):
-        return self._communicator.add_rpc_subscriber(_convert_callback(subscriber), identifier)
+        return self._communicator.add_rpc_subscriber(self._convert_callback(subscriber), identifier)
 
     def remove_rpc_subscriber(self, identifier):
         return self._communicator.remove_rpc_subscriber(identifier)
 
     def add_task_subscriber(self, subscriber):
-        converted = _convert_callback(subscriber)
+        converted = self._convert_callback(subscriber)
         self._communicator.add_task_subscriber(converted)
         self._subscribers[subscriber] = converted
 
@@ -497,7 +503,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             self._communicator.remove_task_subscriber(converted)
 
     def add_broadcast_subscriber(self, subscriber):
-        converted = _convert_callback(subscriber)
+        converted = self._convert_callback(subscriber)
         self._communicator.add_broadcast_subscriber(converted)
         self._subscribers[subscriber] = converted
 
@@ -554,6 +560,20 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._loop.add_callback(do_task)
         return send_future.result()
 
+    def _convert_callback(self, fn):
+        """
+        :param fn: The callback to convert
+        :return: A new function that conforms to that which a Communicator expects
+        """
+
+        def converted(_comm, *args, **kwargs):
+            result = fn(self, *args, **kwargs)
+            if isinstance(result, kiwipy.Future):
+                result = utils.kiwi_to_tornado_future(result)
+            return result
+
+        return converted
+
 
 def connect(connection_params=None,
             connection_factory=topika.connect_robust,
@@ -582,15 +602,3 @@ def connect(connection_params=None,
     )
 
 
-def _convert_callback(fn):
-    """
-    :param fn: The callback to convert
-    :return: A new function that conforms to that which a Communicator expects
-    """
-    def converted(*args, **kwargs):
-        result = fn(*args, **kwargs)
-        if isinstance(result, kiwipy.Future):
-            result = utils.kiwi_to_tornado_future(result)
-        return result
-
-    return converted
