@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import threading
 import time
 
@@ -8,6 +9,7 @@ __all__ = ['LocalCommunicator']
 
 
 class LocalCommunicator(communications.CommunicatorHelper):
+
     def task_send(self, msg):
         return self.fire_task(msg)
 

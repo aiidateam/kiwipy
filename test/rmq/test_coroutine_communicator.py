@@ -1,6 +1,7 @@
+from __future__ import absolute_import
 import shortuuid
 import topika
-from tornado import gen, testing, concurrent, ioloop
+from tornado import gen, testing, concurrent
 
 import kiwipy
 from kiwipy import rmq
@@ -21,11 +22,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
         def init():
             connection = yield topika.connect_robust('amqp://guest:guest@localhost:5672/', loop=self.loop)
             self.communicator = rmq.RmqCommunicator(
-                connection,
-                message_exchange=exchange_name,
-                task_queue=task_queue_name,
-                testing_mode=True
-            )
+                connection, message_exchange=exchange_name, task_queue=task_queue_name, testing_mode=True)
             yield self.communicator.connect()
 
         self.loop.run_sync(init)
@@ -151,11 +148,10 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             if len(subjects) == len(EXPECTED_SUBJECTS):
                 done.set_result(True)
 
-        self.communicator.add_broadcast_subscriber(
-            kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
+        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
 
-        for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
-            yield self.communicator.broadcast_send(None, subject=subject)
+        for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
+            yield self.communicator.broadcast_send(None, subject=subj)
 
         yield done
 
@@ -174,11 +170,10 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             if len(senders) == len(EXPECTED_SENDERS):
                 done.set_result(True)
 
-        self.communicator.add_broadcast_subscriber(
-            kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
+        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
 
-        for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
-            yield self.communicator.broadcast_send(None, sender=sender)
+        for subj in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
+            yield self.communicator.broadcast_send(None, sender=subj)
 
         yield done
 
@@ -208,8 +203,8 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
         self.communicator.add_broadcast_subscriber(filtered)
 
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
-            for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
-                self.communicator.broadcast_send(None, sender=sender, subject=subject)
+            for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
+                self.communicator.broadcast_send(None, sender=sender, subject=subj)
 
         yield done
 

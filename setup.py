@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from setuptools import setup
 
 __author__ = "Martin Uhrin"
@@ -8,7 +9,7 @@ __contributors__ = "Sebastiaan Huber"
 
 about = {}
 with open('kiwipy/version.py') as f:
-    exec (f.read(), about)
+    exec(f.read(), about)
 
 setup(
     name="kiwipy",
@@ -36,9 +37,8 @@ setup(
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
     install_requires=[
-        'tornado',
-        'future',
-        'topika'
+        'tornado', 'future', 'topika', 'six', 'typing; python_version<"3.5"', 'enum34; python_version<"3.4"',
+        'backports.tempfile; python_version<"3.2"', 'futures; python_version == "2.7"'
     ],
     extras_require={
         'rmq': ['pika', 'tornado', 'pyyaml'],
@@ -48,13 +48,12 @@ setup(
             'pytest-cov',
             'ipython',
             'twine',
-            'shortuuid'
+            'shortuuid',
+            'yapf',
+            'prospector',
+            'pylint<2; python_version<"3"',
+            'pylint; python_version>="3"',
         ],
-        ':python_version<"3.5"': ['typing'],
-        ':python_version<"3.4"': ['enum34'],
-        ':python_version<"3.2"': ['backports.tempfile'],
-        ':python_version == "2.7"': ['futures']
     },
     packages=['kiwipy', 'kiwipy.rmq'],
-    test_suite='test'
-)
+    test_suite='test')

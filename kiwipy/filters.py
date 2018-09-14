@@ -1,11 +1,13 @@
-from past.builtins import basestring
+from __future__ import absolute_import
 import re
 import typing
+import six
 
 __all__ = ['BroadcastFilter']
 
 
 class BroadcastFilter(object):
+
     def __init__(self, subscriber, subject=None, sender=None):
         self._subscriber = subscriber
         self._subject_filters = []
@@ -36,15 +38,17 @@ class BroadcastFilter(object):
     def add_sender_filter(self, sender_filter):
         self._sender_filters.append(self._ensure_filter(sender_filter))
 
-    def _ensure_filter(self, filter_value):
-        if isinstance(filter_value, basestring):
+    @classmethod
+    def _ensure_filter(cls, filter_value):
+        if isinstance(filter_value, six.string_types):
             return re.compile(filter_value.replace('.', '\.').replace('*', '.*')).match
         elif isinstance(filter_value, typing.re.Pattern):
             return filter_value.match
-        else:
-            return lambda val: val == filter_value
 
-    def _make_regex(self, filter_str):
+        return lambda val: val == filter_value
+
+    @classmethod
+    def _make_regex(cls, filter_str):
         """
         :param filter_str: The filter string
         :type filter_str: basestring

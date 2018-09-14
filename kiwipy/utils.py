@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import logging
 import traceback
 
@@ -6,7 +7,8 @@ __all__ = ['EventHelper']
 _LOGGER = logging.getLogger(__name__)
 
 
-class EventHelper(object):
+class EventHelper(object):  # pylint: disable=useless-object-inheritance
+
     def __init__(self, listener_type):
         assert listener_type is not None, "Must provide valid listener type"
 
@@ -31,11 +33,8 @@ class EventHelper(object):
         if event_function is None:
             raise ValueError("Must provide valid event method")
 
-        for l in self.listeners:
+        for listener in self.listeners:
             try:
-                getattr(l, event_function.__name__)(*args, **kwargs)
-            except Exception :
-                _LOGGER.error(
-                    "Listener {} produced an exception:\n{}".format(l, traceback.format_exc()))
-
-
+                getattr(listener, event_function.__name__)(*args, **kwargs)
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.error("Listener %s produced an exception:\n%s", listener, traceback.format_exc())

@@ -1,9 +1,11 @@
+from __future__ import absolute_import
 import collections
 import inspect
-import kiwipy
 import os
 import socket
 from tornado import concurrent, gen
+
+import kiwipy
 
 __all__ = ['tornado_to_kiwi_future', 'kiwi_to_tornado_future']
 
@@ -18,10 +20,7 @@ PENDING_KEY = 'pending'
 
 
 def get_host_info():
-    return {
-        'hostname': socket.gethostname(),
-        'pid': os.getpid()
-    }
+    return {'hostname': socket.gethostname(), 'pid': os.getpid()}
 
 
 def add_host_info(msg):
@@ -103,13 +102,16 @@ def future_to_response(future):
         return cancelled_response()
     try:
         return result_response(future.result())
-    except Exception as e:
-        return exception_response(e)
+    except Exception as exception:  # pylint: disable=broad-except
+        return exception_response(exception)
 
 
 def tornado_to_kiwi_future(tornado_future, communicator):
     """
+    :param tornado_future: the tornado future to convert
     :type tornado_future: :class:`tornado.concurrent.Future`
+    :param communicator: the kiwipy communicator
+    :type communicator: :class:`kiwipy.Communicator`
     :rtype: :class:`kiwipy.Future`
     """
     kiwi_future = communicator.create_future()
@@ -124,8 +126,8 @@ def tornado_to_kiwi_future(tornado_future, communicator):
             kiwi_future.set_result(result)
         except kiwipy.CancelledError:
             kiwi_future.cancel()
-        except Exception as e:
-            kiwi_future.set_exception(e)
+        except Exception as exception:  # pylint: disable=broad-except
+            kiwi_future.set_exception(exception)
 
     tornado_future.add_done_callback(done)
     return kiwi_future
@@ -139,8 +141,8 @@ def kiwi_to_tornado_future(kiwi_future):
             tornado_future.cancel()
         try:
             tornado_future.set_result(done_future.result())
-        except Exception as e:
-            tornado_future.set_exception(e)
+        except Exception as exception:  # pylint: disable=broad-except
+            tornado_future.set_exception(exception)
 
     kiwi_future.add_done_callback(done)
 
@@ -154,5 +156,5 @@ def ensure_coroutine(coro_or_fn):
         if inspect.isclass(coro_or_fn):
             coro_or_fn = coro_or_fn.__call__
         return gen.coroutine(coro_or_fn)
-    else:
-        raise TypeError('coro_or_fn must be a callable')
+
+    raise TypeError('coro_or_fn must be a callable')

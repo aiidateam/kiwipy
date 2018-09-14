@@ -1,4 +1,4 @@
-from functools import partial
+from __future__ import absolute_import
 import logging
 import platform
 import sys
@@ -10,8 +10,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Can the garbage collector handle cycles that include __del__ methods?
 # This is true in cpython beginning with version 3.4 (PEP 442).
-_GC_CYCLE_FINALIZERS = (platform.python_implementation() == 'CPython' and
-                        sys.version_info >= (3, 4))
+_GC_CYCLE_FINALIZERS = (platform.python_implementation() == 'CPython' and sys.version_info >= (3, 4))
 
 
 class InvalidStateError(BaseException):
@@ -108,10 +107,8 @@ class Future(object):
         for callback in callbacks:
             try:
                 callback(self)
-            except Exception:
-                _LOGGER.warning(
-                    "Exception calling future callback %s:\n%s",
-                    callback, traceback.format_exc())
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.warning("Exception calling future callback %s:\n%s", callback, traceback.format_exc())
 
     def cancelled(self):
         """Return True if the future was cancelled."""
@@ -157,7 +154,7 @@ class Future(object):
         self.__log_traceback = False
         return self._exception
 
-    def add_done_callback(self, fn):
+    def add_done_callback(self, callback):
         """Add a callback to be run when the future becomes done.
         The callback is called with a single argument - the future object. If
         the future is already done when this is called, the callback is
@@ -165,13 +162,11 @@ class Future(object):
         """
         if self._state != _PENDING:
             try:
-                fn(self)
-            except Exception:
-                _LOGGER.warning(
-                    "Exception calling future callback %s:\n%s",
-                    fn, traceback.format_exc())
+                callback(self)
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.warning("Exception calling future callback %s:\n%s", callback, traceback.format_exc())
         else:
-            self._callbacks.append(fn)
+            self._callbacks.append(callback)
 
     # New method not in PEP 3148.
 
@@ -179,9 +174,7 @@ class Future(object):
         """Remove all instances of a callback from the "call when done" list.
         Returns the number of callbacks removed.
         """
-        filtered_callbacks = [f
-                              for f in self._callbacks
-                              if f != fn]
+        filtered_callbacks = [f for f in self._callbacks if f != fn]
         removed_count = len(self._callbacks) - len(filtered_callbacks)
         if removed_count:
             self._callbacks[:] = filtered_callbacks
@@ -210,8 +203,7 @@ class Future(object):
         if isinstance(exception, type):
             exception = exception()
         if type(exception) is StopIteration:
-            raise TypeError("StopIteration interacts badly with generators "
-                            "and cannot be raised into a Future")
+            raise TypeError("StopIteration interacts badly with generators " "and cannot be raised into a Future")
         self._exception = exception
         self._state = _FINISHED
         self.__schedule_callbacks()
@@ -245,15 +237,15 @@ def copy_future(source, target):
     else:
         try:
             target.set_result(source.result())
-        except Exception as e:
-            target.set_exception(e)
+        except Exception as exception:  # pylint: disable=broad-except
+            target.set_exception(exception)
 
 
-def chain(a, b):
+def chain(source, target):
     """Chain two futures together so that when one completes, so does the other.
 
     The result (success or failure) of ``a`` will be copied to ``b``, unless
     ``b`` has already been completed or cancelled by the time ``a`` finishes.
     """
 
-    a.add_done_callback(lambda first: copy_future(first, b))
+    source.add_done_callback(lambda first: copy_future(first, target))

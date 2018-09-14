@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import topika
 from tornado import testing, gen
 import unittest
@@ -15,6 +16,7 @@ except ImportError:
 
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
 class TestTaskPublisher(testing.AsyncTestCase):
+
     def setUp(self):
         super(TestTaskPublisher, self).setUp()
         self.loop = self.io_loop
@@ -29,16 +31,13 @@ class TestTaskPublisher(testing.AsyncTestCase):
         def init():
             self.connection = yield topika.connect_robust('amqp://guest:guest@localhost:5672/', loop=self.loop)
             self.task_publisher = rmq.RmqTaskPublisher(
-                self.connection,
-                task_queue_name=task_queue_name,
-                exchange_name=exchange_name,
-                testing_mode=True
-            )
+                self.connection, task_queue_name=task_queue_name, exchange_name=exchange_name, testing_mode=True)
             yield self.task_publisher.connect()
 
         self.loop.run_sync(init)
 
     def tearDown(self):
+
         @gen.coroutine
         def destroy():
             yield self.task_publisher.disconnect()

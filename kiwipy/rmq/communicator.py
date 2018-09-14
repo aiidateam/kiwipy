@@ -1,13 +1,15 @@
+from __future__ import absolute_import
 from concurrent.futures import Future as ThreadFuture
 from functools import partial
-import kiwipy
 import logging
+import threading
+
 import pika
 import pika.exceptions
-import threading
-import topika
 from tornado import gen, concurrent, ioloop
+import topika
 
+import kiwipy
 from . import defaults
 from . import tasks
 from . import messages
@@ -19,9 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # The exchange properties use by the publisher and subscriber.  These have to match
 # which is why they're declare her
-EXCHANGE_PROPERTIES = {
-    'type': topika.ExchangeType.TOPIC
-}
+EXCHANGE_PROPERTIES = {'type': topika.ExchangeType.TOPIC}
 
 
 class RmqPublisher(messages.BasePublisherWithReplyQueue):
@@ -32,14 +32,9 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
 
     @gen.coroutine
     def rpc_send(self, recipient_id, msg):
-        message = topika.Message(
-            body=self._encode(msg),
-            reply_to=self._reply_queue.name
-        )
+        message = topika.Message(body=self._encode(msg), reply_to=self._reply_queue.name)
         published, response_future = yield self.publish_expect_response(
-            message,
-            routing_key="{}.{}".format(defaults.RPC_TOPIC, recipient_id),
-            mandatory=True)
+            message, routing_key="{}.{}".format(defaults.RPC_TOPIC, recipient_id), mandatory=True)
         assert published, "The message was not published to the exchanges"
         raise gen.Return(response_future)
 
@@ -64,10 +59,11 @@ class RmqSubscriber(object):
     Subscriber for receiving a range of messages over RMQ
     """
 
-    def __init__(self, connection,
+    def __init__(self,
+                 connection,
                  message_exchange=defaults.MESSAGE_EXCHANGE,
-                 decoder=defaults.decoder,
-                 encoder=defaults.encoder):
+                 decoder=defaults.DECODER,
+                 encoder=defaults.ENCODER):
         """
         Subscribes and listens for process control messages and acts on them
         by calling the corresponding methods of the process manager.
@@ -116,13 +112,11 @@ class RmqSubscriber(object):
             return
 
         self._channel = yield self._connection.channel()
-        self._exchange = yield self._channel.declare_exchange(
-            name=self._exchange_name, **EXCHANGE_PROPERTIES)
+        self._exchange = yield self._channel.declare_exchange(name=self._exchange_name, **EXCHANGE_PROPERTIES)
 
         # RPC queue
         rpc_queue = yield self._channel.declare_queue(
-            exclusive=True,
-            arguments={
+            exclusive=True, arguments={
                 "x-message-ttl": defaults.MESSAGE_TTL,
                 "x-expires": defaults.QUEUE_EXPIRES
             })
@@ -132,8 +126,7 @@ class RmqSubscriber(object):
 
         # Broadcast queue
         broadcast_queue = yield self._channel.declare_queue(
-            exclusive=True,
-            arguments={
+            exclusive=True, arguments={
                 "x-message-ttl": defaults.MESSAGE_TTL,
                 "x-expires": defaults.QUEUE_EXPIRES
             })
@@ -173,14 +166,14 @@ class RmqSubscriber(object):
                         try:
                             response = yield result
                             response = utils.result_response(response)
-                        except kiwipy.CancelledError as e:
-                            response = utils.cancelled_response()
-                        except Exception as e:
-                            response = utils.exception_response(e)
+                        except kiwipy.CancelledError as exception:
+                            response = utils.cancelled_response(str(exception))
+                        except Exception as exception:  # pylint: disable=broad-except
+                            response = utils.exception_response(exception)
                     else:
                         response = utils.result_response(result)
-                except Exception as e:
-                    response = utils.exception_response(e)
+                except Exception as exception:  # pylint: disable=broad-except
+                    response = utils.exception_response(exception)
 
                 yield self._send_response(message.reply_to, message.correlation_id, response)
 
@@ -192,21 +185,19 @@ class RmqSubscriber(object):
                 try:
                     receiver = utils.ensure_coroutine(receiver)
                     yield receiver(self, msg[messages.BroadcastMessage.BODY], msg[messages.BroadcastMessage.SENDER],
-                                   msg[messages.BroadcastMessage.SUBJECT], msg[messages.BroadcastMessage.CORRELATION_ID])
-                except BaseException:
+                                   msg[messages.BroadcastMessage.SUBJECT],
+                                   msg[messages.BroadcastMessage.CORRELATION_ID])
+                except Exception:  # pylint: disable=broad-except
                     import traceback
                     _LOGGER.error("Exception in broadcast receiver!\n"
-                                  "msg: {}\n"
-                                  "traceback:\n{}".format(msg, traceback.format_exc()))
+                                  "msg: %s\n"
+                                  "traceback:\n%s", msg, traceback.format_exc())
 
     @gen.coroutine
     def _send_response(self, reply_to, correlation_id, response):
         assert reply_to, "Must provide an identifier for the recipient"
 
-        message = topika.Message(
-            body=self._response_encode(response),
-            correlation_id=correlation_id
-        )
+        message = topika.Message(body=self._response_encode(response), correlation_id=correlation_id)
         result = yield self._exchange.publish(message, routing_key=reply_to)
         raise gen.Return(result)
 
@@ -216,12 +207,13 @@ class RmqCommunicator(object):
     A publisher and subscriber using topika and a tornado event loop
     """
 
-    def __init__(self, connection,
+    def __init__(self,
+                 connection,
                  message_exchange=defaults.MESSAGE_EXCHANGE,
                  task_exchange=defaults.TASK_EXCHANGE,
                  task_queue=defaults.TASK_QUEUE,
-                 encoder=defaults.encoder,
-                 decoder=defaults.decoder,
+                 encoder=defaults.ENCODER,
+                 decoder=defaults.DECODER,
                  task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
                  task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  testing_mode=False):
@@ -246,11 +238,7 @@ class RmqCommunicator(object):
         self._connected = False
 
         self._message_subscriber = RmqSubscriber(
-            connection,
-            message_exchange=message_exchange,
-            encoder=encoder,
-            decoder=decoder
-        )
+            connection, message_exchange=message_exchange, encoder=encoder, decoder=decoder)
         self._message_publisher = RmqPublisher(
             connection,
             exchange_name=message_exchange,
@@ -340,8 +328,8 @@ class RmqCommunicator(object):
         try:
             response_future = yield self._message_publisher.rpc_send(recipient_id, msg)
             raise gen.Return(response_future)
-        except pika.exceptions.UnroutableError as e:
-            raise kiwipy.UnroutableError(str(e))
+        except pika.exceptions.UnroutableError as exception:
+            raise kiwipy.UnroutableError(str(exception))
 
     @gen.coroutine
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
@@ -353,13 +341,14 @@ class RmqCommunicator(object):
         try:
             response_future = yield self._task_publisher.task_send(msg)
             raise gen.Return(response_future)
-        except pika.exceptions.UnroutableError as e:
-            raise kiwipy.UnroutableError(str(e))
-        except pika.exceptions.NackError as e:
-            raise kiwipy.TaskRejected(str(e))
+        except pika.exceptions.UnroutableError as exception:
+            raise kiwipy.UnroutableError(str(exception))
+        except pika.exceptions.NackError as exception:
+            raise kiwipy.TaskRejected(str(exception))
 
 
 class RmqThreadCommunicator(kiwipy.Communicator):
+
     @classmethod
     def connect(cls,
                 connection_params=None,
@@ -370,10 +359,9 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                 task_queue=defaults.TASK_QUEUE,
                 task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
                 task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
-                encoder=defaults.encoder,
-                decoder=defaults.decoder,
-                testing_mode=False
-                ):
+                encoder=defaults.ENCODER,
+                decoder=defaults.DECODER,
+                testing_mode=False):
         connection_params = connection_params or {}
         # Create a new loop if one isn't supplied
         loop = loop or ioloop.IOLoop()
@@ -381,15 +369,16 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
         # Run the loop to create the connection
         connection = loop.run_sync(lambda: connection_factory(**connection_params))
-        communicator = cls(connection,
-                           message_exchange=message_exchange,
-                           task_exchange=task_exchange,
-                           task_queue=task_queue,
-                           task_prefetch_size=task_prefetch_size,
-                           task_prefetch_count=task_prefetch_count,
-                           encoder=encoder,
-                           decoder=decoder,
-                           testing_mode=testing_mode)
+        communicator = cls(
+            connection,
+            message_exchange=message_exchange,
+            task_exchange=task_exchange,
+            task_queue=task_queue,
+            task_prefetch_size=task_prefetch_size,
+            task_prefetch_count=task_prefetch_count,
+            encoder=encoder,
+            decoder=decoder,
+            testing_mode=testing_mode)
 
         # Start the communicator
         communicator.start()
@@ -402,8 +391,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                  task_queue=defaults.TASK_QUEUE,
                  task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
                  task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
-                 encoder=defaults.encoder,
-                 decoder=defaults.decoder,
+                 encoder=defaults.ENCODER,
+                 decoder=defaults.DECODER,
                  testing_mode=False):
         """
         :param connection: The RMQ connector object
@@ -428,8 +417,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             decoder=decoder,
             task_prefetch_size=task_prefetch_size,
             task_prefetch_count=task_prefetch_count,
-            testing_mode=testing_mode
-        )
+            testing_mode=testing_mode)
         self._loop = self._communicator.loop
         self._communicator_thread = None
         self._subscribers = {}
@@ -441,17 +429,18 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         start_future = ThreadFuture()
 
         def run_loop():
+
             @gen.coroutine
-            def connect():
+            def do_connect():
                 try:
                     yield self._communicator.connect()
                     start_future.set_result(True)
-                except Exception as e:
+                except Exception as exception:  # pylint: disable=broad-except
                     import traceback
                     _LOGGER.error("Error starting the communicator:\n%s", traceback.format_exc())
-                    start_future.set_exception(e)
+                    start_future.set_exception(exception)
 
-            self._loop.add_callback(connect)
+            self._loop.add_callback(do_connect)
             self._loop.start()
             self._communicator_thread = None
 
@@ -459,7 +448,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             target=run_loop, name="Communications thread for '{}'".format(self._communicator))
         self._communicator_thread.daemon = True
         self._communicator_thread.start()
-        return start_future.result()
+        start_future.result()
 
     def stop(self):
         comm_thread = self._communicator_thread
@@ -473,8 +462,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             try:
                 yield self._communicator.disconnect()
                 stop_future.set_result(True)
-            except Exception as e:
-                stop_future.set_exception(e)
+            except Exception as exception:  # pylint: disable=broad-except
+                stop_future.set_exception(exception)
             finally:
                 self._loop.stop()
 
@@ -527,11 +516,13 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         self.start()
-        return self._send_message(partial(self._communicator.broadcast_send,
-                                          body=body,
-                                          sender=sender,
-                                          subject=subject,
-                                          correlation_id=correlation_id))
+        return self._send_message(
+            partial(
+                self._communicator.broadcast_send,
+                body=body,
+                sender=sender,
+                subject=subject,
+                correlation_id=correlation_id))
 
     def wait_for(self, future, timeout=None):
         self.start()
@@ -552,22 +543,22 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         def do_task():
             try:
                 result_future = yield coro()
-            except Exception as e:
-                send_future.set_exception(e)
+            except Exception as exception:  # pylint: disable=broad-except
+                send_future.set_exception(exception)
             else:
                 send_future.set_result(result_future)
 
         self._loop.add_callback(do_task)
         return send_future.result()
 
-    def _convert_callback(self, fn):
+    def _convert_callback(self, callback):
         """
-        :param fn: The callback to convert
+        :param callback: The callback to convert
         :return: A new function that conforms to that which a Communicator expects
         """
 
         def converted(_comm, *args, **kwargs):
-            result = fn(self, *args, **kwargs)
+            result = callback(self, *args, **kwargs)
             if isinstance(result, kiwipy.Future):
                 result = utils.kiwi_to_tornado_future(result)
             return result
@@ -583,10 +574,9 @@ def connect(connection_params=None,
             task_queue=defaults.TASK_QUEUE,
             task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
             task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
-            encoder=defaults.encoder,
-            decoder=defaults.decoder,
-            testing_mode=False
-            ):
+            encoder=defaults.ENCODER,
+            decoder=defaults.DECODER,
+            testing_mode=False):
     return RmqThreadCommunicator.connect(
         connection_params=connection_params,
         connection_factory=connection_factory,
@@ -598,7 +588,4 @@ def connect(connection_params=None,
         task_prefetch_count=task_prefetch_count,
         encoder=encoder,
         decoder=decoder,
-        testing_mode=testing_mode
-    )
-
-
+        testing_mode=testing_mode)

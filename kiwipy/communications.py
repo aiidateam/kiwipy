@@ -1,13 +1,16 @@
+from __future__ import absolute_import
 import abc
-from future.utils import with_metaclass
 import sys
 import time
 
+import six
+
 from . import futures
 
-__all__ = ['Communicator', 'CommunicatorHelper',
-           'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError',
-           'TimeoutError']
+__all__ = [
+    'Communicator', 'CommunicatorHelper', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError',
+    'TimeoutError'
+]
 
 
 class RemoteException(Exception):
@@ -39,7 +42,8 @@ except NameError:
         pass
 
 
-class Communicator(with_metaclass(abc.ABCMeta)):
+@six.add_metaclass(abc.ABCMeta)
+class Communicator(object):
     """
     The interface for a communicator used to both send and receive various
     types of message.
@@ -144,7 +148,9 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         return futures.Future(self)
 
 
+@six.add_metaclass(abc.ABCMeta)
 class CommunicatorHelper(Communicator):
+
     def __init__(self):
         self._task_subscribers = []
         self._broadcast_subscribers = []
@@ -176,11 +182,11 @@ class CommunicatorHelper(Communicator):
         # TODO: Put exception guard and raise out own exception
         self._task_subscribers.remove(subscriber)
 
-    def add_broadcast_subscriber(self, broadcast_subscriber):
-        self._broadcast_subscribers.append(broadcast_subscriber)
+    def add_broadcast_subscriber(self, subscriber):
+        self._broadcast_subscribers.append(subscriber)
 
-    def remove_broadcast_subscriber(self, broadcast_subscriber):
-        self._broadcast_subscribers.remove(broadcast_subscriber)
+    def remove_broadcast_subscriber(self, subscriber):
+        self._broadcast_subscribers.remove(subscriber)
 
     def fire_task(self, msg):
         future = self.create_future()
@@ -194,7 +200,7 @@ class CommunicatorHelper(Communicator):
                 break
             except TaskRejected:
                 pass
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 future.set_exception(RemoteException(sys.exc_info()))
                 handled = True
                 break
@@ -217,7 +223,7 @@ class CommunicatorHelper(Communicator):
                     futures.chain(result, future)
                 else:
                     future.set_result(result)
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 future.set_exception(RemoteException(sys.exc_info()))
             return future
 

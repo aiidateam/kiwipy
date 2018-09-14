@@ -1,10 +1,14 @@
-from future.utils import with_metaclass
+from __future__ import absolute_import
 import abc
+import six
+
 import kiwipy
 
 
-class CommunicatorTester(with_metaclass(abc.ABCMeta)):
+@six.add_metaclass(abc.ABCMeta)
+class CommunicatorTester(object):
     WAIT_TIMEOUT = 2.
+    communicator = None
 
     def setUp(self):
         super(CommunicatorTester, self).setUp()
@@ -131,11 +135,10 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
             if len(subjects) == len(EXPECTED_SUBJECTS):
                 done.set_result(True)
 
-        self.communicator.add_broadcast_subscriber(
-            kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
+        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
 
-        for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
-            self.communicator.broadcast_send(None, subject=subject)
+        for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
+            self.communicator.broadcast_send(None, subject=subj)
 
         self.communicator.wait_for(done, timeout=self.WAIT_TIMEOUT)
 
@@ -153,11 +156,10 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
             if len(senders) == len(EXPECTED_SENDERS):
                 done.set_result(True)
 
-        self.communicator.add_broadcast_subscriber(
-            kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
+        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
 
-        for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
-            self.communicator.broadcast_send(None, sender=sender)
+        for sendr in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
+            self.communicator.broadcast_send(None, sender=sendr)
 
         self.communicator.wait_for(done, timeout=self.WAIT_TIMEOUT)
 
@@ -185,9 +187,9 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
         filtered.add_subject_filter("purchase.*")
         self.communicator.add_broadcast_subscriber(filtered)
 
-        for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
-            for subject in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
-                self.communicator.broadcast_send(None, sender=sender, subject=subject)
+        for sendr in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
+            for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
+                self.communicator.broadcast_send(None, sender=sendr, subject=subj)
 
         self.communicator.wait_for(done, timeout=self.WAIT_TIMEOUT)
 
@@ -213,6 +215,7 @@ class CommunicatorTester(with_metaclass(abc.ABCMeta)):
 
     def test_add_remove_rpc_subscriber(self):
         """ Test adding, sending to, and then removing an RPC subscriber """
+
         def rpc_subscriber(_comm, _msg):
             return True
 

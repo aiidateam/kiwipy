@@ -1,10 +1,11 @@
-from collections import deque, namedtuple
+from __future__ import absolute_import
+from collections import deque
 import logging
-from past.builtins import basestring
-from tornado import gen, concurrent
-import topika
 import traceback
 import uuid
+
+from tornado import gen, concurrent
+import topika
 
 from . import defaults
 from . import utils
@@ -33,13 +34,9 @@ class BaseConnectionWithExchange(object):
     """
     An RMQ connection with a channel and exchange
     """
-    DEFAULT_EXCHANGE_PARAMS = {
-        'type': topika.ExchangeType.TOPIC
-    }
+    DEFAULT_EXCHANGE_PARAMS = {'type': topika.ExchangeType.TOPIC}
 
-    def __init__(self, connection,
-                 exchange_name=defaults.MESSAGE_EXCHANGE,
-                 exchange_params=None):
+    def __init__(self, connection, exchange_name=defaults.MESSAGE_EXCHANGE, exchange_params=None):
         """
         :type connection: :class:`topika.Connection`
         :type exchange_name: str
@@ -77,8 +74,7 @@ class BaseConnectionWithExchange(object):
         # Create the channel
         self._channel = yield self._connection.channel()
         # Create the exchange
-        self._exchange = yield self._channel.declare_exchange(
-            name=self.get_exchange_name(), **self._exchange_params)
+        self._exchange = yield self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
 
     @gen.coroutine
     def disconnect(self):
@@ -94,15 +90,14 @@ class BasePublisherWithReplyQueue(object):
     """
 
     """
-    DEFAULT_EXCHANGE_PARAMS = {
-        'type': topika.ExchangeType.TOPIC
-    }
+    DEFAULT_EXCHANGE_PARAMS = {'type': topika.ExchangeType.TOPIC}
 
-    def __init__(self, connection,
+    def __init__(self,
+                 connection,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
-                 encoder=defaults.encoder,
-                 decoder=defaults.decoder,
+                 encoder=defaults.ENCODER,
+                 decoder=defaults.DECODER,
                  confirm_deliveries=True,
                  testing_mode=False):
         """
@@ -154,8 +149,7 @@ class BasePublisherWithReplyQueue(object):
         self._channel = yield self._connection.channel(
             publisher_confirms=self._confirm_deliveries, on_return_raises=True)
         self._channel.add_close_callback(self._on_channel_close)
-        self._exchange = yield self._channel.declare_exchange(
-            name=self.get_exchange_name(), **self._exchange_params)
+        self._exchange = yield self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
 
         # Declare the reply queue
         reply_queue_name = "{}-reply-{}".format(self._exchange_name, str(uuid.uuid4()))
@@ -163,8 +157,7 @@ class BasePublisherWithReplyQueue(object):
             name=reply_queue_name,
             exclusive=True,
             auto_delete=self._testing_mode,
-            arguments={"x-expires": defaults.REPLY_QUEUE_EXPIRES}
-        )
+            arguments={"x-expires": defaults.REPLY_QUEUE_EXPIRES})
 
         yield self._reply_queue.bind(self._exchange, routing_key=reply_queue_name)
         yield self._reply_queue.consume(self._on_response, no_ack=True)
@@ -193,14 +186,11 @@ class BasePublisherWithReplyQueue(object):
     @gen.coroutine
     def publish(self, message, routing_key, mandatory=True, immediate=False):
         result = yield self._exchange.publish(
-            message,
-            routing_key=routing_key,
-            mandatory=mandatory,
-            immediate=immediate)
+            message, routing_key=routing_key, mandatory=mandatory, immediate=immediate)
         raise gen.Return(result)
 
     @gen.coroutine
-    def publish_expect_response(self, message, routing_key, mandatory=True, immediate=False, response_timeout=None):
+    def publish_expect_response(self, message, routing_key, mandatory=True):
         # If there is no correlation id we have to set on so that we know what the response will be to
         if not message.correlation_id:
             message.correlation_id = str(uuid.uuid4()).encode()
@@ -237,6 +227,7 @@ class BasePublisherWithReplyQueue(object):
                 response = self._response_decode(message.body)
             except Exception:
                 _LOGGER.error("Failed to decode message body:\n%s%s", message.body, traceback.format_exc())
+                raise
             else:
                 utils.response_to_future(response, response_future)
                 try:
@@ -244,7 +235,7 @@ class BasePublisherWithReplyQueue(object):
                     # that future
                     if concurrent.is_future(response_future.result()):
                         self._awaiting_response[correlation_id] = response_future.result()
-                except Exception:
+                except Exception:  # pylint: disable=broad-except
                     pass
 
     def _on_channel_close(self, _closing_future):
