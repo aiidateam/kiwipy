@@ -1,7 +1,9 @@
 from __future__ import absolute_import
 from __future__ import print_function
-from kiwipy import rmq
 import time
+import threading
+
+from kiwipy import rmq
 
 print(' [*] Waiting for messages. To exit press CTRL+C')
 
@@ -12,6 +14,6 @@ def callback(_comm, task):
     print(" [x] Done")
 
 
-with rmq.RmqCommunicator.connect(connection_params={'url': 'amqp://localhost'}) as communicator:
+with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://localhost'}) as communicator:
     communicator.add_task_subscriber(callback)
-    communicator.await()
+    threading.Event().wait()

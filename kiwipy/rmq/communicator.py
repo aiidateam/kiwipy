@@ -217,6 +217,7 @@ class RmqCommunicator(object):
                  task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
                  task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  testing_mode=False):
+        # pylint: disable=too-many-arguments
         """
         :param connection: The RMQ connector object
         :type connection: :class:`topika.Connection`
@@ -362,6 +363,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                 encoder=defaults.ENCODER,
                 decoder=defaults.DECODER,
                 testing_mode=False):
+        # pylint: disable=too-many-arguments
         connection_params = connection_params or {}
         # Create a new loop if one isn't supplied
         loop = loop or ioloop.IOLoop()
@@ -394,6 +396,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                  encoder=defaults.ENCODER,
                  decoder=defaults.DECODER,
                  testing_mode=False):
+        # pylint: disable=too-many-arguments
         """
         :param connection: The RMQ connector object
         :type connection: :class:`topika.Connection`
@@ -421,6 +424,13 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._loop = self._communicator.loop
         self._communicator_thread = None
         self._subscribers = {}
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
 
     def start(self):
         if self._communicator_thread is not None:
@@ -470,7 +480,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         # The stop will end up setting self._communicator_thread to None
         self._loop.add_callback(stop_loop)
         comm_thread.join()
-        return stop_future.result()
+        stop_future.result()
 
     def add_rpc_subscriber(self, subscriber, identifier):
         return self._communicator.add_rpc_subscriber(self._convert_callback(subscriber), identifier)
@@ -577,6 +587,7 @@ def connect(connection_params=None,
             encoder=defaults.ENCODER,
             decoder=defaults.DECODER,
             testing_mode=False):
+    # pylint: disable=too-many-arguments
     return RmqThreadCommunicator.connect(
         connection_params=connection_params,
         connection_factory=connection_factory,

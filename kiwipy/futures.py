@@ -208,15 +208,16 @@ class Future(object):
         self.__schedule_callbacks()
         self.__log_traceback = True
 
-    def __await__(self):
-        if not self.done():
-            self._asyncio_future_blocking = True
-            yield self  # This tells Task to wait for completion.
-        if not self.done():
-            raise RuntimeError("await wasn't used with future")
-        return self.result()  # May raise too.
-
-    __iter__ = __await__  # make compatible with 'yield from'.
+    # Don't know how to make this python 2 and 3 compatible:
+    # def __await__(self):
+    #     if not self.done():
+    #         self._asyncio_future_blocking = True
+    #         yield self  # This tells Task to wait for completion.
+    #     if not self.done():
+    #         raise RuntimeError("await wasn't used with future")
+    #     return self.result()  # May raise too.
+    #
+    # __iter__ = __await__  # make compatible with 'yield from'.
 
 
 def copy_future(source, target):
