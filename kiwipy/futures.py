@@ -1,10 +1,11 @@
 from __future__ import absolute_import
+import contextlib
 import logging
 import platform
 import sys
 import traceback
 
-__all__ = ['Future', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
+__all__ = ['Future', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError', 'capture_exceptions']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -168,13 +169,11 @@ class Future(object):
         else:
             self._callbacks.append(callback)
 
-    # New method not in PEP 3148.
-
-    def remove_done_callback(self, fn):
+    def remove_done_callback(self, callback):
         """Remove all instances of a callback from the "call when done" list.
         Returns the number of callbacks removed.
         """
-        filtered_callbacks = [f for f in self._callbacks if f != fn]
+        filtered_callbacks = [f for f in self._callbacks if f != callback]
         removed_count = len(self._callbacks) - len(filtered_callbacks)
         if removed_count:
             self._callbacks[:] = filtered_callbacks
@@ -202,22 +201,22 @@ class Future(object):
             raise InvalidStateError('{}: {!r}'.format(self._state, self))
         if isinstance(exception, type):
             exception = exception()
-        if type(exception) is StopIteration:
+        if isinstance(exception, StopIteration):
             raise TypeError("StopIteration interacts badly with generators " "and cannot be raised into a Future")
         self._exception = exception
         self._state = _FINISHED
         self.__schedule_callbacks()
         self.__log_traceback = True
 
-    # def __await__(self):
-    #     if not self.done():
-    #         self._asyncio_future_blocking = True
-    #         yield self  # This tells Task to wait for completion.
-    #     if not self.done():
-    #         raise RuntimeError("await wasn't used with future")
-    #     return self.result()  # May raise too.
-    #
-    # __iter__ = __await__  # make compatible with 'yield from'.
+    def __await__(self):
+        if not self.done():
+            self._asyncio_future_blocking = True
+            yield self  # This tells Task to wait for completion.
+        if not self.done():
+            raise RuntimeError("await wasn't used with future")
+        return self.result()  # May raise too.
+
+    __iter__ = __await__  # make compatible with 'yield from'.
 
 
 def copy_future(source, target):
@@ -235,10 +234,8 @@ def copy_future(source, target):
     if source.cancelled():
         target.cancel()
     else:
-        try:
+        with capture_exceptions(target):
             target.set_result(source.result())
-        except Exception as exception:  # pylint: disable=broad-except
-            target.set_exception(exception)
 
 
 def chain(source, target):
@@ -249,3 +246,11 @@ def chain(source, target):
     """
 
     source.add_done_callback(lambda first: copy_future(first, target))
+
+
+@contextlib.contextmanager
+def capture_exceptions(future):
+    try:
+        yield
+    except Exception as exception:  # pylint: disable=broad-except
+        future.set_exception(exception)
