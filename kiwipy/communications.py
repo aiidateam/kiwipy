@@ -139,7 +139,6 @@ class Communicator(object):
             self.wait_for(future, timeout)
 
 
-@six.add_metaclass(abc.ABCMeta)
 class CommunicatorHelper(Communicator):
     # Have to disable this linter because this class remains abstract and it is
     # just used by calsses that will themselves be concrete
@@ -176,7 +175,7 @@ class CommunicatorHelper(Communicator):
         try:
             self._task_subscribers.remove(subscriber)
         except ValueError:
-            raise ValueError('Unknown subscriber: {}'.format(subscriber))
+            raise ValueError("Unknown subscriber: '{}'".format(subscriber))
 
     def add_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.append(subscriber)
@@ -212,15 +211,10 @@ class CommunicatorHelper(Communicator):
         except KeyError:
             raise UnroutableError("Unknown rpc recipient '{}'".format(recipient_id))
         else:
-            future = futures.Future()
-            try:
-                result = subscriber(self, msg)
-                if isinstance(result, futures.Future):
-                    futures.chain(result, future)
-                else:
-                    future.set_result(result)
-            except Exception:  # pylint: disable=broad-except
-                future.set_exception(RemoteException(sys.exc_info()))
+            future = self.create_future()
+            with futures.capture_exceptions(future):
+                future.set_result(subscriber(self, msg))
+
             return future
 
     def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):

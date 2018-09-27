@@ -140,12 +140,14 @@ def kiwi_to_tornado_future(kiwi_future):
         if done_future.cancelled():
             tornado_future.cancel()
         try:
-            tornado_future.set_result(done_future.result())
+            result = done_future.result()
+            if isinstance(result, kiwipy.Future):
+                result = kiwi_to_tornado_future(result)
+            tornado_future.set_result(result)
         except Exception as exception:  # pylint: disable=broad-except
             tornado_future.set_exception(exception)
 
     kiwi_future.add_done_callback(done)
-
     return tornado_future
 
 

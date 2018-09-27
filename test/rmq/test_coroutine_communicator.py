@@ -8,24 +8,37 @@ from kiwipy import rmq
 
 
 class TestCoroutineCommunicator(testing.AsyncTestCase):
+    # Disable invalid name because  I use all caps to designate a constant which pylint
+    # doesn't like
+    # pylint: disable=invalid-name
+
     WAIT_TIMEOUT = testing.get_async_test_timeout()  # Wait timeout in seconds for async operations
 
     def setUp(self):
         super(TestCoroutineCommunicator, self).setUp()
 
         self.loop = self.io_loop
-        exchange_name = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_queue_name = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
         self.communicator = None  # type: kiwipy.rmq.RmqCommunicator
 
         @gen.coroutine
         def init():
             connection = yield topika.connect_robust('amqp://guest:guest@localhost:5672/', loop=self.loop)
             self.communicator = rmq.RmqCommunicator(
-                connection, message_exchange=exchange_name, task_queue=task_queue_name, testing_mode=True)
+                connection,
+                message_exchange=message_exchange,
+                task_exchange=task_exchange,
+                task_queue=task_queue,
+                testing_mode=True)
             yield self.communicator.connect()
 
         self.loop.run_sync(init)
+
+    def tearDown(self):
+        self.loop.run_sync(self.communicator.disconnect)
+        super(TestCoroutineCommunicator, self).tearDown()
 
     @testing.gen_test
     def test_rpc_send_receive(self):
@@ -233,7 +246,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
     def test_add_remove_rpc_subscriber(self):
         """ Test adding, sending to, and then removing an RPC subscriber """
 
-        def rpc_subscriber(_comm, msg):
+        def rpc_subscriber(_comm, _msg):
             return True
 
         # Check we're getting messages
