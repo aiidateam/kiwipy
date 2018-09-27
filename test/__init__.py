@@ -3,12 +3,13 @@ from __future__ import print_function
 import logging
 import tempfile
 import os
+from . import utils
 
-testfile = os.path.join(tempfile.gettempdir(), 'kiwipy_unittest.log')
+TEST_LOG = os.path.join(tempfile.gettempdir(), 'kiwipy_unittest.log')
 try:
-    os.remove(testfile)
+    os.remove(TEST_LOG)
 except OSError:
     pass
-print(("Logging test to '{}'".format(testfile)))
+print(("Logging test to '{}'".format(TEST_LOG)))
 FORMAT = "[%(filename)s:%(lineno)s - %(funcName)s()] %(message)s"
-logging.basicConfig(filename=testfile, level=logging.INFO, format=FORMAT)
+logging.basicConfig(filename=TEST_LOG, level=logging.INFO, format=FORMAT)
