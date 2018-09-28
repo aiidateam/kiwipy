@@ -34,7 +34,7 @@ class TaskRejected(Exception):
 
 
 try:
-    TimeoutError = TimeoutError
+    TimeoutError = TimeoutError  # pylint: disable=redefined-builtin
 except NameError:
     # Most likely python2
     class TimeoutError(OSError):
@@ -138,18 +138,12 @@ class Communicator(object):
                     raise TimeoutError()
             self.wait_for(future, timeout)
 
-    def create_future(self):
-        """
-        Create a new future with this communicator as the owner
-
-        :return: A new futrue
-        :rtype: :class:`kiwipy.Future`
-        """
-        return futures.Future(self)
-
 
 @six.add_metaclass(abc.ABCMeta)
 class CommunicatorHelper(Communicator):
+    # Have to disable this linter because this class remains abstract and it is
+    # just used by calsses that will themselves be concrete
+    # pylint: disable=abstract-method
 
     def __init__(self):
         self._task_subscribers = []
@@ -179,8 +173,10 @@ class CommunicatorHelper(Communicator):
 
         :param subscriber: The task callback function
         """
-        # TODO: Put exception guard and raise out own exception
-        self._task_subscribers.remove(subscriber)
+        try:
+            self._task_subscribers.remove(subscriber)
+        except ValueError:
+            raise ValueError('Unknown subscriber: {}'.format(subscriber))
 
     def add_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.append(subscriber)
@@ -189,7 +185,7 @@ class CommunicatorHelper(Communicator):
         self._broadcast_subscribers.remove(subscriber)
 
     def fire_task(self, msg):
-        future = self.create_future()
+        future = futures.Future()
         handled = False
 
         for subscriber in self._task_subscribers:
@@ -216,7 +212,7 @@ class CommunicatorHelper(Communicator):
         except KeyError:
             raise UnroutableError("Unknown rpc recipient '{}'".format(recipient_id))
         else:
-            future = self.create_future()
+            future = futures.Future()
             try:
                 result = subscriber(self, msg)
                 if isinstance(result, futures.Future):
@@ -230,6 +226,6 @@ class CommunicatorHelper(Communicator):
     def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):
         for subscriber in self._broadcast_subscribers:
             subscriber(self, body=body, sender=sender, subject=subject, correlation_id=correlation_id)
-        future = self.create_future()
+        future = futures.Future()
         future.set_result(True)
         return future

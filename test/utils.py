@@ -7,6 +7,11 @@ import kiwipy
 
 @six.add_metaclass(abc.ABCMeta)
 class CommunicatorTester(object):
+    # Disable invalid name because I use caps for constants which the linter doesn't like
+    # also disable no-member for superclass calls because we use this as a mixin that gets used
+    # with unittest.TestCase
+    # pylint: disable=invalid-name, no-member
+
     WAIT_TIMEOUT = 2.
     communicator = None
 
@@ -66,7 +71,7 @@ class CommunicatorTester(object):
         """
         TASK = 'The meaning?'
         RESULT = 42
-        result_future = self.communicator.create_future()
+        result_future = kiwipy.Future()
 
         tasks = []
 
@@ -105,8 +110,8 @@ class CommunicatorTester(object):
         SENDER_ID = 'me'
         FULL_MSG = {'body': BODY, 'subject': SUBJECT, 'sender': SENDER_ID, 'correlation_id': None}
 
-        message1 = self.communicator.create_future()
-        message2 = self.communicator.create_future()
+        message1 = kiwipy.Future()
+        message2 = kiwipy.Future()
 
         def on_broadcast_1(_comm, body, sender, subject, correlation_id):
             message1.set_result({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
@@ -128,7 +133,7 @@ class CommunicatorTester(object):
         subjects = []
         EXPECTED_SUBJECTS = ['purchase.car', 'purchase.piano']
 
-        done = self.communicator.create_future()
+        done = kiwipy.Future()
 
         def on_broadcast_1(_comm, _body, _sender=None, subject=None, _correlation_id=None):
             subjects.append(subject)
@@ -149,7 +154,7 @@ class CommunicatorTester(object):
         EXPECTED_SENDERS = ['bob.jones', 'alice.jones']
         senders = []
 
-        done = self.communicator.create_future()
+        done = kiwipy.Future()
 
         def on_broadcast_1(_comm, _body, sender=None, _subject=None, _correlation_id=None):
             senders.append(sender)
@@ -175,7 +180,7 @@ class CommunicatorTester(object):
             ('alice.jones', 'purchase.piano'),
         }
 
-        done = self.communicator.create_future()
+        done = kiwipy.Future()
 
         def on_broadcast_1(_communicator, _body, sender=None, subject=None, _correlation_id=None):
             senders_and_subects.add((sender, subject))
@@ -197,9 +202,10 @@ class CommunicatorTester(object):
         self.assertSetEqual(EXPECTED, senders_and_subects)
 
     def test_add_remove_broadcast_subscriber(self):
-        broadcast_received = self.communicator.create_future()
+        broadcast_received = kiwipy.Future()
 
         def broadcast_subscriber(_comm, body, sender=None, subject=None, correlation_id=None):
+            # pylint: disable=unused-argument
             broadcast_received.set_result(True)
 
         # Check we're getting messages
@@ -209,7 +215,7 @@ class CommunicatorTester(object):
 
         self.communicator.remove_broadcast_subscriber(broadcast_subscriber)
         # Check that we're unsubscribed
-        broadcast_received = self.communicator.create_future()
+        broadcast_received = kiwipy.Future()
         with self.assertRaises(kiwipy.TimeoutError):
             self.communicator.wait_for(broadcast_received, timeout=self.WAIT_TIMEOUT)
 

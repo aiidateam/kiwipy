@@ -114,7 +114,7 @@ def tornado_to_kiwi_future(tornado_future, communicator):
     :type communicator: :class:`kiwipy.Communicator`
     :rtype: :class:`kiwipy.Future`
     """
-    kiwi_future = communicator.create_future()
+    kiwi_future = kiwipy.Future()
 
     def done(done_future):
         # Copy over the future
@@ -152,7 +152,7 @@ def kiwi_to_tornado_future(kiwi_future):
 def ensure_coroutine(coro_or_fn):
     if gen.is_coroutine_function(coro_or_fn):
         return coro_or_fn
-    elif callable(coro_or_fn):
+    if callable(coro_or_fn):
         if inspect.isclass(coro_or_fn):
             coro_or_fn = coro_or_fn.__call__
         return gen.coroutine(coro_or_fn)

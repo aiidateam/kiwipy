@@ -7,8 +7,7 @@ import kiwipy
 class TestUtilities(unittest.TestCase):
 
     def test_capture_exceptions(self):
-        comm = kiwipy.LocalCommunicator()
-        future = comm.create_future()
+        future = kiwipy.Future()
 
         exception = RuntimeError()
         with kiwipy.capture_exceptions(future):
