@@ -37,11 +37,18 @@ setup(
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
     install_requires=[
-        'tornado', 'future', 'topika', 'six', 'typing; python_version<"3.5"', 'enum34; python_version<"3.4"',
-        'backports.tempfile; python_version<"3.2"', 'futures; python_version == "2.7"'
+        'future',
+        'six',
+        'typing; python_version<"3.5"',
+        'enum34; python_version<"3.4"',
+        'backports.tempfile; python_version<"3.2"',
+        'futures; python_version == "2.7"',
     ],
     extras_require={
-        'rmq': ['pika', 'tornado', 'pyyaml'],
+        'rmq': [
+            'pika>="1.0.0b1"', 'topika>="0.1.2"', 'tornado>=4; python_version<"3"', 'tornado<5; python_version>="3"',
+            'pyyaml'
+        ],
         'dev': [
             'pip',
             'pytest',
