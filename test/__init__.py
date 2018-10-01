@@ -10,6 +10,5 @@ try:
     os.remove(TEST_LOG)
 except OSError:
     pass
-print(("Logging test to '{}'".format(TEST_LOG)))
 FORMAT = "[%(filename)s:%(lineno)s - %(funcName)s()] %(message)s"
 logging.basicConfig(filename=TEST_LOG, level=logging.INFO, format=FORMAT)
