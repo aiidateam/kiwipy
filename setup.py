@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from setuptools import setup
 
 __author__ = "Martin Uhrin"
@@ -8,7 +9,7 @@ __contributors__ = "Sebastiaan Huber"
 
 about = {}
 with open('kiwipy/version.py') as f:
-    exec (f.read(), about)
+    exec(f.read(), about)
 
 setup(
     name="kiwipy",
@@ -36,16 +37,30 @@ setup(
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
     install_requires=[
-        'tornado',
-        'future'
+        'future',
+        'six',
+        'typing; python_version<"3.5"',
+        'enum34; python_version<"3.4"',
+        'backports.tempfile; python_version<"3.2"',
+        'futures; python_version == "2.7"',
     ],
     extras_require={
-        'rmq': ['pika', 'tornado', 'pyyaml'],
-        'dev': ['pytest', 'pytest-cov', 'ipython', 'twine'],
-        ':python_version<"3.5"': ['typing'],
-        ':python_version<"3.4"': ['enum34'],
-        ':python_version<"3.2"': ['backports.tempfile']
+        'rmq': [
+            'pika>="1.0.0b1"', 'topika>="0.1.2"', 'tornado>=4; python_version<"3"', 'tornado<5; python_version>="3"',
+            'pyyaml'
+        ],
+        'dev': [
+            'pip',
+            'pytest',
+            'pytest-cov',
+            'ipython',
+            'twine',
+            'shortuuid',
+            'yapf',
+            'prospector',
+            'pylint<2; python_version<"3"',
+            'pylint; python_version>="3"',
+        ],
     },
     packages=['kiwipy', 'kiwipy.rmq'],
-    test_suite='test'
-)
+    test_suite='test')

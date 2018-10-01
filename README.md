@@ -19,35 +19,40 @@ Let's dive in, with some examples taken from the [rmq tutorial](https://www.rabb
 
 The client:
 ```python
-from kiwipy.rmq import *
+from kiwipy import rmq
 
-communicator = RmqCommunicator(RmqConnector('amqp://localhost'))
+communicator = rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://localhost'})
 
 # Send an RPC message
 print(" [x] Requesting fib(30)")
-response = communicator.rpc_send_and_wait('fib', 30)
-print(" [.] Got %r" % response)
+response = communicator.rpc_send('fib', 30).result()
+print((" [.] Got %r" % response))
 ```
 [(rmq_rpc_client.py source)](https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_rpc_client.py)
 
 
 The server:
 ```python
-from kiwipy.rmq import *
+import threading
 
-def fib(n):
-    if n == 0:
+from kiwipy import rmq
+
+
+def fib(comm, num):
+    if num == 0:
         return 0
-    elif n == 1:
+    if num == 1:
         return 1
-    else:
-        return fib(n - 1) + fib(n - 2)
 
-communicator = RmqCommunicator(RmqConnector('amqp://localhost'))
+    return fib(comm, num - 1) + fib(comm, num - 2)
+
+
+communicator = rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://localhost'})  # pylint: disable=invalid-name
 
 # Register an RPC subscriber with the name square
 communicator.add_rpc_subscriber(fib, 'fib')
-communicator.await()
+# Now wait indefinitely for fibonacci calls
+threading.Event().wait()
 ```
 [(rmq_rpc_server.py source)](https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_rpc_server.py)
 
@@ -56,35 +61,39 @@ communicator.await()
 
 Create a new task:
 ```python
-from kiwipy.rmq import *
 import sys
+
+from kiwipy import rmq
 
 message = ' '.join(sys.argv[1:]) or "Hello World!"
 
-communicator = RmqCommunicator(RmqConnector('amqp://localhost'))
-communicator.task_send(message)
-communicator.close()
+with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://localhost'}) as communicator:
+    communicator.task_send(message)
 ```
 [(rmq_new_task.py source)](https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_new_task.py)
 
 
 And the worker:
 ```python
-from kiwipy.rmq import *
 import time
+import threading
 
-communicator = RmqCommunicator(RmqConnector('amqp://localhost'))
+from kiwipy import rmq
 
 print(' [*] Waiting for messages. To exit press CTRL+C')
 
 
-def callback(task):
-    print(" [x] Received %r" % task)
+def callback(_comm, task):
+    print((" [x] Received %r" % task))
     time.sleep(task.count(b'.'))
     print(" [x] Done")
 
 
-communicator.add_task_subscriber(callback)
-communicator.await()
+try:
+    with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://localhost'}) as communicator:
+        communicator.add_task_subscriber(callback)
+        threading.Event().wait()
+except KeyboardInterrupt:
+    pass
 ```
 [(rmq_worker.py source)](https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_worker.py)

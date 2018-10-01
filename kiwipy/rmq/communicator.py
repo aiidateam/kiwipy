@@ -1,75 +1,90 @@
+from __future__ import absolute_import
+from concurrent.futures import Future as ThreadFuture
 from functools import partial
-import kiwipy
 import logging
+import threading
+
 import pika
 import pika.exceptions
-import tornado.gen
-from tornado.gen import coroutine
-import tornado.ioloop
-import yaml
+from tornado import gen, concurrent, ioloop
+import topika
 
+import kiwipy
 from . import defaults
 from . import tasks
 from . import messages
-from . import pubsub
 from . import utils
 
-__all__ = ['RmqCommunicator']
+__all__ = ['RmqCommunicator', 'RmqThreadCommunicator', 'connect']
 
 _LOGGER = logging.getLogger(__name__)
 
 # The exchange properties use by the publisher and subscriber.  These have to match
 # which is why they're declare her
-EXCHANGE_PROPERTIES = {
-    'exchange_type': 'topic',
-}
+EXCHANGE_PROPERTIES = {'type': topika.ExchangeType.TOPIC}
 
 
 class RmqPublisher(messages.BasePublisherWithReplyQueue):
     """
-
+    Publisher for sending a range of message types over RMQ
     """
     DEFAULT_EXCHANGE_PARAMS = EXCHANGE_PROPERTIES
 
+    @gen.coroutine
     def rpc_send(self, recipient_id, msg):
-        message = messages.RpcMessage(recipient_id, body=msg)
-        self.action_message(message)
-        return message.future
+        message = topika.Message(body=self._encode(msg), reply_to=self._reply_queue.name)
+        published, response_future = yield self.publish_expect_response(
+            message, routing_key="{}.{}".format(defaults.RPC_TOPIC, recipient_id), mandatory=True)
+        assert published, "The message was not published to the exchanges"
+        raise gen.Return(response_future)
 
+    @gen.coroutine
     def broadcast_send(self, msg, sender=None, subject=None, correlation_id=None):
-        message = messages.BroadcastMessage(
+        message_dict = messages.BroadcastMessage.create(
             body=msg,
             sender=sender,
             subject=subject,
-            correlation_id=correlation_id)
-        self.action_message(message)
+            correlation_id=correlation_id,
+        )
+        message = topika.Message(
+            body=self._encode(message_dict),
+            delivery_mode=topika.DeliveryMode.NOT_PERSISTENT,
+        )
+        result = yield self.publish(message, routing_key=defaults.BROADCAST_TOPIC)
+        raise gen.Return(result)
 
 
-class RmqSubscriber(pubsub.ConnectionListener):
-    def __init__(self, connector,
-                 exchange_name=defaults.TASK_EXCHANGE,
-                 decoder=yaml.load,
-                 encoder=yaml.dump):
+class RmqSubscriber(object):
+    """
+    Subscriber for receiving a range of messages over RMQ
+    """
+
+    def __init__(self,
+                 connection,
+                 message_exchange=defaults.MESSAGE_EXCHANGE,
+                 decoder=defaults.DECODER,
+                 encoder=defaults.ENCODER):
         """
         Subscribes and listens for process control messages and acts on them
         by calling the corresponding methods of the process manager.
 
-        :param connector: The RMQ connector
-        :param exchange_name: The name of the exchange to use
+        :param connection: The tokpia connection
+        :type connection: :class:`topika.Connection`
+        :param message_exchange: The name of the exchange to use
         :param decoder:
         """
         super(RmqSubscriber, self).__init__()
 
-        self._connector = connector
-        self._exchange_name = exchange_name
+        self._connection = connection
+        self._channel = None
+        self._exchange = None
+        self._exchange_name = message_exchange
         self._decode = decoder
         self._response_encode = encoder
-        self._channel = None
 
         self._rpc_subscribers = {}
         self._broadcast_subscribers = []
 
-        self._connector = connector
         self._active = False
 
     def add_rpc_subscriber(self, subscriber, identifier):
@@ -87,153 +102,127 @@ class RmqSubscriber(pubsub.ConnectionListener):
     def remove_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.remove(subscriber)
 
-    def on_connection_opened(self, connector, connection):
-        self.connect()
-
     def channel(self):
         return self._channel
 
-    @coroutine
+    @gen.coroutine
     def connect(self):
         if self._channel:
             # Already connected
             return
 
-        connector = self._connector
-        channel = yield connector.open_channel()
-        channel.add_on_close_callback(self._on_channel_closed)
-        yield connector.exchange_declare(channel, exchange=self._exchange_name, **EXCHANGE_PROPERTIES)
+        self._channel = yield self._connection.channel()
+        self._exchange = yield self._channel.declare_exchange(name=self._exchange_name, **EXCHANGE_PROPERTIES)
 
         # RPC queue
-        frame = yield connector.queue_declare(
-            channel,
-            exclusive=True,
-            arguments={
+        rpc_queue = yield self._channel.declare_queue(
+            exclusive=True, arguments={
                 "x-message-ttl": defaults.MESSAGE_TTL,
                 "x-expires": defaults.QUEUE_EXPIRES
             })
-        rpc_queue = frame.method.queue
-        result = yield connector.queue_bind(
-            channel,
-            queue=rpc_queue,
-            exchange=self._exchange_name,
-            routing_key='{}.*'.format(defaults.RPC_TOPIC))
-        channel.basic_consume(self._on_rpc, queue=rpc_queue)
+
+        yield rpc_queue.bind(self._exchange, routing_key='{}.*'.format(defaults.RPC_TOPIC))
+        rpc_queue.consume(self._on_rpc)
 
         # Broadcast queue
-        frame = yield connector.queue_declare(
-            channel,
-            exclusive=True,
-            arguments={
+        broadcast_queue = yield self._channel.declare_queue(
+            exclusive=True, arguments={
                 "x-message-ttl": defaults.MESSAGE_TTL,
                 "x-expires": defaults.QUEUE_EXPIRES
             })
-        broadcast_queue = frame.method.queue
-        yield connector.queue_bind(
-            channel,
-            queue=broadcast_queue,
-            exchange=self._exchange_name,
-            routing_key=defaults.BROADCAST_TOPIC)
-        channel.basic_consume(self._on_broadcast, queue=broadcast_queue)
+        yield broadcast_queue.bind(self._exchange, routing_key=defaults.BROADCAST_TOPIC)
+        broadcast_queue.consume(self._on_broadcast)
 
-        self._channel = channel
-        # Have we been called externally?  In which case activate
-        if not self._active:
-            self._connector.add_connection_listener(self)
-            self._active = True
-
-    @coroutine
+    @gen.coroutine
     def disconnect(self):
-        self._connector.remove_connection_listener(self)
-        if self.channel() is not None:
-            yield self._connector.close_channel(self.channel())
-            self._channel = None
-
-    # region RMQ methods
-
-    def _on_channel_closed(self, ch, reply_code, reply_text):
-        assert self._channel is ch
+        yield self._channel.close()
+        self._exchange = None
         self._channel = None
 
-    # end region
+    @gen.coroutine
+    def _on_rpc(self, message):
+        """
+        :param message: The RMQ message
+        :type message: :class:`topika.message.IncomingMessage`
+        """
+        with message.process(ignore_processed=True):
+            identifier = message.routing_key[len('{}.'.format(defaults.RPC_TOPIC)):]
+            receiver = self._rpc_subscribers.get(identifier, None)
+            if receiver is None:
+                message.reject(requeue=True)
+            else:
+                # Tell the sender that we've dealt with it
+                message.ack()
 
-    @coroutine
-    def _on_rpc(self, ch, method, props, body):
-        identifier = method.routing_key[len('{}.'.format(defaults.RPC_TOPIC)):]
-        receiver = self._rpc_subscribers.get(identifier, None)
-        if receiver is None:
-            self._channel.basic_reject(method.delivery_tag)
-        else:
-            # Tell the sender that we've dealt with it
-            self._channel.basic_ack(method.delivery_tag)
+                msg = self._decode(message.body)
 
-            msg = self._decode(body)
+                try:
+                    receiver = utils.ensure_coroutine(receiver)
+                    result = yield receiver(self, msg)
 
-            try:
-                if tornado.gen.is_coroutine_function(receiver):
-                    result = yield receiver(msg)
-                else:
-                    result = receiver(msg)
+                    if isinstance(result, concurrent.Future):
+                        response = utils.pending_response()
+                        yield self._send_response(message.reply_to, message.correlation_id, response)
+                        try:
+                            response = yield result
+                            response = utils.result_response(response)
+                        except kiwipy.CancelledError as exception:
+                            response = utils.cancelled_response(str(exception))
+                        except Exception as exception:  # pylint: disable=broad-except
+                            response = utils.exception_response(exception)
+                    else:
+                        response = utils.result_response(result)
+                except Exception as exception:  # pylint: disable=broad-except
+                    response = utils.exception_response(exception)
 
-                if isinstance(result, tornado.concurrent.Future):
-                    response = utils.pending_response()
-                    self._send_response(ch, props.reply_to, props.correlation_id, response)
-                    try:
-                        response = yield result
-                        response = utils.result_response(response)
-                    except kiwipy.CancelledError as e:
-                        response = utils.cancelled_response()
-                    except BaseException as e:
-                        response = utils.exception_response(e)
-                else:
-                    response = utils.result_response(result)
-            except BaseException as e:
-                response = utils.exception_response(e)
+                yield self._send_response(message.reply_to, message.correlation_id, response)
 
-            self._send_response(ch, props.reply_to, props.correlation_id, response)
+    @gen.coroutine
+    def _on_broadcast(self, message):
+        with message.process():
+            msg = self._decode(message.body)
+            for receiver in self._broadcast_subscribers:
+                try:
+                    receiver = utils.ensure_coroutine(receiver)
+                    yield receiver(self, msg[messages.BroadcastMessage.BODY], msg[messages.BroadcastMessage.SENDER],
+                                   msg[messages.BroadcastMessage.SUBJECT],
+                                   msg[messages.BroadcastMessage.CORRELATION_ID])
+                except Exception:  # pylint: disable=broad-except
+                    import traceback
+                    _LOGGER.error("Exception in broadcast receiver!\n"
+                                  "msg: %s\n"
+                                  "traceback:\n%s", msg, traceback.format_exc())
 
-    @coroutine
-    def _on_broadcast(self, ch, method, props, body):
-        msg = self._decode(body)
-        for receiver in self._broadcast_subscribers:
-            try:
-                if tornado.gen.is_coroutine_function(receiver):
-                    yield receiver(**msg)
-                else:
-                    receiver(**msg)
-            except BaseException:
-                import traceback
-                _LOGGER.error("Exception in broadcast receiver!\n"
-                              "msg: {}\n"
-                              "traceback:\n{}".format(msg, traceback.format_exc()))
+    @gen.coroutine
+    def _send_response(self, reply_to, correlation_id, response):
+        assert reply_to, "Must provide an identifier for the recipient"
 
-    def _send_response(self, ch, reply_to, correlation_id, response):
-        ch.basic_publish(
-            exchange='', routing_key=reply_to,
-            properties=pika.BasicProperties(correlation_id=correlation_id),
-            body=self._response_encode(response)
-        )
+        message = topika.Message(body=self._response_encode(response), correlation_id=correlation_id)
+        result = yield self._exchange.publish(message, routing_key=reply_to)
+        raise gen.Return(result)
 
 
-class RmqCommunicator(kiwipy.Communicator):
+class RmqCommunicator(object):
     """
-    A publisher and subscriber that implements the Communicator interface.
+    A publisher and subscriber using topika and a tornado event loop
     """
 
-    def __init__(self, connector,
-                 exchange_name=defaults.MESSAGE_EXCHANGE,
+    def __init__(self,
+                 connection,
+                 message_exchange=defaults.MESSAGE_EXCHANGE,
                  task_exchange=defaults.TASK_EXCHANGE,
                  task_queue=defaults.TASK_QUEUE,
-                 encoder=yaml.dump,
-                 decoder=yaml.load,
+                 encoder=defaults.ENCODER,
+                 decoder=defaults.DECODER,
                  task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
                  task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  testing_mode=False):
+        # pylint: disable=too-many-arguments
         """
-
-        :param connector: The RMQ connector object
-        :param exchange_name: The name of the RMQ message exchange to use
-        :type exchange_name: str
+        :param connection: The RMQ connector object
+        :type connection: :class:`topika.Connection`
+        :param message_exchange: The name of the RMQ message exchange to use
+        :type message_exchange: str
         :param task_exchange: The name of the RMQ task exchange to use
         :type task_exchange: str
         :param task_queue: The name of the task queue to use
@@ -245,24 +234,20 @@ class RmqCommunicator(kiwipy.Communicator):
         """
         super(RmqCommunicator, self).__init__()
 
-        self._connector = connector
-        self._loop = connector._loop
+        self._connection = connection
+        self._loop = connection.loop
         self._connected = False
 
         self._message_subscriber = RmqSubscriber(
-            connector,
-            exchange_name,
-            encoder=encoder,
-            decoder=decoder
-        )
+            connection, message_exchange=message_exchange, encoder=encoder, decoder=decoder)
         self._message_publisher = RmqPublisher(
-            connector,
-            exchange_name=exchange_name,
+            connection,
+            exchange_name=message_exchange,
             encoder=encoder,
             decoder=decoder,
         )
         self._task_subscriber = tasks.RmqTaskSubscriber(
-            connector,
+            connection,
             exchange_name=task_exchange,
             task_queue_name=task_queue,
             encoder=encoder,
@@ -272,7 +257,7 @@ class RmqCommunicator(kiwipy.Communicator):
             testing_mode=testing_mode,
         )
         self._task_publisher = tasks.RmqTaskPublisher(
-            connector,
+            connection,
             exchange_name=task_exchange,
             task_queue_name=task_queue,
             encoder=encoder,
@@ -287,23 +272,32 @@ class RmqCommunicator(kiwipy.Communicator):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
 
+    def __str__(self):
+        return "RMQCommunicator ({})".format(self._connection)
+
+    @property
+    def loop(self):
+        return self._connection.loop
+
+    @gen.coroutine
     def connect(self):
         if self._connected:
             return
 
-        self._loop.run_sync(self._message_subscriber.connect)
-        self._loop.run_sync(self._task_subscriber.connect)
-        self._loop.run_sync(self._message_publisher.connect)
-        self._loop.run_sync(self._task_publisher.connect)
+        yield self._message_subscriber.connect()
+        yield self._task_subscriber.connect()
+        yield self._message_publisher.connect()
+        yield self._task_publisher.connect()
 
         self._connected = True
 
+    @gen.coroutine
     def disconnect(self):
-        self._loop.run_sync(self._message_publisher.disconnect)
-        self._loop.run_sync(self._message_subscriber.disconnect)
-        self._loop.run_sync(self._task_publisher.disconnect)
-        self._loop.run_sync(self._task_subscriber.disconnect)
-        self._loop.run_sync(self._connector.disconnect)
+        yield self._message_publisher.disconnect()
+        yield self._message_subscriber.disconnect()
+        yield self._task_publisher.disconnect()
+        yield self._task_subscriber.disconnect()
+        yield self._connection.close()
 
     def add_rpc_subscriber(self, subscriber, identifier):
         self._message_subscriber.add_rpc_subscriber(subscriber, identifier)
@@ -323,6 +317,7 @@ class RmqCommunicator(kiwipy.Communicator):
     def remove_broadcast_subscriber(self, subscriber):
         self._message_subscriber.remove_broadcast_subscriber(subscriber)
 
+    @gen.coroutine
     def rpc_send(self, recipient_id, msg):
         """
         Initiate a remote procedure call on a recipient
@@ -332,27 +327,276 @@ class RmqCommunicator(kiwipy.Communicator):
         :return: A future corresponding to the outcome of the call
         """
         try:
-            return self._message_publisher.rpc_send(recipient_id, msg)
-        except pika.exceptions.UnroutableError as e:
-            raise kiwipy.UnroutableError(str(e))
+            response_future = yield self._message_publisher.rpc_send(recipient_id, msg)
+            raise gen.Return(response_future)
+        except pika.exceptions.UnroutableError as exception:
+            raise kiwipy.UnroutableError(str(exception))
 
+    @gen.coroutine
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
-        return self._message_publisher.broadcast_send(body, sender, subject, correlation_id)
+        result = yield self._message_publisher.broadcast_send(body, sender, subject, correlation_id)
+        raise gen.Return(result)
 
+    @gen.coroutine
     def task_send(self, msg):
         try:
-            return self._task_publisher.task_send(msg)
-        except pika.exceptions.UnroutableError as e:
-            raise kiwipy.UnroutableError(str(e))
-        except pika.exceptions.NackError as e:
-            raise kiwipy.TaskRejected(str(e))
+            response_future = yield self._task_publisher.task_send(msg)
+            raise gen.Return(response_future)
+        except pika.exceptions.UnroutableError as exception:
+            raise kiwipy.UnroutableError(str(exception))
+        except pika.exceptions.NackError as exception:
+            raise kiwipy.TaskRejected(str(exception))
 
-    def await(self, future=None, timeout=None):
-        # Ensure we're connected
-        if future is None:
-            future = kiwipy.Future()
-        self.connect()
+
+class RmqThreadCommunicator(kiwipy.Communicator):
+
+    @classmethod
+    def connect(cls,
+                connection_params=None,
+                connection_factory=topika.connect_robust,
+                loop=None,
+                message_exchange=defaults.MESSAGE_EXCHANGE,
+                task_exchange=defaults.TASK_EXCHANGE,
+                task_queue=defaults.TASK_QUEUE,
+                task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+                task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+                encoder=defaults.ENCODER,
+                decoder=defaults.DECODER,
+                testing_mode=False):
+        # pylint: disable=too-many-arguments
+        connection_params = connection_params or {}
+        # Create a new loop if one isn't supplied
+        loop = loop or ioloop.IOLoop()
+        connection_params['loop'] = loop
+
+        # Run the loop to create the connection
+        connection = loop.run_sync(lambda: connection_factory(**connection_params))
+        communicator = cls(
+            connection,
+            message_exchange=message_exchange,
+            task_exchange=task_exchange,
+            task_queue=task_queue,
+            task_prefetch_size=task_prefetch_size,
+            task_prefetch_count=task_prefetch_count,
+            encoder=encoder,
+            decoder=decoder,
+            testing_mode=testing_mode)
+
+        # Start the communicator
+        communicator.start()
+        return communicator
+
+    def __init__(self,
+                 connection,
+                 message_exchange=defaults.MESSAGE_EXCHANGE,
+                 task_exchange=defaults.TASK_EXCHANGE,
+                 task_queue=defaults.TASK_QUEUE,
+                 task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+                 task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+                 encoder=defaults.ENCODER,
+                 decoder=defaults.DECODER,
+                 testing_mode=False):
+        # pylint: disable=too-many-arguments
+        """
+        :param connection: The RMQ connector object
+        :type connection: :class:`topika.Connection`
+        :param message_exchange: The name of the RMQ message exchange to use
+        :type message_exchange: str
+        :param task_exchange: The name of the RMQ task exchange to use
+        :type task_exchange: str
+        :param task_queue: The name of the task queue to use
+        :type task_queue: str
+        :param encoder: The encoder to call for encoding a message
+        :param decoder: The decoder to call for decoding a message
+        :param testing_mode: Run in testing mode: all queues and exchanges
+            will be temporary
+        """
+        self._communicator = RmqCommunicator(
+            connection,
+            message_exchange=message_exchange,
+            task_exchange=task_exchange,
+            task_queue=task_queue,
+            encoder=encoder,
+            decoder=decoder,
+            task_prefetch_size=task_prefetch_size,
+            task_prefetch_count=task_prefetch_count,
+            testing_mode=testing_mode)
+        self._loop = self._communicator.loop
+        self._communicator_thread = None
+        self._subscribers = {}
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+
+    def start(self):
+        if self._communicator_thread is not None:
+            return
+
+        start_future = ThreadFuture()
+
+        def run_loop():
+
+            @gen.coroutine
+            def do_connect():
+                try:
+                    yield self._communicator.connect()
+                    start_future.set_result(True)
+                except Exception as exception:  # pylint: disable=broad-except
+                    import traceback
+                    _LOGGER.error("Error starting the communicator:\n%s", traceback.format_exc())
+                    start_future.set_exception(exception)
+
+            self._loop.add_callback(do_connect)
+            self._loop.start()
+            self._communicator_thread = None
+
+        self._communicator_thread = threading.Thread(
+            target=run_loop, name="Communications thread for '{}'".format(self._communicator))
+        self._communicator_thread.daemon = True
+        self._communicator_thread.start()
+        start_future.result()
+
+    def stop(self):
+        comm_thread = self._communicator_thread
+        if comm_thread is None:
+            return
+
+        stop_future = ThreadFuture()
+
+        @gen.coroutine
+        def stop_loop():
+            try:
+                yield self._communicator.disconnect()
+                stop_future.set_result(True)
+            except Exception as exception:  # pylint: disable=broad-except
+                stop_future.set_exception(exception)
+            finally:
+                self._loop.stop()
+
+        # The stop will end up setting self._communicator_thread to None
+        self._loop.add_callback(stop_loop)
+        comm_thread.join()
+        stop_future.result()
+
+    def add_rpc_subscriber(self, subscriber, identifier):
+        return self._communicator.add_rpc_subscriber(self._convert_callback(subscriber), identifier)
+
+    def remove_rpc_subscriber(self, identifier):
+        return self._communicator.remove_rpc_subscriber(identifier)
+
+    def add_task_subscriber(self, subscriber):
+        converted = self._convert_callback(subscriber)
+        self._communicator.add_task_subscriber(converted)
+        self._subscribers[subscriber] = converted
+
+    def remove_task_subscriber(self, subscriber):
         try:
-            return self._loop.run_sync(lambda: future, timeout=timeout)
-        except tornado.ioloop.TimeoutError as e:
-            raise kiwipy.TimeoutError(str(e))
+            converted = self._subscribers.pop(subscriber)
+        except KeyError:
+            raise ValueError("Subscriber '{}' is unknown".format(subscriber))
+        else:
+            self._communicator.remove_task_subscriber(converted)
+
+    def add_broadcast_subscriber(self, subscriber):
+        converted = self._convert_callback(subscriber)
+        self._communicator.add_broadcast_subscriber(converted)
+        self._subscribers[subscriber] = converted
+
+    def remove_broadcast_subscriber(self, subscriber):
+        try:
+            converted = self._subscribers.pop(subscriber)
+        except KeyError:
+            raise ValueError("Subscriber '{}' is unknown".format(subscriber))
+        else:
+            self._communicator.remove_broadcast_subscriber(converted)
+
+    def task_send(self, msg):
+        self.start()
+        future = self._send_message(partial(self._communicator.task_send, msg))
+        return utils.tornado_to_kiwi_future(future, self)
+
+    def rpc_send(self, recipient_id, msg):
+        self.start()
+        future = self._send_message(partial(self._communicator.rpc_send, recipient_id, msg))
+        return utils.tornado_to_kiwi_future(future, self)
+
+    def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
+        self.start()
+        return self._send_message(
+            partial(
+                self._communicator.broadcast_send,
+                body=body,
+                sender=sender,
+                subject=subject,
+                correlation_id=correlation_id))
+
+    def wait_for(self, future, timeout=None):
+        self.start()
+        thread_result = ThreadFuture()
+        do_copy = partial(kiwipy.copy_future, target=thread_result)
+        future.add_done_callback(do_copy)
+
+        try:
+            return thread_result.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            future.remove_done_callback(do_copy)
+            raise kiwipy.TimeoutError()
+
+    def _send_message(self, coro):
+        send_future = ThreadFuture()
+
+        @gen.coroutine
+        def do_task():
+            try:
+                result_future = yield coro()
+            except Exception as exception:  # pylint: disable=broad-except
+                send_future.set_exception(exception)
+            else:
+                send_future.set_result(result_future)
+
+        self._loop.add_callback(do_task)
+        return send_future.result()
+
+    def _convert_callback(self, callback):
+        """
+        :param callback: The callback to convert
+        :return: A new function that conforms to that which a Communicator expects
+        """
+
+        def converted(_comm, *args, **kwargs):
+            result = callback(self, *args, **kwargs)
+            if isinstance(result, kiwipy.Future):
+                result = utils.kiwi_to_tornado_future(result)
+            return result
+
+        return converted
+
+
+def connect(connection_params=None,
+            connection_factory=topika.connect_robust,
+            loop=None,
+            message_exchange=defaults.MESSAGE_EXCHANGE,
+            task_exchange=defaults.TASK_EXCHANGE,
+            task_queue=defaults.TASK_QUEUE,
+            task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+            task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+            encoder=defaults.ENCODER,
+            decoder=defaults.DECODER,
+            testing_mode=False):
+    # pylint: disable=too-many-arguments
+    return RmqThreadCommunicator.connect(
+        connection_params=connection_params,
+        connection_factory=connection_factory,
+        loop=loop,
+        message_exchange=message_exchange,
+        task_exchange=task_exchange,
+        task_queue=task_queue,
+        task_prefetch_size=task_prefetch_size,
+        task_prefetch_count=task_prefetch_count,
+        encoder=encoder,
+        decoder=decoder,
+        testing_mode=testing_mode)

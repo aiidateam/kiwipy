@@ -1,13 +1,16 @@
+from __future__ import absolute_import
 import abc
-from future.utils import with_metaclass
 import sys
+import time
+
+import six
 
 from . import futures
 
-__all__ = ['Communicator', 'CommunicatorHelper',
-           'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError',
-           'TimeoutError'
-           ]
+__all__ = [
+    'Communicator', 'CommunicatorHelper', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError',
+    'TimeoutError'
+]
 
 
 class RemoteException(Exception):
@@ -30,12 +33,17 @@ class TaskRejected(Exception):
     pass
 
 
-class TimeoutError(Exception):
-    """ Waiting for a future timed out """
-    pass
+try:
+    TimeoutError = TimeoutError  # pylint: disable=redefined-builtin
+except NameError:
+    # Most likely python2
+    class TimeoutError(OSError):
+        """ Waiting for a future timed out """
+        pass
 
 
-class Communicator(with_metaclass(abc.ABCMeta)):
+@six.add_metaclass(abc.ABCMeta)
+class Communicator(object):
     """
     The interface for a communicator used to both send and receive various
     types of message.
@@ -83,11 +91,6 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         :rtype: :class:`kiwi.Future`
         """
 
-    def task_send_and_wait(self, msg):
-        future = self.task_send(msg)
-        self.await(future)
-        return future.result()
-
     @abc.abstractmethod
     def rpc_send(self, recipient_id, msg):
         """
@@ -101,21 +104,47 @@ class Communicator(with_metaclass(abc.ABCMeta)):
         """
         pass
 
-    def rpc_send_and_wait(self, recipient_id, msg, timeout=None):
-        future = self.rpc_send(recipient_id, msg)
-        self.await(future, timeout=timeout)
-        return future.result()
-
     @abc.abstractmethod
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         pass
 
     @abc.abstractmethod
-    def await(self, future=None, timeout=None):
+    def wait_for(self, future, timeout=None):
+        """
+        Wait for a future to complete
+
+        :param future: the future to be waited on
+        :param timeout: the timeout
+        :type timeout: float
+        """
         pass
 
+    def wait_for_many(self, *futs, **kwargs):
+        """
+        Wait for multiple futures to complete, takes a single additional keyword argument,
+        timeout which can be a float.
 
+        :param futs: the futures
+        """
+        timeout = kwargs.pop('timeout', None)
+        if kwargs:
+            raise ValueError('Unexpected keyword arguments supplied: {}'.format(kwargs))
+
+        start_time = time.time()
+        for future in futs:
+            if timeout is not None:
+                timeout = timeout - (time.time() - start_time) if timeout is not None else None
+                if timeout <= 0.:
+                    raise TimeoutError()
+            self.wait_for(future, timeout)
+
+
+@six.add_metaclass(abc.ABCMeta)
 class CommunicatorHelper(Communicator):
+    # Have to disable this linter because this class remains abstract and it is
+    # just used by calsses that will themselves be concrete
+    # pylint: disable=abstract-method
+
     def __init__(self):
         self._task_subscribers = []
         self._broadcast_subscribers = []
@@ -140,18 +169,20 @@ class CommunicatorHelper(Communicator):
 
     def remove_task_subscriber(self, subscriber):
         """
-        Deregister a task subscriber
+        Remove a task subscriber
 
         :param subscriber: The task callback function
         """
-        # TODO: Put exception guard and raise out own exception
-        self._task_subscribers.remove(subscriber)
+        try:
+            self._task_subscribers.remove(subscriber)
+        except ValueError:
+            raise ValueError('Unknown subscriber: {}'.format(subscriber))
 
-    def add_broadcast_subscriber(self, broadcast_subscriber):
-        self._broadcast_subscribers.append(broadcast_subscriber)
+    def add_broadcast_subscriber(self, subscriber):
+        self._broadcast_subscribers.append(subscriber)
 
-    def remove_broadcast_subscriber(self, broadcast_subscriber):
-        self._broadcast_subscribers.remove(broadcast_subscriber)
+    def remove_broadcast_subscriber(self, subscriber):
+        self._broadcast_subscribers.remove(subscriber)
 
     def fire_task(self, msg):
         future = futures.Future()
@@ -159,19 +190,16 @@ class CommunicatorHelper(Communicator):
 
         for subscriber in self._task_subscribers:
             try:
-                result = subscriber(msg)
-                if isinstance(result, futures.Future):
-                    future = result
-                else:
-                    future.set_result(result)
-
+                result = subscriber(self, msg)
+                future.set_result(result)
                 handled = True
                 break
             except TaskRejected:
                 pass
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 future.set_exception(RemoteException(sys.exc_info()))
                 handled = True
+                break
 
         if not handled:
             future.set_exception(TaskRejected("Rejected by all subscribers"))
@@ -186,18 +214,18 @@ class CommunicatorHelper(Communicator):
         else:
             future = futures.Future()
             try:
-                result = subscriber(msg)
+                result = subscriber(self, msg)
                 if isinstance(result, futures.Future):
                     futures.chain(result, future)
                 else:
                     future.set_result(result)
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 future.set_exception(RemoteException(sys.exc_info()))
             return future
 
     def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):
         for subscriber in self._broadcast_subscribers:
-            subscriber(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
+            subscriber(self, body=body, sender=sender, subject=subject, correlation_id=correlation_id)
         future = futures.Future()
         future.set_result(True)
         return future
