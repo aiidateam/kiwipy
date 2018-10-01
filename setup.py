@@ -37,7 +37,6 @@ setup(
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
     install_requires=[
-        'future',
         'six',
         'typing; python_version<"3.5"',
         'enum34; python_version<"3.4"',
@@ -51,11 +50,12 @@ setup(
         ],
         'dev': [
             'pip',
+            'pre-commit',
             'pytest',
             'pytest-cov',
+            'shortuuid',
             'ipython',
             'twine',
-            'shortuuid',
             'yapf',
             'prospector',
             'pylint<2; python_version<"3"',
