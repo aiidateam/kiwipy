@@ -14,6 +14,9 @@ def callback(_comm, task):
     print(" [x] Done")
 
 
-with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://localhost'}) as communicator:
-    communicator.add_task_subscriber(callback)
-    threading.Event().wait()
+try:
+    with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://localhost'}) as communicator:
+        communicator.add_task_subscriber(callback)
+        threading.Event().wait()
+except KeyboardInterrupt:
+    pass

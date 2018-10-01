@@ -17,4 +17,5 @@ communicator = rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp
 
 # Register an RPC subscriber with the name square
 communicator.add_rpc_subscriber(fib, 'fib')
+# Now wait indefinitely for fibonacci calls
 threading.Event().wait()
