@@ -7,7 +7,7 @@ from tornado import concurrent, gen
 
 import kiwipy
 
-__all__ = ['tornado_to_kiwi_future', 'kiwi_to_tornado_future']
+__all__ = []
 
 # The key used in messages to give information about the host that send a message
 HOST_KEY = 'host'
@@ -104,50 +104,6 @@ def future_to_response(future):
         return result_response(future.result())
     except Exception as exception:  # pylint: disable=broad-except
         return exception_response(exception)
-
-
-def tornado_to_kiwi_future(tornado_future, communicator):
-    """
-    :param tornado_future: the tornado future to convert
-    :type tornado_future: :class:`tornado.concurrent.Future`
-    :param communicator: the kiwipy communicator
-    :type communicator: :class:`kiwipy.Communicator`
-    :rtype: :class:`kiwipy.Future`
-    """
-    kiwi_future = kiwipy.Future()
-
-    def done(done_future):
-        # Copy over the future
-        try:
-            result = done_future.result()
-            if concurrent.is_future(result):
-                # Change the future type to a kiwi one
-                result = tornado_to_kiwi_future(result, communicator)
-            kiwi_future.set_result(result)
-        except kiwipy.CancelledError:
-            kiwi_future.cancel()
-        except Exception as exception:  # pylint: disable=broad-except
-            kiwi_future.set_exception(exception)
-
-    tornado_future.add_done_callback(done)
-    return kiwi_future
-
-
-def kiwi_to_tornado_future(kiwi_future):
-    tornado_future = concurrent.Future()
-
-    def done(done_future):
-        if done_future.cancelled():
-            tornado_future.cancel()
-
-        with kiwipy.capture_exceptions(tornado_future):
-            result = done_future.result()
-            if isinstance(result, kiwipy.Future):
-                result = kiwi_to_tornado_future(result)
-            tornado_future.set_result(result)
-
-    kiwi_future.add_done_callback(done)
-    return tornado_future
 
 
 def ensure_coroutine(coro_or_fn):

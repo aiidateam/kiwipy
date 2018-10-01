@@ -29,6 +29,7 @@ class CommunicatorTester(object):
 
     def tearDown(self):
         self.destroy_communicator(self.communicator)
+        self.communicator = None
 
     @abc.abstractmethod
     def create_communicator(self):
@@ -153,7 +154,7 @@ class CommunicatorTester(object):
 
         self.communicator.add_task_subscriber(on_task)
         with self.assertRaises(kiwipy.RemoteException):
-            self.communicator.task_send(TASK).result()
+            self.communicator.task_send(TASK).result(timeout=self.WAIT_TIMEOUT)
 
         self.assertEqual(tasks[0], TASK)
 

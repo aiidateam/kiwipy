@@ -53,6 +53,7 @@ setup(
             'pre-commit',
             'pytest',
             'pytest-cov',
+            'shortuuid',
             'ipython',
             'twine',
             'yapf',
