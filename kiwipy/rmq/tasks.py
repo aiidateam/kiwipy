@@ -23,29 +23,31 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     Listens for tasks coming in on the RMQ task queue
     """
 
-    def __init__(
-            self,
-            connection,
-            task_queue_name=defaults.TASK_QUEUE,
-            testing_mode=False,
-            decoder=defaults.DECODER,
-            encoder=defaults.ENCODER,
-            exchange_name=defaults.MESSAGE_EXCHANGE,
-            exchange_params=None,
-            prefetch_size=defaults.TASK_PREFETCH_SIZE,
-            prefetch_count=defaults.TASK_PREFETCH_COUNT,
-    ):
+    def __init__(self,
+                 connection,
+                 exchange_name=defaults.MESSAGE_EXCHANGE,
+                 queue_name=defaults.TASK_QUEUE,
+                 testing_mode=False,
+                 decoder=defaults.DECODER,
+                 encoder=defaults.ENCODER,
+                 exchange_params=None,
+                 prefetch_size=defaults.TASK_PREFETCH_SIZE,
+                 prefetch_count=defaults.TASK_PREFETCH_COUNT):
+        # pylint: disable=too-many-arguments
         """
-        :param connection: An RMQ connector
+        :param connection: An RMQ connection
         :type connection: :class:`topika.Connection`
-        :param task_queue_name: The name of the queue to use
+        :param exchange_name: the name of the exchange to use
+        :type exchange_name: :class:`six.string_types`
+        :param queue_name: the name of the task queue to use
+        :type queue_name: :class:`six.string_types`
         :param decoder: A message decoder
         :param encoder: A response encoder
         """
         super(RmqTaskSubscriber, self).__init__(
             connection, exchange_name=exchange_name, exchange_params=exchange_params)
 
-        self._task_queue_name = task_queue_name
+        self._task_queue_name = queue_name
         self._testing_mode = testing_mode
         self._decode = decoder
         self._encode = encoder
@@ -99,9 +101,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                     result = yield subscriber(self, task)
                 except kiwipy.TaskRejected:
                     continue
-                except KeyboardInterrupt:
+                except KeyboardInterrupt:  # pylint: disable=try-except-raise
                     raise
-                except Exception as exc:
+                except Exception as exc:  # pylint: disable=broad-except
                     _LOGGER.debug('There was an exception in task %s:\n%s', exc, traceback.format_exc())
                     msg = self._build_response_message(utils.exception_response(sys.exc_info()[1:]), message)
                     handled = True  # Finished
@@ -130,7 +132,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         :return: The reply message
         :rtype: :class:`topika.Message`
         """
-        if isinstance(result, concurrent.Future):
+        if concurrent.is_future(result):
             self._pending_tasks.append(result)
 
             def task_done(future):
@@ -197,6 +199,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                  decoder=defaults.DECODER,
                  confirm_deliveries=True,
                  testing_mode=False):
+        # pylint: disable=too-many-arguments
         super(RmqTaskPublisher, self).__init__(
             connection,
             exchange_name=exchange_name,

@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from __future__ import print_function
 from concurrent.futures import Future as ThreadFuture
 from functools import partial
 import logging
@@ -153,29 +154,22 @@ class RmqSubscriber(object):
             else:
                 # Tell the sender that we've dealt with it
                 message.ack()
-
                 msg = self._decode(message.body)
 
                 try:
                     receiver = utils.ensure_coroutine(receiver)
                     result = yield receiver(self, msg)
-
-                    if isinstance(result, concurrent.Future):
-                        response = utils.pending_response()
-                        yield self._send_response(message.reply_to, message.correlation_id, response)
-                        try:
-                            response = yield result
-                            response = utils.result_response(response)
-                        except kiwipy.CancelledError as exception:
-                            response = utils.cancelled_response(str(exception))
-                        except Exception as exception:  # pylint: disable=broad-except
-                            response = utils.exception_response(exception)
-                    else:
-                        response = utils.result_response(result)
                 except Exception as exception:  # pylint: disable=broad-except
-                    response = utils.exception_response(exception)
-
-                yield self._send_response(message.reply_to, message.correlation_id, response)
+                    # We had an exception in  calling the receiver
+                    yield self._send_response(message.reply_to, message.correlation_id,
+                                              utils.exception_response(exception))
+                else:
+                    if concurrent.is_future(result):
+                        yield self._send_future_response(result, message.reply_to, message.correlation_id)
+                    else:
+                        # All good, send the response out
+                        yield self._send_response(message.reply_to, message.correlation_id,
+                                                  utils.result_response(result))
 
     @gen.coroutine
     def _on_broadcast(self, message):
@@ -192,6 +186,34 @@ class RmqSubscriber(object):
                     _LOGGER.error("Exception in broadcast receiver!\n"
                                   "msg: %s\n"
                                   "traceback:\n%s", msg, traceback.format_exc())
+
+    @gen.coroutine
+    def _send_future_response(self, future, reply_to, correlation_id):
+        """
+        The RPC call returned a future which means we need to keep send a pending response
+        and send a further message when the future resolves.  If it resolves to another future
+        we should send out a further pending response and so on.
+
+        :param future: the future from the RPC call
+        :type future: :class:`tornado.concurrent.Future`
+        :param reply_to: the recipient
+        :param correlation_id: the correlation id
+        """
+        try:
+            # Keep looping in case we're in a situation where a futrue resolves to a future etc.
+            while concurrent.is_future(future):
+                # Send out a message saying that we're waiting for a future to complete
+                yield self._send_response(reply_to, correlation_id, utils.pending_response())
+                future = yield future
+        except kiwipy.CancelledError as exception:
+            # Send out a cancelled response
+            yield self._send_response(reply_to, correlation_id, utils.cancelled_response(str(exception)))
+        except Exception as exception:  # pylint: disable=broad-except
+            # Send out an exception response
+            yield self._send_response(reply_to, correlation_id, utils.exception_response(exception))
+        else:
+            # We have a final result so send that as the response
+            yield self._send_response(reply_to, correlation_id, utils.result_response(future))
 
     @gen.coroutine
     def _send_response(self, reply_to, correlation_id, response):
@@ -249,13 +271,12 @@ class RmqCommunicator(object):
         self._task_subscriber = tasks.RmqTaskSubscriber(
             connection,
             exchange_name=task_exchange,
-            task_queue_name=task_queue,
-            encoder=encoder,
-            decoder=decoder,
-            prefetch_size=task_prefetch_size,
-            prefetch_count=task_prefetch_count,
+            queue_name=task_queue,
             testing_mode=testing_mode,
-        )
+            decoder=decoder,
+            encoder=encoder,
+            prefetch_size=task_prefetch_size,
+            prefetch_count=task_prefetch_count)
         self._task_publisher = tasks.RmqTaskPublisher(
             connection,
             exchange_name=task_exchange,
@@ -432,6 +453,9 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
+    def loop(self):
+        return self._loop
+
     def start(self):
         if self._communicator_thread is not None:
             return
@@ -439,6 +463,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         start_future = ThreadFuture()
 
         def run_loop():
+            _LOGGER.debug('Starting event loop on %s', threading.current_thread())
 
             @gen.coroutine
             def do_connect():
@@ -453,6 +478,9 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             self._loop.add_callback(do_connect)
             self._loop.start()
             self._communicator_thread = None
+
+            _LOGGER.debug('Event loop stopped on %s', threading.current_thread())
+            ioloop.IOLoop.current(False)
 
         self._communicator_thread = threading.Thread(
             target=run_loop, name="Communications thread for '{}'".format(self._communicator))
@@ -470,12 +498,11 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         @gen.coroutine
         def stop_loop():
             try:
-                yield self._communicator.disconnect()
-                stop_future.set_result(True)
-            except Exception as exception:  # pylint: disable=broad-except
-                stop_future.set_exception(exception)
+                with kiwipy.capture_exceptions(stop_future):
+                    yield self._communicator.disconnect()
+                    self._loop.stop()
             finally:
-                self._loop.stop()
+                stop_future.set_result(True)
 
         # The stop will end up setting self._communicator_thread to None
         self._loop.add_callback(stop_loop)
@@ -517,12 +544,12 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     def task_send(self, msg):
         self.start()
         future = self._send_message(partial(self._communicator.task_send, msg))
-        return utils.tornado_to_kiwi_future(future, self)
+        return self.tornado_to_kiwi_future(future)
 
     def rpc_send(self, recipient_id, msg):
         self.start()
         future = self._send_message(partial(self._communicator.rpc_send, recipient_id, msg))
-        return utils.tornado_to_kiwi_future(future, self)
+        return self.tornado_to_kiwi_future(future)
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         self.start()
@@ -551,11 +578,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
         @gen.coroutine
         def do_task():
-            try:
+            with kiwipy.capture_exceptions(send_future):
                 result_future = yield coro()
-            except Exception as exception:  # pylint: disable=broad-except
-                send_future.set_exception(exception)
-            else:
                 send_future.set_result(result_future)
 
         self._loop.add_callback(do_task)
@@ -570,10 +594,65 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         def converted(_comm, *args, **kwargs):
             result = callback(self, *args, **kwargs)
             if isinstance(result, kiwipy.Future):
-                result = utils.kiwi_to_tornado_future(result)
+                result = self.kiwi_to_tornado_future(result)
             return result
 
         return converted
+
+    def kiwi_to_tornado_future(self, kiwi_future):
+        """
+        Convert a kiwipy future to a tornado future
+
+        :param kiwi_future: the kiwipy future to convert
+        :type kiwi_future: :class:`kiwipy.Future`
+        :return: the tornado future
+        :rtype: :class:`tornado.concurrent.Future`
+        """
+        tornado_future = concurrent.Future()
+
+        def done(done_future):
+            if done_future.cancelled():
+                tornado_future.cancel()
+
+            with kiwipy.capture_exceptions(tornado_future):
+                result = done_future.result()
+                if isinstance(result, kiwipy.Future):
+                    result = self.kiwi_to_tornado_future(result)
+
+                # Schedule the callback to set the result because this method may be called
+                # from outside the event loop in which case any done callbacks would be called
+                # using the wrong event loop
+                self.loop().add_callback(tornado_future.set_result, result)
+
+        kiwi_future.add_done_callback(done)
+        return tornado_future
+
+    def tornado_to_kiwi_future(self, tornado_future):
+        """
+        Convert a tornado future to a kiwipy future
+
+        :param tornado_future: the tornado future to convert
+        :type tornado_future: :class:`tornado.concurrent.Future`
+        :return: the kiwipy future
+        :rtype: :class:`kiwipy.Future`
+        """
+        kiwi_future = kiwipy.Future()
+
+        def done(done_future):
+            # Copy over the future
+            try:
+                result = done_future.result()
+                if concurrent.is_future(result):
+                    # Change the future type to a kiwi one
+                    result = self.tornado_to_kiwi_future(result)
+                kiwi_future.set_result(result)
+            except kiwipy.CancelledError:
+                kiwi_future.cancel()
+            except Exception as exception:  # pylint: disable=broad-except
+                kiwi_future.set_exception(exception)
+
+        self.loop().add_future(tornado_future, done)
+        return kiwi_future
 
 
 def connect(connection_params=None,
