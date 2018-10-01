@@ -41,6 +41,8 @@ class CommunicatorTester(object):
     def destroy_communicator(self, communicator):
         pass
 
+    # region RPC
+
     def test_rpc_send_receive(self):
         MESSAGE = "sup yo'"  # pylint: disable=invalid-name
         RESPONSE = "nuthin bra"  # pylint: disable=invalid-name
@@ -72,6 +74,48 @@ class CommunicatorTester(object):
 
         self.assertEqual(tasks[0], TASK)
         self.assertEqual(RESULT, result)
+
+    def test_add_remove_rpc_subscriber(self):
+        """ Test adding, sending to, and then removing an RPC subscriber """
+
+        def rpc_subscriber(_comm, _msg):
+            return True
+
+        # Check we're getting messages
+        self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
+        result = self.communicator.rpc_send(rpc_subscriber.__name__, None).result(timeout=self.WAIT_TIMEOUT)
+        self.assertTrue(result)
+
+        self.communicator.remove_rpc_subscriber(rpc_subscriber.__name__)
+        # Check that we're unsubscribed
+        with self.assertRaises((kiwipy.UnroutableError, kiwipy.TimeoutError)):
+            self.communicator.rpc_send(rpc_subscriber.__name__, None).result(timeout=self.WAIT_TIMEOUT)
+
+    def test_rpc_nested_futrues(self):
+        """Test that an RPC call that returns a future, which itself resolves to a future works"""
+        RESULT = "You've reached the bottom of the rabbit hole my friend"  # pylint: disable=invalid-name
+
+        def rpc_subscriber(_comm, _msg):
+            future1 = kiwipy.Future()
+            future2 = kiwipy.Future()
+            future1.set_result(future2)
+            future2.set_result(RESULT)
+            return future1
+
+        # Check we're getting messages
+        self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
+        future1 = self.communicator.rpc_send(rpc_subscriber.__name__, None).result(timeout=self.WAIT_TIMEOUT)
+        self.assertIsInstance(future1, kiwipy.Future)
+
+        future2 = future1.result(timeout=self.WAIT_TIMEOUT)
+        self.assertIsInstance(future2, kiwipy.Future)
+
+        result = future2.result(timeout=self.WAIT_TIMEOUT)
+        self.assertEqual(RESULT, result)
+
+    # endregion
+
+    # region Task
 
     def test_future_task(self):
         """
@@ -113,12 +157,15 @@ class CommunicatorTester(object):
 
         self.assertEqual(tasks[0], TASK)
 
+    # endregion
+
+    # region Broadcast
+
     def test_broadcast_send(self):
         SUBJECT = 'yo momma'  # pylint: disable=invalid-name
         BODY = 'so fat'  # pylint: disable=invalid-name
         SENDER_ID = 'me'  # pylint: disable=invalid-name
-        FULL_MSG = {'body': BODY, 'subject': SUBJECT, 'sender': SENDER_ID,
-                    'correlation_id': None}  # pylint: disable=invalid-name
+        FULL_MSG = {'body': BODY, 'subject': SUBJECT, 'sender': SENDER_ID, 'correlation_id': None}  # pylint: disable=invalid-name
 
         message1 = kiwipy.Future()
         message2 = kiwipy.Future()
@@ -134,7 +181,7 @@ class CommunicatorTester(object):
 
         self.communicator.broadcast_send(**FULL_MSG)
         # Wait fot the send and receive
-        self.communicator.wait_for_many(message1, message2, timeout=self.WAIT_TIMEOUT)
+        kiwipy.wait((message1, message2), timeout=self.WAIT_TIMEOUT)
 
         self.assertDictEqual(message1.result(), FULL_MSG)
         self.assertDictEqual(message2.result(), FULL_MSG)
@@ -155,7 +202,7 @@ class CommunicatorTester(object):
         for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
             self.communicator.broadcast_send(None, subject=subj)
 
-        self.communicator.wait_for(done, timeout=self.WAIT_TIMEOUT)
+        done.result(timeout=self.WAIT_TIMEOUT)
 
         self.assertEqual(len(subjects), 2)
         self.assertListEqual(EXPECTED_SUBJECTS, subjects)
@@ -176,7 +223,7 @@ class CommunicatorTester(object):
         for sendr in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
             self.communicator.broadcast_send(None, sender=sendr)
 
-        self.communicator.wait_for(done, timeout=self.WAIT_TIMEOUT)
+        done.result(timeout=self.WAIT_TIMEOUT)
 
         self.assertEqual(2, len(senders))
         self.assertListEqual(EXPECTED_SENDERS, senders)
@@ -207,7 +254,7 @@ class CommunicatorTester(object):
             for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
                 self.communicator.broadcast_send(None, sender=sendr, subject=subj)
 
-        self.communicator.wait_for(done, timeout=self.WAIT_TIMEOUT)
+        done.result(timeout=self.WAIT_TIMEOUT)
 
         self.assertEqual(4, len(senders_and_subects))
         self.assertSetEqual(EXPECTED, senders_and_subects)
@@ -228,42 +275,6 @@ class CommunicatorTester(object):
         # Check that we're unsubscribed
         broadcast_received = kiwipy.Future()
         with self.assertRaises(kiwipy.TimeoutError):
-            self.communicator.wait_for(broadcast_received, timeout=self.WAIT_TIMEOUT)
+            broadcast_received.result(timeout=self.WAIT_TIMEOUT)
 
-    def test_add_remove_rpc_subscriber(self):
-        """ Test adding, sending to, and then removing an RPC subscriber """
-
-        def rpc_subscriber(_comm, _msg):
-            return True
-
-        # Check we're getting messages
-        self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
-        result = self.communicator.rpc_send(rpc_subscriber.__name__, None).result(timeout=self.WAIT_TIMEOUT)
-        self.assertTrue(result)
-
-        self.communicator.remove_rpc_subscriber(rpc_subscriber.__name__)
-        # Check that we're unsubscribed
-        with self.assertRaises((kiwipy.UnroutableError, kiwipy.TimeoutError)):
-            self.communicator.rpc_send(rpc_subscriber.__name__, None).result(timeout=self.WAIT_TIMEOUT)
-
-    def test_rpc_nested_futrues(self):
-        """Test that an RPC call that returns a future, which itself resolves to a future works"""
-        RESULT = "You've reached the bottom of the rabbit hole my friend"  # pylint: disable=invalid-name
-
-        def rpc_subscriber(_comm, _msg):
-            future1 = _comm.create_future()
-            future2 = _comm.create_future()
-            future1.set_result(future2)
-            future2.set_result(RESULT)
-            return future1
-
-        # Check we're getting messages
-        self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
-        future1 = self.communicator.rpc_send(rpc_subscriber.__name__, None).result(timeout=self.WAIT_TIMEOUT)
-        self.assertIsInstance(future1, kiwipy.Future)
-
-        future2 = future1.result(timeout=self.WAIT_TIMEOUT)
-        self.assertIsInstance(future2, kiwipy.Future)
-
-        result = future2.result(timeout=self.WAIT_TIMEOUT)
-        self.assertEqual(RESULT, result)
+    # endregion

@@ -3,12 +3,14 @@ import concurrent.futures
 import contextlib
 import logging
 
-__all__ = ['Future', 'chain', 'copy_future', 'CancelledError', 'capture_exceptions']
+__all__ = ['Future', 'chain', 'copy_future', 'CancelledError', 'capture_exceptions', 'wait', 'as_completed']
 
 _LOGGER = logging.getLogger(__name__)
 
 CancelledError = concurrent.futures.CancelledError
 Future = concurrent.futures.Future
+wait = concurrent.futures.wait  # pylint: disable=invalid-name
+as_completed = concurrent.futures.as_completed  # pylint: disable=invalid-name
 
 
 def copy_future(source, target):
@@ -41,8 +43,18 @@ def chain(source, target):
 
 
 @contextlib.contextmanager
-def capture_exceptions(future):
+def capture_exceptions(future, ignore=()):
+    """
+    Capture any exceptions in the context and set them as the result of the given future
+
+    :param future: The future to the exception on
+    :type future: :class:`kiwipy.Future`
+    :param ignore: An optional list of exception types to ignore, these will be raised and not set on the future
+    """
     try:
         yield
     except Exception as exception:  # pylint: disable=broad-except
+        if isinstance(exception, ignore):
+            raise
+
         future.set_exception(exception)
