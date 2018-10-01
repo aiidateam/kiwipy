@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import abc
+import concurrent.futures
 import sys
 import time
 
@@ -33,13 +34,7 @@ class TaskRejected(Exception):
     pass
 
 
-try:
-    TimeoutError = TimeoutError  # pylint: disable=redefined-builtin
-except NameError:
-    # Most likely python2
-    class TimeoutError(OSError):
-        """ Waiting for a future timed out """
-        pass
+TimeoutError = concurrent.futures.TimeoutError  # pylint: disable=redefined-builtin
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -211,7 +206,7 @@ class CommunicatorHelper(Communicator):
         except KeyError:
             raise UnroutableError("Unknown rpc recipient '{}'".format(recipient_id))
         else:
-            future = self.create_future()
+            future = futures.Future()
             with futures.capture_exceptions(future):
                 future.set_result(subscriber(self, msg))
 
