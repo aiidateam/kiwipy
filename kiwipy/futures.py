@@ -38,7 +38,6 @@ def chain(source, target):
     The result (success or failure) of ``a`` will be copied to ``b``, unless
     ``b`` has already been completed or cancelled by the time ``a`` finishes.
     """
-
     source.add_done_callback(lambda first: copy_future(first, target))
 
 

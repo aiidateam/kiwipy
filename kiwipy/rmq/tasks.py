@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 import logging
 import uuid
-from functools import partial
 import sys
 import traceback
 
@@ -99,73 +98,36 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
                     result = yield subscriber(self, task)
+                    # If a task returns a future it is not considered until the chain of futrues
+                    # (i.e. if the first future resolves to a future and so on) finishes and produces
+                    # a concrete result
+                    while concurrent.is_future(result):
+                        yield self._send_response(utils.pending_response(), message)
+                        result = yield result
                 except kiwipy.TaskRejected:
                     continue
+                except kiwipy.CancelledError as exception:
+                    reply_body = utils.cancelled_response(str(exception))
+                    handled = True  # Finished
                 except KeyboardInterrupt:  # pylint: disable=try-except-raise
                     raise
                 except Exception as exc:  # pylint: disable=broad-except
                     _LOGGER.debug('There was an exception in task %s:\n%s', exc, traceback.format_exc())
-                    msg = self._build_response_message(utils.exception_response(sys.exc_info()[1:]), message)
+                    reply_body = utils.exception_response(sys.exc_info()[1:])
                     handled = True  # Finished
                 else:
                     # Create a reply message
-                    msg = self._create_task_reply(message, result)
+                    reply_body = utils.result_response(result)
                     handled = True  # Finished
 
                 if handled:
                     message.ack()
-                    self._exchange.publish(msg, routing_key=message.reply_to)
+                    yield self._send_response(reply_body, message)
                     break  # Done, do break the loop
 
             if not handled:
                 # No one handled the task
                 message.reject(requeue=True)
-
-    def _create_task_reply(self, task_message, result):
-        """
-        Create the reply message based on the result of a task, if it's a future then
-        a further message will be scheduled for when that future finishes (and so on
-        if that future also resolves to a future)
-
-        :param task_message: The original task message
-        :param result: The result from the task
-        :return: The reply message
-        :rtype: :class:`topika.Message`
-        """
-        if concurrent.is_future(result):
-            self._pending_tasks.append(result)
-
-            def task_done(future):
-                """
-                Process this future being done
-                :type future: :class:`tornado.concurrent.Future`
-                """
-                if future not in self._pending_tasks:
-                    # Must have been 'cancelled'
-                    return
-
-                if future.cancelled():
-                    reply_msg = self._build_response_message(utils.cancelled_response(), task_message)
-                else:
-                    try:
-                        future_result = future.result()
-                    except Exception as exception:  # pylint: disable=broad-except
-                        reply_msg = self._build_response_message(utils.exception_response(exception), task_message)
-                    else:
-                        reply_msg = self._create_task_reply(task_message, future_result)
-
-                # Clean up
-                self._pending_tasks.remove(future)
-
-                # Send the response to the sender
-                self._loop.add_callback(partial(self._exchange.publish, reply_msg, routing_key=task_message.reply_to))
-
-            result.add_done_callback(task_done)
-            body = utils.pending_response()
-        else:
-            body = utils.result_response(result)
-
-        return self._build_response_message(body, task_message)
 
     def _build_response_message(self, body, incoming_message):
         """
@@ -183,6 +145,11 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         message = topika.Message(body=self._encode(body), correlation_id=incoming_message.correlation_id)
 
         return message
+
+    @gen.coroutine
+    def _send_response(self, msg_body, incoming_message):
+        msg = self._build_response_message(msg_body, incoming_message)
+        yield self._exchange.publish(msg, routing_key=incoming_message.reply_to)
 
 
 class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):

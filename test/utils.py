@@ -60,22 +60,6 @@ class CommunicatorTester(object):
         self.assertEqual(messages[0], MESSAGE)
         self.assertEqual(response, RESPONSE)
 
-    def test_task_send(self):
-        TASK = 'The meaning?'  # pylint: disable=invalid-name
-        RESULT = 42  # pylint: disable=invalid-name
-
-        tasks = []
-
-        def on_task(_comm, task):
-            tasks.append(task)
-            return RESULT
-
-        self.communicator.add_task_subscriber(on_task)
-        result = self.communicator.task_send(TASK).result(timeout=self.WAIT_TIMEOUT)
-
-        self.assertEqual(tasks[0], TASK)
-        self.assertEqual(RESULT, result)
-
     def test_add_remove_rpc_subscriber(self):
         """ Test adding, sending to, and then removing an RPC subscriber """
 
@@ -114,9 +98,41 @@ class CommunicatorTester(object):
         result = future2.result(timeout=self.WAIT_TIMEOUT)
         self.assertEqual(RESULT, result)
 
+    def test_rpc_exception(self):
+        MESSAGE = 'The meaning?'  # pylint: disable=invalid-name
+        EXCEPTION = RuntimeError("I cannea do it Captain!")  # pylint: disable=invalid-name
+
+        messages = []
+
+        def on_receive(_com, msg):
+            messages.append(msg)
+            raise EXCEPTION
+
+        self.communicator.add_rpc_subscriber(on_receive, on_receive.__name__)
+        with self.assertRaises(kiwipy.RemoteException):
+            self.communicator.rpc_send(on_receive.__name__, MESSAGE).result(timeout=self.WAIT_TIMEOUT)
+
+        self.assertEqual(messages[0], MESSAGE)
+
     # endregion
 
     # region Task
+
+    def test_task_send(self):
+        TASK = 'The meaning?'  # pylint: disable=invalid-name
+        RESULT = 42  # pylint: disable=invalid-name
+
+        tasks = []
+
+        def on_task(_comm, task):
+            tasks.append(task)
+            return RESULT
+
+        self.communicator.add_task_subscriber(on_task)
+        result = self.communicator.task_send(TASK).result(timeout=self.WAIT_TIMEOUT)
+
+        self.assertEqual(tasks[0], TASK)
+        self.assertEqual(RESULT, result)
 
     def test_future_task(self):
         """
