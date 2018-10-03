@@ -207,8 +207,10 @@ class CommunicatorHelper(Communicator):
             raise UnroutableError("Unknown rpc recipient '{}'".format(recipient_id))
         else:
             future = futures.Future()
-            with futures.capture_exceptions(future):
+            try:
                 future.set_result(subscriber(self, msg))
+            except Exception:  # pylint: disable=broad-except
+                future.set_exception(RemoteException(sys.exc_info()))
 
             return future
 
