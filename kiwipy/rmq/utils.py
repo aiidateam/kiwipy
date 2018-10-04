@@ -3,7 +3,8 @@ import collections
 import inspect
 import os
 import socket
-from tornado import concurrent, gen
+import tornado.concurrent
+from tornado import gen
 
 import kiwipy
 
@@ -58,7 +59,7 @@ def pending_response(msg=None):
 
 
 def response_result(response):
-    future = concurrent.Future()
+    future = tornado.concurrent.Future()
     response_to_future(response, future)
     return future.result()
 
@@ -74,7 +75,7 @@ def response_to_future(response, future=None):
         raise TypeError("Response must be a mapping")
 
     if future is None:
-        future = concurrent.Future()
+        future = tornado.concurrent.Future()
 
     if CANCELLED_KEY in response:
         future.cancel()
@@ -83,7 +84,7 @@ def response_to_future(response, future=None):
     elif RESULT_KEY in response:
         future.set_result(response[RESULT_KEY])
     elif PENDING_KEY in response:
-        future.set_result(concurrent.Future())
+        future.set_result(tornado.concurrent.Future())
     else:
         raise ValueError("Unknown response type '{}'".format(response))
 
@@ -115,3 +116,10 @@ def ensure_coroutine(coro_or_fn):
         return gen.coroutine(coro_or_fn)
 
     raise TypeError('coro_or_fn must be a callable')
+
+
+@gen.convert_yielded.register(kiwipy.Future)
+def test(concurrent_future):
+    tornado_future = tornado.concurrent.Future()
+    tornado.concurrent.chain_future(concurrent_future, tornado_future)
+    return tornado_future
