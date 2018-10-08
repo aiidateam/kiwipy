@@ -444,7 +444,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             testing_mode=testing_mode)
         self._loop = self._communicator.loop
         self._communicator_thread = None
-        self._subscribers = {}
 
     def __enter__(self):
         self.start()
@@ -510,36 +509,22 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         stop_future.result()
 
     def add_rpc_subscriber(self, subscriber, identifier):
-        return self._communicator.add_rpc_subscriber(self._convert_callback(subscriber), identifier)
+        return self._communicator.add_rpc_subscriber(subscriber, identifier)
 
     def remove_rpc_subscriber(self, identifier):
         return self._communicator.remove_rpc_subscriber(identifier)
 
     def add_task_subscriber(self, subscriber):
-        converted = self._convert_callback(subscriber)
-        self._communicator.add_task_subscriber(converted)
-        self._subscribers[subscriber] = converted
+        self._communicator.add_task_subscriber(subscriber)
 
     def remove_task_subscriber(self, subscriber):
-        try:
-            converted = self._subscribers.pop(subscriber)
-        except KeyError:
-            raise ValueError("Subscriber '{}' is unknown".format(subscriber))
-        else:
-            self._communicator.remove_task_subscriber(converted)
+        self._communicator.remove_task_subscriber(subscriber)
 
     def add_broadcast_subscriber(self, subscriber):
-        converted = self._convert_callback(subscriber)
-        self._communicator.add_broadcast_subscriber(converted)
-        self._subscribers[subscriber] = converted
+        self._communicator.add_broadcast_subscriber(subscriber)
 
     def remove_broadcast_subscriber(self, subscriber):
-        try:
-            converted = self._subscribers.pop(subscriber)
-        except KeyError:
-            raise ValueError("Subscriber '{}' is unknown".format(subscriber))
-        else:
-            self._communicator.remove_broadcast_subscriber(converted)
+        self._communicator.remove_broadcast_subscriber(subscriber)
 
     def task_send(self, msg):
         self.start()
@@ -584,48 +569,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
         self._loop.add_callback(do_task)
         return send_future.result()
-
-    def _convert_callback(self, callback):
-        """
-        :param callback: The callback to convert
-        :return: A new function that conforms to that which a Communicator expects
-        """
-
-        def converted(_comm, *args, **kwargs):
-            result = callback(self, *args, **kwargs)
-            if isinstance(result, kiwipy.Future):
-                result = self.kiwi_to_tornado_future(result)
-            return result
-
-        return converted
-
-    def kiwi_to_tornado_future(self, kiwi_future):
-        """
-        Convert a kiwipy future to a tornado future
-
-        :param kiwi_future: the kiwipy future to convert
-        :type kiwi_future: :class:`kiwipy.Future`
-        :return: the tornado future
-        :rtype: :class:`tornado.concurrent.Future`
-        """
-        tornado_future = concurrent.Future()
-
-        def done(done_future):
-            if done_future.cancelled():
-                tornado_future.cancel()
-
-            with kiwipy.capture_exceptions(tornado_future):
-                result = done_future.result()
-                if isinstance(result, kiwipy.Future):
-                    result = self.kiwi_to_tornado_future(result)
-
-                # Schedule the callback to set the result because this method may be called
-                # from outside the event loop in which case any done callbacks would be called
-                # using the wrong event loop
-                self.loop().add_callback(tornado_future.set_result, result)
-
-        kiwi_future.add_done_callback(done)
-        return tornado_future
 
     def tornado_to_kiwi_future(self, tornado_future):
         """
