@@ -41,8 +41,8 @@ class BroadcastFilter(object):
     @classmethod
     def _ensure_filter(cls, filter_value):
         if isinstance(filter_value, six.string_types):
-            return re.compile(filter_value.replace('.', '\.').replace('*', '.*')).match
-        elif isinstance(filter_value, typing.re.Pattern):
+            return re.compile(filter_value.replace('.', '[.]').replace('*', '.*')).match
+        if isinstance(filter_value, typing.re.Pattern):
             return filter_value.match
 
         return lambda val: val == filter_value
@@ -54,4 +54,4 @@ class BroadcastFilter(object):
         :type filter_str: basestring
         :return: The regular expression object
         """
-        return re.compile(filter_str.replace('.', '\.'))
+        return re.compile(filter_str.replace('.', '[.]'))

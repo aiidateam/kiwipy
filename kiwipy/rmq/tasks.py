@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import collections
 import logging
 import uuid
 import sys
@@ -15,6 +16,8 @@ from . import utils
 _LOGGER = logging.getLogger(__name__)
 
 __all__ = ['RmqTaskSubscriber', 'RmqTaskPublisher']
+
+TaskBody = collections.namedtuple('TaskBody', ('task', 'no_reply'))
 
 
 class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
@@ -91,13 +94,15 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         :param message: The topika RMQ message
         :type message: :class:`topika.IncomingMessage`
         """
+        # pylint: disable=too-many-branches
+
         with message.process(ignore_processed=True):
             handled = False
-            task = self._decode(message.body)
+            task_body = self._decode(message.body)  # type: TaskBody
             for subscriber in self._subscribers:
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
-                    result = yield subscriber(self, task)
+                    result = yield subscriber(self, task_body.task)
                     # If a task returns a future it is not considered until the chain of futrues
                     # (i.e. if the first future resolves to a future and so on) finishes and produces
                     # a concrete result
@@ -105,24 +110,29 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                         yield self._send_response(utils.pending_response(), message)
                         result = yield result
                 except kiwipy.TaskRejected:
+                    # Keep trying to find one that will accept the task
                     continue
                 except kiwipy.CancelledError as exception:
-                    reply_body = utils.cancelled_response(str(exception))
+                    if not task_body.no_reply:
+                        reply_body = utils.cancelled_response(str(exception))
                     handled = True  # Finished
                 except KeyboardInterrupt:  # pylint: disable=try-except-raise
                     raise
                 except Exception as exc:  # pylint: disable=broad-except
                     _LOGGER.debug('There was an exception in task %s:\n%s', exc, traceback.format_exc())
-                    reply_body = utils.exception_response(sys.exc_info()[1:])
+                    if not task_body.no_reply:
+                        reply_body = utils.exception_response(sys.exc_info()[1:])
                     handled = True  # Finished
                 else:
                     # Create a reply message
-                    reply_body = utils.result_response(result)
+                    if not task_body.no_reply:
+                        reply_body = utils.result_response(result)
                     handled = True  # Finished
 
                 if handled:
                     message.ack()
-                    yield self._send_response(reply_body, message)
+                    if not task_body.no_reply:
+                        yield self._send_response(reply_body, message)
                     break  # Done, do break the loop
 
             if not handled:
@@ -178,16 +188,26 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
         self._task_queue_name = task_queue_name
 
     @gen.coroutine
-    def task_send(self, msg):
+    def task_send(self, task, no_reply=False):
         """
         Send a task for processing by a task subscriber
-        :param msg: The task payload
+        :param task: The task payload
+        :param no_reply: Don't send a reply containing the result of the task
+        :type no_reply: bool
         :return: A future representing the result of the task
         :rtype: :class:`tornado.concurrent.Future`
         """
-        task_msg = topika.Message(
-            body=self._encode(msg), correlation_id=str(uuid.uuid4()), reply_to=self._reply_queue.name)
-        published, result_future = yield self.publish_expect_response(
-            task_msg, routing_key=self._task_queue_name, mandatory=True)
+        # Build the full message body and encode
+        body = self._encode(TaskBody(task, no_reply))
+        # Now build up the full topika message
+        task_msg = topika.Message(body=body, correlation_id=str(uuid.uuid4()), reply_to=self._reply_queue.name)
+
+        result_future = None
+        if no_reply:
+            published = yield self.publish(task_msg, routing_key=self._task_queue_name, mandatory=True)
+        else:
+            published, result_future = yield self.publish_expect_response(
+                task_msg, routing_key=self._task_queue_name, mandatory=True)
+
         assert published, "The task was not published to the exchange"
         raise gen.Return(result_future)

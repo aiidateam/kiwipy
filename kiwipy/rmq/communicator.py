@@ -359,10 +359,10 @@ class RmqCommunicator(object):
         raise gen.Return(result)
 
     @gen.coroutine
-    def task_send(self, msg):
+    def task_send(self, task, no_reply=False):
         try:
-            response_future = yield self._task_publisher.task_send(msg)
-            raise gen.Return(response_future)
+            result = yield self._task_publisher.task_send(task, no_reply)
+            raise gen.Return(result)
         except pika.exceptions.UnroutableError as exception:
             raise kiwipy.UnroutableError(str(exception))
         except pika.exceptions.NackError as exception:
@@ -456,8 +456,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         return self._loop
 
     def start(self):
-        if self._communicator_thread is not None:
-            return
+        assert self._communicator_thread is None, "Already running"
 
         start_future = ThreadFuture()
 
@@ -526,18 +525,21 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     def remove_broadcast_subscriber(self, subscriber):
         self._communicator.remove_broadcast_subscriber(subscriber)
 
-    def task_send(self, msg):
-        self.start()
-        future = self._send_message(partial(self._communicator.task_send, msg))
+    def task_send(self, task, no_reply=False):
+        self._ensure_running()
+        future = self._send_message(partial(self._communicator.task_send, task, no_reply))
+        if no_reply:
+            return None
+
         return self.tornado_to_kiwi_future(future)
 
     def rpc_send(self, recipient_id, msg):
-        self.start()
+        self._ensure_running()
         future = self._send_message(partial(self._communicator.rpc_send, recipient_id, msg))
         return self.tornado_to_kiwi_future(future)
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
-        self.start()
+        self._ensure_running()
         return self._send_message(
             partial(
                 self._communicator.broadcast_send,
@@ -546,26 +548,13 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                 subject=subject,
                 correlation_id=correlation_id))
 
-    def wait_for(self, future, timeout=None):
-        self.start()
-        thread_result = ThreadFuture()
-        do_copy = partial(kiwipy.copy_future, target=thread_result)
-        future.add_done_callback(do_copy)
-
-        try:
-            return thread_result.result(timeout=timeout)
-        except concurrent.futures.TimeoutError:
-            future.remove_done_callback(do_copy)
-            raise kiwipy.TimeoutError()
-
     def _send_message(self, coro):
-        send_future = ThreadFuture()
+        send_future = kiwipy.Future()
 
         @gen.coroutine
         def do_task():
             with kiwipy.capture_exceptions(send_future):
-                result_future = yield coro()
-                send_future.set_result(result_future)
+                send_future.set_result((yield coro()))
 
         self._loop.add_callback(do_task)
         return send_future.result()
@@ -596,6 +585,11 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
         self.loop().add_future(tornado_future, done)
         return kiwi_future
+
+    def _ensure_running(self):
+        if self._communicator_thread is not None:
+            return
+        self.start()
 
 
 def connect(connection_params=None,

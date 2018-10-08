@@ -40,6 +40,8 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
         self.loop.run_sync(self.communicator.disconnect)
         super(TestCoroutineCommunicator, self).tearDown()
 
+    # region RPC
+
     @testing.gen_test
     def test_rpc_send_receive(self):
         MESSAGE = "sup yo'"
@@ -57,6 +59,29 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
         self.assertEqual(messages[0], MESSAGE)
         self.assertEqual(response, RESPONSE)
+
+    @testing.gen_test
+    def test_add_remove_rpc_subscriber(self):
+        """ Test adding, sending to, and then removing an RPC subscriber """
+
+        def rpc_subscriber(_comm, _msg):
+            return True
+
+        # Check we're getting messages
+        self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
+        result_future = yield self.communicator.rpc_send(rpc_subscriber.__name__, None)
+        result = yield result_future
+        self.assertTrue(result)
+
+        self.communicator.remove_rpc_subscriber(rpc_subscriber.__name__)
+        # Check that we're unsubscribed
+        with self.assertRaises((kiwipy.UnroutableError, gen.TimeoutError)):
+            to_await = self.communicator.rpc_send(rpc_subscriber.__name__, None)
+            yield gen.with_timeout(timeout=2., future=to_await)
+
+    # endregion
+
+    # region Tasks
 
     @testing.gen_test
     def test_task_send(self):
@@ -122,6 +147,35 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             yield result_future
 
         self.assertEqual(tasks[0], TASK)
+
+    @testing.gen_test
+    def test_task_no_reply(self):
+        """Test that we don't get a reply if we don't ask for one, i.e. fire-and-forget"""
+        TASK = 'The meaning?'  # pylint: disable=invalid-name
+        RESULT = 42  # pylint: disable=invalid-name
+
+        tasks = []
+
+        task_future = concurrent.Future()
+
+        def on_task(_comm, task):
+            tasks.append(task)
+            task_future.set_result(RESULT)
+            return RESULT
+
+        self.communicator.add_task_subscriber(on_task)
+        result = yield self.communicator.task_send(TASK, no_reply=True)
+
+        # Make sure the task actually gets done
+        yield task_future
+
+        self.assertEqual(1, len(tasks))
+        self.assertEqual(tasks[0], TASK)
+        self.assertEqual(None, result)
+
+    # endregion
+
+    # region Broadcast
 
     @testing.gen_test
     def test_broadcast_send(self):
@@ -242,21 +296,4 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
         with self.assertRaises(gen.TimeoutError):
             yield gen.with_timeout(timeout=2., future=broadcast_received)
 
-    @testing.gen_test
-    def test_add_remove_rpc_subscriber(self):
-        """ Test adding, sending to, and then removing an RPC subscriber """
-
-        def rpc_subscriber(_comm, _msg):
-            return True
-
-        # Check we're getting messages
-        self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
-        result_future = yield self.communicator.rpc_send(rpc_subscriber.__name__, None)
-        result = yield result_future
-        self.assertTrue(result)
-
-        self.communicator.remove_rpc_subscriber(rpc_subscriber.__name__)
-        # Check that we're unsubscribed
-        with self.assertRaises((kiwipy.UnroutableError, gen.TimeoutError)):
-            to_await = self.communicator.rpc_send(rpc_subscriber.__name__, None)
-            yield gen.with_timeout(timeout=2., future=to_await)
+    # endregion

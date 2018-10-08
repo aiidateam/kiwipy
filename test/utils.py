@@ -57,8 +57,8 @@ class CommunicatorTester(object):
         self.communicator.add_rpc_subscriber(on_receive, 'rpc')
         response = self.communicator.rpc_send('rpc', MESSAGE).result(timeout=self.WAIT_TIMEOUT)
 
-        self.assertEqual(messages[0], MESSAGE)
-        self.assertEqual(response, RESPONSE)
+        self.assertEqual(MESSAGE, messages[0])
+        self.assertEqual(RESPONSE, response)
 
     def test_add_remove_rpc_subscriber(self):
         """ Test adding, sending to, and then removing an RPC subscriber """
@@ -173,6 +173,31 @@ class CommunicatorTester(object):
             self.communicator.task_send(TASK).result(timeout=self.WAIT_TIMEOUT)
 
         self.assertEqual(tasks[0], TASK)
+
+    def test_task_no_reply(self):
+        """Test that we don't get a reply if we don't ask for one, i.e. fire-and-forget"""
+        TASK = 'The meaning?'  # pylint: disable=invalid-name
+        RESULT = 42  # pylint: disable=invalid-name
+
+        tasks = []
+
+        task_future = kiwipy.Future()
+
+        def on_task(_comm, task):
+            tasks.append(task)
+            task_future.set_result(RESULT)
+            return RESULT
+
+        self.communicator.add_task_subscriber(on_task)
+        send_result = self.communicator.task_send(TASK, no_reply=True)
+        self.assertIsNone(send_result)
+
+        # Make sure the task is done
+        result = task_future.result(timeout=self.WAIT_TIMEOUT)
+
+        self.assertEqual(1, len(tasks))
+        self.assertEqual(TASK, tasks[0])
+        self.assertEqual(RESULT, result)
 
     # endregion
 
