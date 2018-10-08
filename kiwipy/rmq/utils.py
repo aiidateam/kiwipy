@@ -119,7 +119,8 @@ def ensure_coroutine(coro_or_fn):
 
 
 @gen.convert_yielded.register(kiwipy.Future)
-def test(concurrent_future):
+def _register_concurrent_future(concurrent_future):
+    """Register concurrent.future.Future to be compatible with tornado yield"""
     tornado_future = tornado.concurrent.Future()
     tornado.concurrent.chain_future(concurrent_future, tornado_future)
     return tornado_future

@@ -2,7 +2,6 @@ from __future__ import absolute_import
 import abc
 import concurrent.futures
 import sys
-import time
 
 import six
 
@@ -75,13 +74,15 @@ class Communicator(object):
         pass
 
     @abc.abstractmethod
-    def task_send(self, msg):
+    def task_send(self, task, no_reply=False):
         """
         Send a task messages, this will be queued and picked up by a
         worker at some point in the future.  The method returns a future
         representing the outcome of the task.
 
-        :param msg: The task message
+        :param task: The task message
+        :param no_reply: Do not send a reply containing the result of the task
+        :type no_reply: bool
         :return: A future corresponding to the outcome of the task
         :rtype: :class:`kiwi.Future`
         """
@@ -102,36 +103,6 @@ class Communicator(object):
     @abc.abstractmethod
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         pass
-
-    @abc.abstractmethod
-    def wait_for(self, future, timeout=None):
-        """
-        Wait for a future to complete
-
-        :param future: the future to be waited on
-        :param timeout: the timeout
-        :type timeout: float
-        """
-        pass
-
-    def wait_for_many(self, *futs, **kwargs):
-        """
-        Wait for multiple futures to complete, takes a single additional keyword argument,
-        timeout which can be a float.
-
-        :param futs: the futures
-        """
-        timeout = kwargs.pop('timeout', None)
-        if kwargs:
-            raise ValueError('Unexpected keyword arguments supplied: {}'.format(kwargs))
-
-        start_time = time.time()
-        for future in futs:
-            if timeout is not None:
-                timeout = timeout - (time.time() - start_time) if timeout is not None else None
-                if timeout <= 0.:
-                    raise TimeoutError()
-            self.wait_for(future, timeout)
 
 
 class CommunicatorHelper(Communicator):
@@ -178,7 +149,7 @@ class CommunicatorHelper(Communicator):
     def remove_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.remove(subscriber)
 
-    def fire_task(self, msg):
+    def fire_task(self, msg, no_reply=False):
         future = futures.Future()
         handled = False
 
@@ -197,6 +168,9 @@ class CommunicatorHelper(Communicator):
 
         if not handled:
             future.set_exception(TaskRejected("Rejected by all subscribers"))
+
+        if no_reply:
+            return None
 
         return future
 

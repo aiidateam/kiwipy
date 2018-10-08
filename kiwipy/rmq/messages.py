@@ -88,8 +88,10 @@ class BaseConnectionWithExchange(object):
 
 class BasePublisherWithReplyQueue(object):
     """
-
+    A base class for any object that needs to be able to publish a message and to potentially expect a reply.
     """
+    # pylint: disable=too-many-instance-attributes
+
     DEFAULT_EXCHANGE_PARAMS = {'type': topika.ExchangeType.TOPIC}
 
     def __init__(self,
@@ -100,6 +102,7 @@ class BasePublisherWithReplyQueue(object):
                  decoder=defaults.DECODER,
                  confirm_deliveries=True,
                  testing_mode=False):
+        # pylint: disable=too-many-arguments
         """
         :param connection: The topika RMQ connection
         :type connection: :class:`topika.connection.Connection`
@@ -185,6 +188,15 @@ class BasePublisherWithReplyQueue(object):
 
     @gen.coroutine
     def publish(self, message, routing_key, mandatory=True, immediate=False):
+        """
+        Send a fire-and-forget message i.e. no response expected.
+
+        :param message: The message to send
+        :param routing_key: The routing key
+        :param mandatory: If the message cannot be routed this will raise an UnroutableException
+        :param immediate: Return the message if it cannot be queued immediately
+        :return:
+        """
         result = yield self._exchange.publish(
             message, routing_key=routing_key, mandatory=mandatory, immediate=immediate)
         raise gen.Return(result)

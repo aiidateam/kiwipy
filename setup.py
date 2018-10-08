@@ -15,7 +15,7 @@ setup(
     name="kiwipy",
     version=about['__version__'],
     description='A python remote communications library',
-    long_description=open('README.md').read(),
+    long_description=open('README.rst').read(),
     url='https://github.com/muhrin/kiwipy.git',
     author='Martin Uhrin',
     author_email='martin.uhrin@gmail.com',
