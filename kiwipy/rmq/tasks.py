@@ -98,7 +98,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         with message.process(ignore_processed=True):
             handled = False
-            task_body = self._decode(message.body)  # type: TaskBody
+            # Decode the message tuple into a task body for easier use
+            task_body = TaskBody(*self._decode(message.body))  # type: TaskBody
             for subscriber in self._subscribers:
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
@@ -197,8 +198,8 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
         :return: A future representing the result of the task
         :rtype: :class:`tornado.concurrent.Future`
         """
-        # Build the full message body and encode
-        body = self._encode(TaskBody(task, no_reply))
+        # Build the full message body and encode as a tuple
+        body = self._encode((task, no_reply))
         # Now build up the full topika message
         task_msg = topika.Message(body=body, correlation_id=str(uuid.uuid4()), reply_to=self._reply_queue.name)
 
