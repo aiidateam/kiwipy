@@ -87,7 +87,6 @@ class BaseConnectionWithExchange(object):
             if self.channel() is not None:
                 yield self.channel().close()
                 self._channel = None
-            self._connection = None
 
 
 class BasePublisherWithReplyQueue(object):
