@@ -2,9 +2,12 @@ from __future__ import absolute_import
 import unittest
 import shortuuid
 
+import kiwipy
 from kiwipy import rmq
 
 from ..utils import CommunicatorTester
+
+# pylint: disable=invalid-name
 
 
 class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
@@ -24,3 +27,19 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
 
     def destroy_communicator(self, communicator):
         communicator.stop()
+
+    def test_context_manager(self):
+        MESSAGE = 'get this yo'
+
+        rpc_future = kiwipy.Future()
+
+        def rpc_get(_comm, msg):
+            rpc_future.set_result(msg)
+
+        self.communicator.add_rpc_subscriber(rpc_get, 'test_context_manager')
+        # Check the context manager of the communicator works
+        with self.communicator as comm:
+            comm.rpc_send('test_context_manager', MESSAGE)
+
+        message = rpc_future.result(self.WAIT_TIMEOUT)
+        self.assertEqual(MESSAGE, message)

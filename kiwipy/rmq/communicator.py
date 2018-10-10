@@ -266,7 +266,6 @@ class RmqCommunicator(object):
 
         self._connection = connection
         self._loop = connection.loop
-        self._connected = False
 
         self._message_subscriber = RmqSubscriber(
             connection, message_exchange=message_exchange, encoder=encoder, decoder=decoder, testing_mode=testing_mode)
@@ -306,15 +305,13 @@ class RmqCommunicator(object):
 
     @gen.coroutine
     def connect(self):
-        if self._connected:
-            return
+        if not self._connection.is_open:
+            yield self._connection.connect()
 
         yield self._message_subscriber.connect()
         yield self._task_subscriber.connect()
         yield self._message_publisher.connect()
         yield self._task_publisher.connect()
-
-        self._connected = True
 
     @gen.coroutine
     def disconnect(self):
@@ -450,7 +447,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._communicator_thread = None
 
     def __enter__(self):
-        self.start()
+        self._ensure_running()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -502,8 +499,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             try:
                 with kiwipy.capture_exceptions(stop_future):
                     yield self._communicator.disconnect()
-                    self._loop.stop()
             finally:
+                self._loop.stop()
                 stop_future.set_result(True)
 
         # The stop will end up setting self._communicator_thread to None
