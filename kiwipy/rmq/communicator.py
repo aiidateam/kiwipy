@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from concurrent.futures import Future as ThreadFuture
 from functools import partial
+import copy
 import logging
 import threading
 
@@ -64,7 +65,8 @@ class RmqSubscriber(object):
                  connection,
                  message_exchange=defaults.MESSAGE_EXCHANGE,
                  decoder=defaults.DECODER,
-                 encoder=defaults.ENCODER):
+                 encoder=defaults.ENCODER,
+                 testing_mode=False):
         """
         Subscribes and listens for process control messages and acts on them
         by calling the corresponding methods of the process manager.
@@ -81,6 +83,7 @@ class RmqSubscriber(object):
         self._exchange = None
         self._exchange_name = message_exchange
         self._decode = decoder
+        self._testing_mode = testing_mode
         self._response_encode = encoder
 
         self._rpc_subscribers = {}
@@ -112,8 +115,13 @@ class RmqSubscriber(object):
             # Already connected
             return
 
+        exchange_params = copy.copy(EXCHANGE_PROPERTIES)
+
+        if self._testing_mode:
+            exchange_params.setdefault('auto_delete', self._testing_mode)
+
         self._channel = yield self._connection.channel()
-        self._exchange = yield self._channel.declare_exchange(name=self._exchange_name, **EXCHANGE_PROPERTIES)
+        self._exchange = yield self._channel.declare_exchange(name=self._exchange_name, **exchange_params)
 
         # RPC queue
         rpc_queue = yield self._channel.declare_queue(
@@ -261,13 +269,9 @@ class RmqCommunicator(object):
         self._connected = False
 
         self._message_subscriber = RmqSubscriber(
-            connection, message_exchange=message_exchange, encoder=encoder, decoder=decoder)
+            connection, message_exchange=message_exchange, encoder=encoder, decoder=decoder, testing_mode=testing_mode)
         self._message_publisher = RmqPublisher(
-            connection,
-            exchange_name=message_exchange,
-            encoder=encoder,
-            decoder=decoder,
-        )
+            connection, exchange_name=message_exchange, encoder=encoder, decoder=decoder, testing_mode=testing_mode)
         self._task_subscriber = tasks.RmqTaskSubscriber(
             connection,
             exchange_name=task_exchange,
