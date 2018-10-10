@@ -47,7 +47,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         :param encoder: A response encoder
         """
         super(RmqTaskSubscriber, self).__init__(
-            connection, exchange_name=exchange_name, exchange_params=exchange_params)
+            connection, exchange_name=exchange_name, exchange_params=exchange_params, testing_mode=testing_mode)
 
         self._task_queue_name = queue_name
         self._testing_mode = testing_mode

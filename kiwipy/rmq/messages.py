@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 from collections import deque
+import copy
 import logging
 import traceback
 import uuid
@@ -36,7 +37,7 @@ class BaseConnectionWithExchange(object):
     """
     DEFAULT_EXCHANGE_PARAMS = {'type': topika.ExchangeType.TOPIC}
 
-    def __init__(self, connection, exchange_name=defaults.MESSAGE_EXCHANGE, exchange_params=None):
+    def __init__(self, connection, exchange_name=defaults.MESSAGE_EXCHANGE, exchange_params=None, testing_mode=False):
         """
         :type connection: :class:`topika.Connection`
         :type exchange_name: str
@@ -45,7 +46,10 @@ class BaseConnectionWithExchange(object):
         super(BaseConnectionWithExchange, self).__init__()
 
         if exchange_params is None:
-            exchange_params = self.DEFAULT_EXCHANGE_PARAMS
+            exchange_params = copy.copy(self.DEFAULT_EXCHANGE_PARAMS)
+
+        if testing_mode:
+            exchange_params.setdefault('auto_delete', testing_mode)
 
         self._connection = connection
         self._exchange_name = exchange_name
@@ -115,7 +119,10 @@ class BasePublisherWithReplyQueue(object):
         super(BasePublisherWithReplyQueue, self).__init__()
 
         if exchange_params is None:
-            exchange_params = self.DEFAULT_EXCHANGE_PARAMS
+            exchange_params = copy.copy(self.DEFAULT_EXCHANGE_PARAMS)
+
+        if testing_mode:
+            exchange_params.setdefault('auto_delete', testing_mode)
 
         self._exchange_name = exchange_name
         self._exchange_params = exchange_params
@@ -152,6 +159,7 @@ class BasePublisherWithReplyQueue(object):
         self._channel = yield self._connection.channel(
             publisher_confirms=self._confirm_deliveries, on_return_raises=True)
         self._channel.add_close_callback(self._on_channel_close)
+
         self._exchange = yield self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
 
         # Declare the reply queue
