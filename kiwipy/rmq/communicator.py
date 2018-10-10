@@ -271,12 +271,7 @@ class RmqCommunicator(object):
         self._message_subscriber = RmqSubscriber(
             connection, message_exchange=message_exchange, encoder=encoder, decoder=decoder, testing_mode=testing_mode)
         self._message_publisher = RmqPublisher(
-            connection,
-            exchange_name=message_exchange,
-            encoder=encoder,
-            decoder=decoder,
-            testing_mode=testing_mode
-        )
+            connection, exchange_name=message_exchange, encoder=encoder, decoder=decoder, testing_mode=testing_mode)
         self._task_subscriber = tasks.RmqTaskSubscriber(
             connection,
             exchange_name=task_exchange,
