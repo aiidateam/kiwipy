@@ -4,7 +4,7 @@ import inspect
 import os
 import socket
 import tornado.concurrent
-from tornado import gen
+from tornado import gen, ioloop
 
 import kiwipy
 
@@ -124,3 +124,26 @@ def _register_concurrent_future(concurrent_future):
     tornado_future = tornado.concurrent.Future()
     tornado.concurrent.chain_future(concurrent_future, tornado_future)
     return tornado_future
+
+
+def create_task(coro, loop=None):
+    """
+    Schedule a call to a coroutine in the event loop and wrap the outcome
+    in a future.
+
+    :param coro: the coroutine to schedule
+    :param loop: the event loop to schedule it in
+    :return: the future representing the outcome of the coroutine
+    :rtype: :class:`tornado.concurrent.Future`
+    """
+    loop = loop or ioloop.IOLoop.current()
+
+    future = tornado.concurrent.Future()
+
+    @gen.coroutine
+    def run_task():
+        with kiwipy.capture_exceptions(future):
+            future.set_result((yield coro()))
+
+    loop.add_callback(run_task)
+    return future
