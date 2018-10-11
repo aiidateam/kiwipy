@@ -53,7 +53,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             messages.append(msg)
             return RESPONSE
 
-        self.communicator.add_rpc_subscriber(on_receive, 'rpc')
+        yield self.communicator.add_rpc_subscriber(on_receive, 'rpc')
         response_future = yield self.communicator.rpc_send('rpc', MESSAGE)
         response = yield response_future
 
@@ -68,12 +68,12 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             return True
 
         # Check we're getting messages
-        self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
+        yield self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
         result_future = yield self.communicator.rpc_send(rpc_subscriber.__name__, None)
         result = yield result_future
         self.assertTrue(result)
 
-        self.communicator.remove_rpc_subscriber(rpc_subscriber.__name__)
+        yield self.communicator.remove_rpc_subscriber(rpc_subscriber.__name__)
         # Check that we're unsubscribed
         with self.assertRaises((kiwipy.UnroutableError, gen.TimeoutError)):
             to_await = self.communicator.rpc_send(rpc_subscriber.__name__, None)

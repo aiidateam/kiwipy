@@ -79,8 +79,8 @@ class RmqSubscriber(object):
         super(RmqSubscriber, self).__init__()
 
         self._connection = connection
-        self._channel = None
-        self._exchange = None
+        self._channel = None  # type: topika.Channel
+        self._exchange = None  # type: topika.Exchange
         self._exchange_name = message_exchange
         self._decode = decoder
         self._testing_mode = testing_mode
@@ -91,14 +91,29 @@ class RmqSubscriber(object):
 
         self._active = False
 
+    @gen.coroutine
     def add_rpc_subscriber(self, subscriber, identifier):
-        self._rpc_subscribers[identifier] = subscriber
+        # Create an RPC queue
+        rpc_queue = yield self._channel.declare_queue(
+            exclusive=True, arguments={
+                "x-message-ttl": defaults.MESSAGE_TTL,
+                "x-expires": defaults.QUEUE_EXPIRES
+            })
 
+        yield rpc_queue.bind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
+
+        rpc_queue.consume(partial(self._on_rpc, subscriber))
+
+        self._rpc_subscribers[identifier] = rpc_queue
+
+    @gen.coroutine
     def remove_rpc_subscriber(self, identifier):
         try:
-            self._rpc_subscribers.pop(identifier)
+            rpc_queue = self._rpc_subscribers.pop(identifier)
         except KeyError:
             raise ValueError("Unknown subscriber '{}'".format(identifier))
+        else:
+            yield rpc_queue.unbind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
 
     def add_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.append(subscriber)
@@ -123,16 +138,6 @@ class RmqSubscriber(object):
         self._channel = yield self._connection.channel()
         self._exchange = yield self._channel.declare_exchange(name=self._exchange_name, **exchange_params)
 
-        # RPC queue
-        rpc_queue = yield self._channel.declare_queue(
-            exclusive=True, arguments={
-                "x-message-ttl": defaults.MESSAGE_TTL,
-                "x-expires": defaults.QUEUE_EXPIRES
-            })
-
-        yield rpc_queue.bind(self._exchange, routing_key='{}.*'.format(defaults.RPC_TOPIC))
-        rpc_queue.consume(self._on_rpc)
-
         # Broadcast queue
         broadcast_queue = yield self._channel.declare_queue(
             exclusive=True, arguments={
@@ -149,35 +154,29 @@ class RmqSubscriber(object):
         self._channel = None
 
     @gen.coroutine
-    def _on_rpc(self, message):
+    def _on_rpc(self, subscriber, message):
         """
-        :param message: The RMQ message
+        :param subscriber: the subscriber function or coroutine that will get the RPC message
+        :param message: the RMQ message
         :type message: :class:`topika.message.IncomingMessage`
         """
         with message.process(ignore_processed=True):
-            identifier = message.routing_key[len('{}.'.format(defaults.RPC_TOPIC)):]
-            receiver = self._rpc_subscribers.get(identifier, None)
-            if receiver is None:
-                message.reject(requeue=True)
-            else:
-                # Tell the sender that we've dealt with it
-                message.ack()
-                msg = self._decode(message.body)
+            # Tell the sender that we've dealt with it
+            message.ack()
+            msg = self._decode(message.body)
 
-                try:
-                    receiver = utils.ensure_coroutine(receiver)
-                    result = yield receiver(self, msg)
-                except Exception as exception:  # pylint: disable=broad-except
-                    # We had an exception in  calling the receiver
-                    yield self._send_response(message.reply_to, message.correlation_id,
-                                              utils.exception_response(exception))
+            try:
+                receiver = utils.ensure_coroutine(subscriber)
+                result = yield receiver(self, msg)
+            except Exception as exception:  # pylint: disable=broad-except
+                # We had an exception in  calling the receiver
+                yield self._send_response(message.reply_to, message.correlation_id, utils.exception_response(exception))
+            else:
+                if concurrent.is_future(result):
+                    yield self._send_future_response(result, message.reply_to, message.correlation_id)
                 else:
-                    if concurrent.is_future(result):
-                        yield self._send_future_response(result, message.reply_to, message.correlation_id)
-                    else:
-                        # All good, send the response out
-                        yield self._send_response(message.reply_to, message.correlation_id,
-                                                  utils.result_response(result))
+                    # All good, send the response out
+                    yield self._send_response(message.reply_to, message.correlation_id, utils.result_response(result))
 
     @gen.coroutine
     def _on_broadcast(self, message):
@@ -321,11 +320,13 @@ class RmqCommunicator(object):
         yield self._task_subscriber.disconnect()
         yield self._connection.close()
 
+    @gen.coroutine
     def add_rpc_subscriber(self, subscriber, identifier):
-        self._message_subscriber.add_rpc_subscriber(subscriber, identifier)
+        yield self._message_subscriber.add_rpc_subscriber(subscriber, identifier)
 
+    @gen.coroutine
     def remove_rpc_subscriber(self, identifier):
-        self._message_subscriber.remove_rpc_subscriber(identifier)
+        yield self._message_subscriber.remove_rpc_subscriber(identifier)
 
     def add_task_subscriber(self, subscriber):
         self._task_subscriber.add_task_subscriber(subscriber)
@@ -371,6 +372,13 @@ class RmqCommunicator(object):
 
 
 class RmqThreadCommunicator(kiwipy.Communicator):
+    """
+    RabbitMQ communicator that runs an event loop on a separate thread to do communication.
+    This also means that heartbeats are not missed and the main program is free to block for
+    as long as it wants.
+    """
+
+    TASK_TIMEOUT = 5.
 
     @classmethod
     def connect(cls,
@@ -509,10 +517,12 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         stop_future.result()
 
     def add_rpc_subscriber(self, subscriber, identifier):
-        return self._communicator.add_rpc_subscriber(subscriber, identifier)
+        coro = partial(self._communicator.add_rpc_subscriber, subscriber, identifier)
+        return self._run_task(coro)
 
     def remove_rpc_subscriber(self, identifier):
-        return self._communicator.remove_rpc_subscriber(identifier)
+        coro = partial(self._communicator.remove_rpc_subscriber, identifier)
+        return self._run_task(coro)
 
     def add_task_subscriber(self, subscriber):
         self._communicator.add_task_subscriber(subscriber)
@@ -586,6 +596,25 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
         self.loop().add_future(tornado_future, done)
         return kiwi_future
+
+    def _create_task(self, coro):
+        """
+        Create a task to be run on our event loop
+
+        :param coro: the coroutine to run
+        :return: a future corresponding to the execution of the coroutine
+        :rtype: :class:`tornado.concurrent.Future`
+        """
+        return utils.create_task(coro, self._loop)
+
+    def _run_task(self, coro):
+        """
+        Run a coroutine on the event loop and return the result
+
+        :param coro: the coroutine to run
+        :return: the result of running the coroutine
+        """
+        return self.tornado_to_kiwi_future(self._create_task(coro)).result(timeout=self.TASK_TIMEOUT)
 
     def _ensure_running(self):
         if self._communicator_thread is not None:

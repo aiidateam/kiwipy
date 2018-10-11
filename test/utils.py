@@ -114,6 +114,11 @@ class CommunicatorTester(object):
 
         self.assertEqual(messages[0], MESSAGE)
 
+    def test_rpc_unroutable(self):
+        """Test that if there is no subscriber then an RPC call is unroutable"""
+        with self.assertRaises(kiwipy.UnroutableError):
+            self.communicator.rpc_send('noone', 'nothing').result(timeout=1.)
+
     # endregion
 
     # region Task
