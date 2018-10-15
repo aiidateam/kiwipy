@@ -107,11 +107,13 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
                     result = yield subscriber(self, task_body.task)
-                    # If a task returns a future it is not considered until the chain of futrues
+
+                    # If a task returns a future it is not considered done until the chain of futrues
                     # (i.e. if the first future resolves to a future and so on) finishes and produces
                     # a concrete result
                     while concurrent.is_future(result):
-                        yield self._send_response(utils.pending_response(), message)
+                        if not task_body.no_reply:
+                            yield self._send_response(utils.pending_response(), message)
                         result = yield result
                 except kiwipy.TaskRejected:
                     # Keep trying to find one that will accept the task
