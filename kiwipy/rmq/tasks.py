@@ -63,9 +63,14 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
     def add_task_subscriber(self, subscriber):
         self._subscribers.append(subscriber)
+        if self._consumer_tag is None:
+            self._consumer_tag = self._task_queue.consume(self._on_task)
 
     def remove_task_subscriber(self, subscriber):
         self._subscribers.remove(subscriber)
+        if not self._subscribers:
+            self._task_queue.cancel(self._consumer_tag)
+            self._consumer_tag = None
 
     @gen.coroutine
     def connect(self):
@@ -86,8 +91,6 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         # x-message-ttl means what is the default ttl for a message arriving in the queue
         yield self._task_queue.bind(self._exchange, routing_key=self._task_queue.name)
 
-        self._consumer_tag = self._task_queue.consume(self._on_task)
-
     @gen.coroutine
     def _on_task(self, message):
         """
@@ -104,11 +107,13 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
                     result = yield subscriber(self, task_body.task)
-                    # If a task returns a future it is not considered until the chain of futrues
+
+                    # If a task returns a future it is not considered done until the chain of futrues
                     # (i.e. if the first future resolves to a future and so on) finishes and produces
                     # a concrete result
                     while concurrent.is_future(result):
-                        yield self._send_response(utils.pending_response(), message)
+                        if not task_body.no_reply:
+                            yield self._send_response(utils.pending_response(), message)
                         result = yield result
                 except kiwipy.TaskRejected:
                     # Keep trying to find one that will accept the task
