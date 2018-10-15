@@ -63,9 +63,14 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
     def add_task_subscriber(self, subscriber):
         self._subscribers.append(subscriber)
+        if self._consumer_tag is None:
+            self._consumer_tag = self._task_queue.consume(self._on_task)
 
     def remove_task_subscriber(self, subscriber):
         self._subscribers.remove(subscriber)
+        if not self._subscribers:
+            self._task_queue.cancel(self._consumer_tag)
+            self._consumer_tag = None
 
     @gen.coroutine
     def connect(self):
@@ -85,8 +90,6 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         # x-expires means how long does the queue stay alive after no clients
         # x-message-ttl means what is the default ttl for a message arriving in the queue
         yield self._task_queue.bind(self._exchange, routing_key=self._task_queue.name)
-
-        self._consumer_tag = self._task_queue.consume(self._on_task)
 
     @gen.coroutine
     def _on_task(self, message):
