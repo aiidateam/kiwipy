@@ -88,6 +88,8 @@ class RmqSubscriber(object):
 
         self._rpc_subscribers = {}
         self._broadcast_subscribers = []
+        self._broadcast_queue = None  # type: topika.Queue
+        self._broadcast_consumer_tag = None
 
         self._active = False
 
@@ -101,9 +103,7 @@ class RmqSubscriber(object):
             })
 
         yield rpc_queue.bind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
-
         rpc_queue.consume(partial(self._on_rpc, subscriber))
-
         self._rpc_subscribers[identifier] = rpc_queue
 
     @gen.coroutine
@@ -117,9 +117,15 @@ class RmqSubscriber(object):
 
     def add_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.append(subscriber)
+        if self._broadcast_consumer_tag is None:
+            # Consume on the broadcast queue
+            self._broadcast_consumer_tag = self._broadcast_queue.consume(self._on_broadcast)
 
     def remove_broadcast_subscriber(self, subscriber):
         self._broadcast_subscribers.remove(subscriber)
+        if not self._broadcast_subscribers:
+            self._broadcast_queue.cancel(self._broadcast_consumer_tag)
+            self._broadcast_consumer_tag = None
 
     def channel(self):
         return self._channel
@@ -139,13 +145,12 @@ class RmqSubscriber(object):
         self._exchange = yield self._channel.declare_exchange(name=self._exchange_name, **exchange_params)
 
         # Broadcast queue
-        broadcast_queue = yield self._channel.declare_queue(
+        self._broadcast_queue = yield self._channel.declare_queue(
             exclusive=True, arguments={
                 "x-message-ttl": defaults.MESSAGE_TTL,
                 "x-expires": defaults.QUEUE_EXPIRES
             })
-        yield broadcast_queue.bind(self._exchange, routing_key=defaults.BROADCAST_TOPIC)
-        broadcast_queue.consume(self._on_broadcast)
+        yield self._broadcast_queue.bind(self._exchange, routing_key=defaults.BROADCAST_TOPIC)
 
     @gen.coroutine
     def disconnect(self):
@@ -609,7 +614,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     def _run_task(self, coro):
         """
-        Run a coroutine on the event loop and return the result
+        Run a coroutine on the event loop and return the result.  It may take a little time for the loop
+        to get around to scheduling it so we use a timeout as set by the TASK_TIMEOUT class constant.
 
         :param coro: the coroutine to run
         :return: the result of running the coroutine
