@@ -324,4 +324,9 @@ class CommunicatorTester(object):
         with self.assertRaises(kiwipy.TimeoutError):
             broadcast_received.result(timeout=self.WAIT_TIMEOUT)
 
+    def test_broadcast_noone_listening(self):
+        """ Check that it's not an error to send a broadcast if no one is listening"""
+        result = self.communicator.broadcast_send('into the ether')
+        self.assertIs(True, result)
+
     # endregion

@@ -24,6 +24,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     """
     Listens for tasks coming in on the RMQ task queue
     """
+    TASK_QUEUE_ARGUMENTS = {"x-message-ttl": defaults.TASK_MESSAGE_TTL}
 
     def __init__(self,
                  connection,
@@ -81,14 +82,22 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         yield super(RmqTaskSubscriber, self).connect()
         yield self.channel().set_qos(prefetch_count=self._prefetch_count, prefetch_size=self._prefetch_size)
 
-        # Set up task queue
+        yield self._create_task_queue()
+
+    @gen.coroutine
+    def _create_task_queue(self):
+        """Create and bind the task queue"""
+        arguments = dict(self.TASK_QUEUE_ARGUMENTS)
+        if self._testing_mode:
+            arguments['x-expires'] = defaults.TEST_QUEUE_EXPIRES
+
+        # x-expires means how long does the queue stay alive after no clients
+        # x-message-ttl means what is the default ttl for a message arriving in the queue
         self._task_queue = yield self._channel.declare_queue(
             name=self._task_queue_name,
             durable=not self._testing_mode,
             auto_delete=self._testing_mode,
-            arguments={"x-message-ttl": defaults.TASK_MESSAGE_TTL})
-        # x-expires means how long does the queue stay alive after no clients
-        # x-message-ttl means what is the default ttl for a message arriving in the queue
+            arguments=arguments)
         yield self._task_queue.bind(self._exchange, routing_key=self._task_queue.name)
 
     @gen.coroutine
