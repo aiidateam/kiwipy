@@ -52,7 +52,12 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
             body=self._encode(message_dict),
             delivery_mode=topika.DeliveryMode.NOT_PERSISTENT,
         )
-        result = yield self.publish(message, routing_key=defaults.BROADCAST_TOPIC)
+        try:
+            result = yield self.publish(message, routing_key=defaults.BROADCAST_TOPIC)
+        except pika.exceptions.UnroutableError as exception:
+            _LOGGER.debug('Broadcast message sent but was unroutable, probably no queues: %s', str(exception))
+            # Doesn't matter because broadcasts are meant to be fire-and-forget anyway
+            result = True
         raise gen.Return(result)
 
 
