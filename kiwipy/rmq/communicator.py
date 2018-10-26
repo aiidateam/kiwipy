@@ -52,7 +52,12 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
             body=self._encode(message_dict),
             delivery_mode=topika.DeliveryMode.NOT_PERSISTENT,
         )
-        result = yield self.publish(message, routing_key=defaults.BROADCAST_TOPIC)
+        try:
+            result = yield self.publish(message, routing_key=defaults.BROADCAST_TOPIC)
+        except pika.exceptions.UnroutableError as exception:
+            _LOGGER.debug('Broadcast message sent but was unroutable, probably no queues: %s', str(exception))
+            # Doesn't matter because broadcasts are meant to be fire-and-forget anyway
+            result = True
         raise gen.Return(result)
 
 
@@ -60,6 +65,10 @@ class RmqSubscriber(object):
     """
     Subscriber for receiving a range of messages over RMQ
     """
+
+    BROADCAST_QUEUE_ARGUMENTS = {'x-message-ttl': defaults.MESSAGE_TTL, 'x-expires': defaults.QUEUE_EXPIRES}
+
+    RPC_QUEUE_ARGUMENTS = {'x-message-ttl': defaults.MESSAGE_TTL, 'x-expires': defaults.QUEUE_EXPIRES}
 
     def __init__(self,
                  connection,
@@ -96,11 +105,7 @@ class RmqSubscriber(object):
     @gen.coroutine
     def add_rpc_subscriber(self, subscriber, identifier):
         # Create an RPC queue
-        rpc_queue = yield self._channel.declare_queue(
-            exclusive=True, arguments={
-                "x-message-ttl": defaults.MESSAGE_TTL,
-                "x-expires": defaults.QUEUE_EXPIRES
-            })
+        rpc_queue = yield self._channel.declare_queue(exclusive=True, arguments=self.RPC_QUEUE_ARGUMENTS)
 
         yield rpc_queue.bind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
         rpc_queue.consume(partial(self._on_rpc, subscriber))
@@ -132,6 +137,7 @@ class RmqSubscriber(object):
 
     @gen.coroutine
     def connect(self):
+        """Get a channel and set up all the exchanges/queues we need"""
         if self._channel:
             # Already connected
             return
@@ -144,12 +150,17 @@ class RmqSubscriber(object):
         self._channel = yield self._connection.channel()
         self._exchange = yield self._channel.declare_exchange(name=self._exchange_name, **exchange_params)
 
-        # Broadcast queue
+        yield self._create_broadcast_queue()
+
+    @gen.coroutine
+    def _create_broadcast_queue(self):
+        """
+        Create and bind the broadcast queue
+
+        One is used for all broadcasts on this exchange
+        """
         self._broadcast_queue = yield self._channel.declare_queue(
-            exclusive=True, arguments={
-                "x-message-ttl": defaults.MESSAGE_TTL,
-                "x-expires": defaults.QUEUE_EXPIRES
-            })
+            exclusive=True, arguments=self.BROADCAST_QUEUE_ARGUMENTS)
         yield self._broadcast_queue.bind(self._exchange, routing_key=defaults.BROADCAST_TOPIC)
 
     @gen.coroutine
@@ -194,10 +205,7 @@ class RmqSubscriber(object):
                                    msg[messages.BroadcastMessage.SUBJECT],
                                    msg[messages.BroadcastMessage.CORRELATION_ID])
                 except Exception:  # pylint: disable=broad-except
-                    import traceback
-                    _LOGGER.error("Exception in broadcast receiver!\n"
-                                  "msg: %s\n"
-                                  "traceback:\n%s", msg, traceback.format_exc())
+                    _LOGGER.exception('Exception in broadcast receiver')
 
     @gen.coroutine
     def _send_future_response(self, future, reply_to, correlation_id):

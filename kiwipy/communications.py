@@ -191,6 +191,4 @@ class CommunicatorHelper(Communicator):
     def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):
         for subscriber in self._broadcast_subscribers:
             subscriber(self, body=body, sender=sender, subject=subject, correlation_id=correlation_id)
-        future = futures.Future()
-        future.set_result(True)
-        return future
+        return True
