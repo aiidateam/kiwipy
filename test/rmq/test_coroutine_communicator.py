@@ -193,8 +193,8 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
         def on_broadcast_2(_comm, body, sender, subject, correlation_id):
             message2.set_result({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
-        self.communicator.add_broadcast_subscriber(on_broadcast_1)
-        self.communicator.add_broadcast_subscriber(on_broadcast_2)
+        yield self.communicator.add_broadcast_subscriber(on_broadcast_1)
+        yield self.communicator.add_broadcast_subscriber(on_broadcast_2)
 
         yield self.communicator.broadcast_send(**FULL_MSG)
         # Wait fot the send and receive
@@ -215,7 +215,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             if len(subjects) == len(EXPECTED_SUBJECTS):
                 done.set_result(True)
 
-        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
+        yield self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
 
         for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
             yield self.communicator.broadcast_send(None, subject=subj)
@@ -237,7 +237,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             if len(senders) == len(EXPECTED_SENDERS):
                 done.set_result(True)
 
-        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
+        yield self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
 
         for subj in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
             yield self.communicator.broadcast_send(None, sender=subj)
@@ -267,7 +267,7 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
         filtered = kiwipy.BroadcastFilter(on_broadcast_1)
         filtered.add_sender_filter("*.jones")
         filtered.add_subject_filter("purchase.*")
-        self.communicator.add_broadcast_subscriber(filtered)
+        yield self.communicator.add_broadcast_subscriber(filtered)
 
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
             for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
@@ -286,11 +286,11 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             broadcast_received.set_result(True)
 
         # Check we're getting messages
-        identifier = self.communicator.add_broadcast_subscriber(broadcast_subscriber)
+        identifier = yield self.communicator.add_broadcast_subscriber(broadcast_subscriber)
         yield self.communicator.broadcast_send(None)
         self.assertTrue((yield broadcast_received))
 
-        self.communicator.remove_broadcast_subscriber(identifier)
+        yield self.communicator.remove_broadcast_subscriber(identifier)
         # Check that we're unsubscribed
         broadcast_received = concurrent.Future()
         with self.assertRaises(gen.TimeoutError):
