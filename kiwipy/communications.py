@@ -3,6 +3,7 @@ import abc
 import concurrent.futures
 import sys
 
+import shortuuid
 import six
 
 from . import futures
@@ -44,7 +45,7 @@ class Communicator(object):
     """
 
     @abc.abstractmethod
-    def add_rpc_subscriber(self, subscriber, identifier):
+    def add_rpc_subscriber(self, subscriber, identifier=None):
         pass
 
     @abc.abstractmethod
@@ -66,11 +67,23 @@ class Communicator(object):
         pass
 
     @abc.abstractmethod
-    def add_broadcast_subscriber(self, subscriber):
+    def add_broadcast_subscriber(self, subscriber, identifier=None):
+        """
+        Add a broadcast subscriber that will receive all broadcast messages
+
+        :param subscriber: the subscriber function to be called
+        :param identifier: an optional identifier for the subscriber
+        :return: an identifier for the subscriber and can be subsequently used to remove it
+        """
         pass
 
     @abc.abstractmethod
-    def remove_broadcast_subscriber(self, subscriber):
+    def remove_broadcast_subscriber(self, identifier):
+        """
+        Remove a broadcast subscriber
+
+        :param identifier: the identifier of the subscriber to remove
+        """
         pass
 
     @abc.abstractmethod
@@ -112,10 +125,11 @@ class CommunicatorHelper(Communicator):
 
     def __init__(self):
         self._task_subscribers = []
-        self._broadcast_subscribers = []
+        self._broadcast_subscribers = {}
         self._rpc_subscribers = {}
 
-    def add_rpc_subscriber(self, subscriber, identifier):
+    def add_rpc_subscriber(self, subscriber, identifier=None):
+        identifier = identifier or shortuuid.uuid()
         self._rpc_subscribers[identifier] = subscriber
 
     def remove_rpc_subscriber(self, identifier):
@@ -143,11 +157,16 @@ class CommunicatorHelper(Communicator):
         except ValueError:
             raise ValueError("Unknown subscriber: '{}'".format(subscriber))
 
-    def add_broadcast_subscriber(self, subscriber):
-        self._broadcast_subscribers.append(subscriber)
+    def add_broadcast_subscriber(self, subscriber, identifier=None):
+        identifier = identifier or shortuuid.uuid()
+        self._broadcast_subscribers[identifier] = subscriber
+        return identifier
 
-    def remove_broadcast_subscriber(self, subscriber):
-        self._broadcast_subscribers.remove(subscriber)
+    def remove_broadcast_subscriber(self, identifier):
+        try:
+            del self._broadcast_subscribers[identifier]
+        except KeyError:
+            raise ValueError("Broadcast subscriber '{}' unknown".format(identifier))
 
     def fire_task(self, msg, no_reply=False):
         future = futures.Future()
@@ -189,6 +208,6 @@ class CommunicatorHelper(Communicator):
             return future
 
     def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):
-        for subscriber in self._broadcast_subscribers:
+        for subscriber in self._broadcast_subscribers.values():
             subscriber(self, body=body, sender=sender, subject=subject, correlation_id=correlation_id)
         return True

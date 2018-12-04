@@ -314,11 +314,11 @@ class CommunicatorTester(object):
             broadcast_received.set_result(True)
 
         # Check we're getting messages
-        self.communicator.add_broadcast_subscriber(broadcast_subscriber)
+        identifier = self.communicator.add_broadcast_subscriber(broadcast_subscriber)
         self.communicator.broadcast_send(None)
         self.assertTrue(broadcast_received.result(timeout=self.WAIT_TIMEOUT))
 
-        self.communicator.remove_broadcast_subscriber(broadcast_subscriber)
+        self.communicator.remove_broadcast_subscriber(identifier)
         # Check that we're unsubscribed
         broadcast_received = kiwipy.Future()
         with self.assertRaises(kiwipy.TimeoutError):
