@@ -286,11 +286,11 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
             broadcast_received.set_result(True)
 
         # Check we're getting messages
-        self.communicator.add_broadcast_subscriber(broadcast_subscriber)
+        identifier = self.communicator.add_broadcast_subscriber(broadcast_subscriber)
         yield self.communicator.broadcast_send(None)
         self.assertTrue((yield broadcast_received))
 
-        self.communicator.remove_broadcast_subscriber(broadcast_subscriber)
+        self.communicator.remove_broadcast_subscriber(identifier)
         # Check that we're unsubscribed
         broadcast_received = concurrent.Future()
         with self.assertRaises(gen.TimeoutError):

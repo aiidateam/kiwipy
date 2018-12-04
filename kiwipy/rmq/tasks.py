@@ -134,9 +134,13 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 except KeyboardInterrupt:  # pylint: disable=try-except-raise
                     raise
                 except Exception as exc:  # pylint: disable=broad-except
-                    _LOGGER.debug('There was an exception in task %s:\n%s', exc, traceback.format_exc())
-                    if not task_body.no_reply:
+                    if task_body.no_reply:
+                        # The user has asked for no reply so log an error so they see this exception
+                        _LOGGER.exception('The task excepted')
+                    else:
+                        # Send the exception back to the other side but log here at INFO level also
                         reply_body = utils.exception_response(sys.exc_info()[1:])
+                        _LOGGER.info('There was an exception in a task %s:\n%s', exc, traceback.format_exc())
                     handled = True  # Finished
                 else:
                     # Create a reply message

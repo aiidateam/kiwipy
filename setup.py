@@ -39,6 +39,7 @@ setup(
     # for a useful dicussion
     install_requires=[
         'six',
+        'shortuuid',
         'typing; python_version<"3.5"',
         'enum34; python_version<"3.4"',
         'backports.tempfile; python_version<"3.2"',
@@ -54,7 +55,6 @@ setup(
             'pre-commit',
             'pytest',
             'pytest-cov',
-            'shortuuid',
             'ipython',
             'twine',
             'yapf',

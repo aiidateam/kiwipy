@@ -8,6 +8,7 @@ import threading
 
 import pika
 import pika.exceptions
+import shortuuid
 from tornado import gen, concurrent, ioloop
 import topika
 
@@ -96,20 +97,22 @@ class RmqSubscriber(object):
         self._response_encode = encoder
 
         self._rpc_subscribers = {}
-        self._broadcast_subscribers = []
+        self._broadcast_subscribers = {}
         self._broadcast_queue = None  # type: topika.Queue
         self._broadcast_consumer_tag = None
 
         self._active = False
 
     @gen.coroutine
-    def add_rpc_subscriber(self, subscriber, identifier):
+    def add_rpc_subscriber(self, subscriber, identifier=None):
         # Create an RPC queue
         rpc_queue = yield self._channel.declare_queue(exclusive=True, arguments=self.RPC_QUEUE_ARGUMENTS)
 
+        identifier = yield rpc_queue.consume(partial(self._on_rpc, subscriber), consumer_tag=identifier)
         yield rpc_queue.bind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
-        rpc_queue.consume(partial(self._on_rpc, subscriber))
+        # Save the queue so we can cancel and unbind later
         self._rpc_subscribers[identifier] = rpc_queue
+        raise gen.Return(identifier)
 
     @gen.coroutine
     def remove_rpc_subscriber(self, identifier):
@@ -118,16 +121,22 @@ class RmqSubscriber(object):
         except KeyError:
             raise ValueError("Unknown subscriber '{}'".format(identifier))
         else:
+            yield rpc_queue.cancel(identifier)
             yield rpc_queue.unbind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
 
-    def add_broadcast_subscriber(self, subscriber):
-        self._broadcast_subscribers.append(subscriber)
+    def add_broadcast_subscriber(self, subscriber, identifier=None):
+        identifier = identifier or shortuuid.uuid()
+        self._broadcast_subscribers[identifier] = subscriber
         if self._broadcast_consumer_tag is None:
             # Consume on the broadcast queue
             self._broadcast_consumer_tag = self._broadcast_queue.consume(self._on_broadcast)
+        return identifier
 
-    def remove_broadcast_subscriber(self, subscriber):
-        self._broadcast_subscribers.remove(subscriber)
+    def remove_broadcast_subscriber(self, identifier):
+        try:
+            del self._broadcast_subscribers[identifier]
+        except KeyError:
+            raise ValueError("Broadcast subscriber '{}' unknown".format(identifier))
         if not self._broadcast_subscribers:
             self._broadcast_queue.cancel(self._broadcast_consumer_tag)
             self._broadcast_consumer_tag = None
@@ -198,7 +207,7 @@ class RmqSubscriber(object):
     def _on_broadcast(self, message):
         with message.process():
             msg = self._decode(message.body)
-            for receiver in self._broadcast_subscribers:
+            for receiver in self._broadcast_subscribers.values():
                 try:
                     receiver = utils.ensure_coroutine(receiver)
                     yield receiver(self, msg[messages.BroadcastMessage.BODY], msg[messages.BroadcastMessage.SENDER],
@@ -334,7 +343,7 @@ class RmqCommunicator(object):
         yield self._connection.close()
 
     @gen.coroutine
-    def add_rpc_subscriber(self, subscriber, identifier):
+    def add_rpc_subscriber(self, subscriber, identifier=None):
         yield self._message_subscriber.add_rpc_subscriber(subscriber, identifier)
 
     @gen.coroutine
@@ -347,11 +356,11 @@ class RmqCommunicator(object):
     def remove_task_subscriber(self, subscriber):
         self._task_subscriber.remove_task_subscriber(subscriber)
 
-    def add_broadcast_subscriber(self, subscriber):
-        self._message_subscriber.add_broadcast_subscriber(subscriber)
+    def add_broadcast_subscriber(self, subscriber, identifier=None):
+        return self._message_subscriber.add_broadcast_subscriber(subscriber, identifier)
 
-    def remove_broadcast_subscriber(self, subscriber):
-        self._message_subscriber.remove_broadcast_subscriber(subscriber)
+    def remove_broadcast_subscriber(self, identifier):
+        self._message_subscriber.remove_broadcast_subscriber(identifier)
 
     @gen.coroutine
     def rpc_send(self, recipient_id, msg):
@@ -529,7 +538,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         comm_thread.join()
         stop_future.result()
 
-    def add_rpc_subscriber(self, subscriber, identifier):
+    def add_rpc_subscriber(self, subscriber, identifier=None):
         coro = partial(self._communicator.add_rpc_subscriber, subscriber, identifier)
         return self._run_task(coro)
 
@@ -543,11 +552,11 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     def remove_task_subscriber(self, subscriber):
         self._communicator.remove_task_subscriber(subscriber)
 
-    def add_broadcast_subscriber(self, subscriber):
-        self._communicator.add_broadcast_subscriber(subscriber)
+    def add_broadcast_subscriber(self, subscriber, identifier=None):
+        return self._communicator.add_broadcast_subscriber(subscriber, identifier)
 
-    def remove_broadcast_subscriber(self, subscriber):
-        self._communicator.remove_broadcast_subscriber(subscriber)
+    def remove_broadcast_subscriber(self, identifier):
+        self._communicator.remove_broadcast_subscriber(identifier)
 
     def task_send(self, task, no_reply=False):
         self._ensure_running()
