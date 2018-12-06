@@ -10,28 +10,28 @@ from . import futures
 
 __all__ = [
     'Communicator', 'CommunicatorHelper', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError',
-    'TimeoutError'
+    'TimeoutError', 'DuplicateSubscriberIdentifier'
 ]
 
 
 class RemoteException(Exception):
-    """ An exception occurred at the remote end of the call """
-    pass
+    """An exception occurred at the remote end of the call """
 
 
 class DeliveryFailed(Exception):
-    """ Failed to deliver a message """
-    pass
+    """Failed to deliver a message """
 
 
 class UnroutableError(DeliveryFailed):
-    """ The messages was unroutable """
-    pass
+    """The messages was unroutable """
 
 
 class TaskRejected(Exception):
     """ A task was rejected at the remote end """
-    pass
+
+
+class DuplicateSubscriberIdentifier(Exception):
+    """Failed to add a subscriber because the identifier supplied is already in use"""
 
 
 TimeoutError = concurrent.futures.TimeoutError  # pylint: disable=redefined-builtin
@@ -130,6 +130,8 @@ class CommunicatorHelper(Communicator):
 
     def add_rpc_subscriber(self, subscriber, identifier=None):
         identifier = identifier or shortuuid.uuid()
+        if identifier in self._rpc_subscribers:
+            raise DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
         self._rpc_subscribers[identifier] = subscriber
 
     def remove_rpc_subscriber(self, identifier):
@@ -159,6 +161,9 @@ class CommunicatorHelper(Communicator):
 
     def add_broadcast_subscriber(self, subscriber, identifier=None):
         identifier = identifier or shortuuid.uuid()
+        if identifier in self._broadcast_subscribers:
+            raise DuplicateSubscriberIdentifier("Broadcast identifier '{}'".format(identifier))
+
         self._broadcast_subscribers[identifier] = subscriber
         return identifier
 

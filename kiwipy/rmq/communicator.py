@@ -107,12 +107,15 @@ class RmqSubscriber(object):
     def add_rpc_subscriber(self, subscriber, identifier=None):
         # Create an RPC queue
         rpc_queue = yield self._channel.declare_queue(exclusive=True, arguments=self.RPC_QUEUE_ARGUMENTS)
-
-        identifier = yield rpc_queue.consume(partial(self._on_rpc, subscriber), consumer_tag=identifier)
-        yield rpc_queue.bind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
-        # Save the queue so we can cancel and unbind later
-        self._rpc_subscribers[identifier] = rpc_queue
-        raise gen.Return(identifier)
+        try:
+            identifier = yield rpc_queue.consume(partial(self._on_rpc, subscriber), consumer_tag=identifier)
+        except pika.exceptions.DuplicateConsumerTag:
+            raise kiwipy.DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
+        else:
+            yield rpc_queue.bind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
+            # Save the queue so we can cancel and unbind later
+            self._rpc_subscribers[identifier] = rpc_queue
+            raise gen.Return(identifier)
 
     @gen.coroutine
     def remove_rpc_subscriber(self, identifier):
@@ -127,6 +130,9 @@ class RmqSubscriber(object):
     @gen.coroutine
     def add_broadcast_subscriber(self, subscriber, identifier=None):
         identifier = identifier or shortuuid.uuid()
+        if identifier in self._broadcast_subscribers:
+            raise kiwipy.DuplicateSubscriberIdentifier("Broadcast identifier '{}'".format(identifier))
+
         self._broadcast_subscribers[identifier] = subscriber
         if self._broadcast_consumer_tag is None:
             # Consume on the broadcast queue
