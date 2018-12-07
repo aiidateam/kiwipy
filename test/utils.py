@@ -61,7 +61,7 @@ class CommunicatorTester(object):
         self.assertEqual(RESPONSE, response)
 
     def test_add_remove_rpc_subscriber(self):
-        """ Test adding, sending to, and then removing an RPC subscriber """
+        """ Test adding, sending to, removing and readding an RPC subscriber """
 
         def rpc_subscriber(_comm, _msg):
             return True
@@ -75,6 +75,10 @@ class CommunicatorTester(object):
         # Check that we're unsubscribed
         with self.assertRaises((kiwipy.UnroutableError, kiwipy.TimeoutError)):
             self.communicator.rpc_send(rpc_subscriber.__name__, None).result(timeout=self.WAIT_TIMEOUT)
+
+        self.communicator.add_rpc_subscriber(rpc_subscriber, rpc_subscriber.__name__)
+        result = self.communicator.rpc_send(rpc_subscriber.__name__, None).result(timeout=self.WAIT_TIMEOUT)
+        self.assertTrue(result)
 
     def test_rpc_nested_futrues(self):
         """Test that an RPC call that returns a future, which itself resolves to a future works"""
@@ -307,6 +311,7 @@ class CommunicatorTester(object):
         self.assertSetEqual(EXPECTED, senders_and_subects)
 
     def test_add_remove_broadcast_subscriber(self):
+        """Test adding, removing and readding a broadcast subscriber"""
         broadcast_received = kiwipy.Future()
 
         def broadcast_subscriber(_comm, body, sender=None, subject=None, correlation_id=None):
@@ -314,15 +319,20 @@ class CommunicatorTester(object):
             broadcast_received.set_result(True)
 
         # Check we're getting messages
-        identifier = self.communicator.add_broadcast_subscriber(broadcast_subscriber)
+        self.communicator.add_broadcast_subscriber(broadcast_subscriber, broadcast_subscriber.__name__)
         self.communicator.broadcast_send(None)
         self.assertTrue(broadcast_received.result(timeout=self.WAIT_TIMEOUT))
 
-        self.communicator.remove_broadcast_subscriber(identifier)
+        self.communicator.remove_broadcast_subscriber(broadcast_subscriber.__name__)
         # Check that we're unsubscribed
         broadcast_received = kiwipy.Future()
         with self.assertRaises(kiwipy.TimeoutError):
             broadcast_received.result(timeout=self.WAIT_TIMEOUT)
+
+        broadcast_received = kiwipy.Future()
+        self.communicator.add_broadcast_subscriber(broadcast_subscriber, broadcast_subscriber.__name__)
+        self.communicator.broadcast_send(None)
+        self.assertTrue(broadcast_received.result(timeout=self.WAIT_TIMEOUT))
 
     def test_broadcast_noone_listening(self):
         """ Check that it's not an error to send a broadcast if no one is listening"""

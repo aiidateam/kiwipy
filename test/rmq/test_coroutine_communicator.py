@@ -14,27 +14,32 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
     WAIT_TIMEOUT = testing.get_async_test_timeout()  # Wait timeout in seconds for async operations
 
-    def setUp(self):
-        super(TestCoroutineCommunicator, self).setUp()
+    connection = None
 
-        self.loop = self.io_loop
+    @gen.coroutine
+    def new_communicator(self, settings=None):
+        settings = settings or {}
+
         message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
         task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
         task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        self.communicator = None  # type: kiwipy.rmq.RmqCommunicator
 
-        @gen.coroutine
-        def init():
-            connection = yield topika.connect_robust('amqp://guest:guest@localhost:5672/', loop=self.loop)
-            self.communicator = rmq.RmqCommunicator(
-                connection,
-                message_exchange=message_exchange,
-                task_exchange=task_exchange,
-                task_queue=task_queue,
-                testing_mode=True)
-            yield self.communicator.connect()
+        if self.connection is None:
+            self.connection = yield topika.connect_robust('amqp://guest:guest@localhost:5672/', loop=self.loop)
+        communicator = rmq.RmqCommunicator(
+            self.connection,
+            message_exchange=message_exchange,
+            task_exchange=task_exchange,
+            task_queue=task_queue,
+            testing_mode=True,
+            **settings)
+        yield communicator.connect()
+        raise gen.Return(communicator)
 
-        self.loop.run_sync(init)
+    def setUp(self):
+        super(TestCoroutineCommunicator, self).setUp()
+        self.loop = self.io_loop
+        self.communicator = self.loop.run_sync(self.new_communicator)
 
     def tearDown(self):
         self.loop.run_sync(self.communicator.disconnect)
@@ -280,20 +285,33 @@ class TestCoroutineCommunicator(testing.AsyncTestCase):
 
     @testing.gen_test
     def test_add_remove_broadcast_subscriber(self):
+        # Set the expiry to something small so we know that the queues expire after we unsubscribe
+        communicator = yield self.new_communicator(settings={'queue_expires': 1})
+
         broadcast_received = concurrent.Future()
 
         def broadcast_subscriber(_comm, _body, _sender=None, _subject=None, _correlation_id=None):
             broadcast_received.set_result(True)
 
         # Check we're getting messages
-        identifier = yield self.communicator.add_broadcast_subscriber(broadcast_subscriber)
-        yield self.communicator.broadcast_send(None)
+        yield communicator.add_broadcast_subscriber(broadcast_subscriber, broadcast_subscriber.__name__)
+        yield communicator.broadcast_send(None)
         self.assertTrue((yield broadcast_received))
 
-        yield self.communicator.remove_broadcast_subscriber(identifier)
+        yield communicator.remove_broadcast_subscriber(broadcast_subscriber.__name__)
         # Check that we're unsubscribed
         broadcast_received = concurrent.Future()
         with self.assertRaises(gen.TimeoutError):
             yield gen.with_timeout(timeout=2., future=broadcast_received)
+
+        # Wait to make sure the queue is expired.  The queue_expires above is in milliseconds while below
+        # it is in seconds so this should be enough for RMQ to get its ass in gear
+        yield gen.sleep(1.)
+
+        # Now re-add and check we're getting messages
+        broadcast_received = concurrent.Future()
+        yield communicator.add_broadcast_subscriber(broadcast_subscriber, broadcast_subscriber.__name__)
+        yield communicator.broadcast_send(None)
+        self.assertTrue((yield broadcast_received))
 
     # endregion
