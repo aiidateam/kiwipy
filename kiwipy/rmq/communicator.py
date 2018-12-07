@@ -67,16 +67,16 @@ class RmqSubscriber(object):
     Subscriber for receiving a range of messages over RMQ
     """
 
-    BROADCAST_QUEUE_ARGUMENTS = {'x-message-ttl': defaults.MESSAGE_TTL, 'x-expires': defaults.QUEUE_EXPIRES}
-
-    RPC_QUEUE_ARGUMENTS = {'x-message-ttl': defaults.MESSAGE_TTL, 'x-expires': defaults.QUEUE_EXPIRES}
+    # pylint: disable=too-many-instance-attributes
 
     def __init__(self,
                  connection,
                  message_exchange=defaults.MESSAGE_EXCHANGE,
+                 queue_expires=defaults.QUEUE_EXPIRES,
                  decoder=defaults.DECODER,
                  encoder=defaults.ENCODER,
                  testing_mode=False):
+        # pylint: disable=too-many-arguments
         """
         Subscribes and listens for process control messages and acts on them
         by calling the corresponding methods of the process manager.
@@ -84,7 +84,13 @@ class RmqSubscriber(object):
         :param connection: The tokpia connection
         :type connection: :class:`topika.Connection`
         :param message_exchange: The name of the exchange to use
-        :param decoder:
+        :param queue_expires: the expiry time for standard queues in milliseconds.  This is the time after which, if
+            there are no subscribers, a queue will automatically be deleted by RabbitMQ.
+        :type queue_expires: int
+        :param encoder: The encoder to call for encoding a message
+        :param decoder: The decoder to call for decoding a message
+        :param testing_mode: Run in testing mode: all queues and exchanges
+            will be temporary
         """
         super(RmqSubscriber, self).__init__()
 
@@ -96,6 +102,12 @@ class RmqSubscriber(object):
         self._testing_mode = testing_mode
         self._response_encode = encoder
 
+        self._broadcast_queue_arguments = {'x-message-ttl': defaults.MESSAGE_TTL}
+
+        self._rmq_queue_arguments = {'x-message-ttl': defaults.MESSAGE_TTL}
+        if queue_expires:
+            self._rmq_queue_arguments['x-expires'] = queue_expires
+
         self._rpc_subscribers = {}
         self._broadcast_subscribers = {}
         self._broadcast_queue = None  # type: topika.Queue
@@ -106,7 +118,7 @@ class RmqSubscriber(object):
     @gen.coroutine
     def add_rpc_subscriber(self, subscriber, identifier=None):
         # Create an RPC queue
-        rpc_queue = yield self._channel.declare_queue(exclusive=True, arguments=self.RPC_QUEUE_ARGUMENTS)
+        rpc_queue = yield self._channel.declare_queue(exclusive=True, arguments=self._rmq_queue_arguments)
         try:
             identifier = yield rpc_queue.consume(partial(self._on_rpc, subscriber), consumer_tag=identifier)
         except pika.exceptions.DuplicateConsumerTag:
@@ -176,8 +188,10 @@ class RmqSubscriber(object):
 
         One is used for all broadcasts on this exchange
         """
+        # Create a new such that we can see this is the broadcast queue
+        name = "broadcast-{}".format(shortuuid.uuid())
         self._broadcast_queue = yield self._channel.declare_queue(
-            exclusive=True, arguments=self.BROADCAST_QUEUE_ARGUMENTS)
+            name=name, exclusive=True, arguments=self._broadcast_queue_arguments)
         yield self._broadcast_queue.bind(self._exchange, routing_key=defaults.BROADCAST_TOPIC)
 
     @gen.coroutine
@@ -271,10 +285,11 @@ class RmqCommunicator(object):
                  message_exchange=defaults.MESSAGE_EXCHANGE,
                  task_exchange=defaults.TASK_EXCHANGE,
                  task_queue=defaults.TASK_QUEUE,
-                 encoder=defaults.ENCODER,
-                 decoder=defaults.DECODER,
                  task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
                  task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+                 queue_expires=defaults.QUEUE_EXPIRES,
+                 encoder=defaults.ENCODER,
+                 decoder=defaults.DECODER,
                  testing_mode=False):
         # pylint: disable=too-many-arguments
         """
@@ -286,6 +301,9 @@ class RmqCommunicator(object):
         :type task_exchange: str
         :param task_queue: The name of the task queue to use
         :type task_queue: str
+        :param queue_expires: the expiry time for standard queues in milliseconds.  This is the time after which, if
+            there are no subscribers, a queue will automatically be deleted by RabbitMQ.
+        :type queue_expires: int
         :param encoder: The encoder to call for encoding a message
         :param decoder: The decoder to call for decoding a message
         :param testing_mode: Run in testing mode: all queues and exchanges
@@ -297,7 +315,12 @@ class RmqCommunicator(object):
         self._loop = connection.loop
 
         self._message_subscriber = RmqSubscriber(
-            connection, message_exchange=message_exchange, encoder=encoder, decoder=decoder, testing_mode=testing_mode)
+            connection,
+            message_exchange=message_exchange,
+            queue_expires=queue_expires,
+            encoder=encoder,
+            decoder=decoder,
+            testing_mode=testing_mode)
         self._message_publisher = RmqPublisher(
             connection, exchange_name=message_exchange, encoder=encoder, decoder=decoder, testing_mode=testing_mode)
         self._task_subscriber = tasks.RmqTaskSubscriber(
