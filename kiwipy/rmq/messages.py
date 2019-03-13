@@ -194,18 +194,17 @@ class BasePublisherWithReplyQueue(object):
         return message.future
 
     @gen.coroutine
-    def publish(self, message, routing_key, mandatory=True, immediate=False):
+    def publish(self, message, routing_key, mandatory=True):
         """
         Send a fire-and-forget message i.e. no response expected.
 
         :param message: The message to send
         :param routing_key: The routing key
         :param mandatory: If the message cannot be routed this will raise an UnroutableException
-        :param immediate: Return the message if it cannot be queued immediately
         :return:
         """
         result = yield self._exchange.publish(
-            message, routing_key=routing_key, mandatory=mandatory, immediate=immediate)
+            message, routing_key=routing_key, mandatory=mandatory)
         raise gen.Return(result)
 
     @gen.coroutine
