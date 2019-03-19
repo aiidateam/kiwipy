@@ -47,13 +47,13 @@ setup(
     ],
     extras_require={
         'rmq': [
-            'pika>="1.0.0b1"', 'topika>="0.1.2"', 'tornado>=4; python_version<"3"', 'tornado<5; python_version>="3"',
+            'pika>=1.0.0b2', 'topika~=0.2.0', 'tornado>=4; python_version<"3"', 'tornado<5; python_version>="3"',
             'pyyaml'
         ],
         'dev': [
             'pip',
             'pre-commit',
-            'pytest',
+            'pytest>=4',
             'pytest-cov',
             'ipython',
             'twine',
