@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 from __future__ import absolute_import
 from setuptools import setup
 
@@ -31,12 +30,6 @@ setup(
         'Programming Language :: Python :: 3.6',
     ],
     keywords='communication messaging rpc broadcast',
-    # Abstract dependencies.  Concrete versions are listed in
-    # requirements.txt
-    # See https://caremad.io/2013/07/setup-vs-requirement/ for an explanation
-    # of the difference and
-    # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
-    # for a useful dicussion
     install_requires=[
         'six',
         'shortuuid',
@@ -47,7 +40,10 @@ setup(
     ],
     extras_require={
         'rmq': [
-            'pika>=1.0.0b2', 'topika~=0.2.0', 'tornado>=4; python_version<"3"', 'tornado<5; python_version>="3"',
+            'pika>=1.0.0b2',
+            'topika>=0.2.0, <0.3.0',
+            'tornado>=4; python_version<"3"',
+            'tornado<5; python_version>="3"',
             'pyyaml'
         ],
         'dev': [
