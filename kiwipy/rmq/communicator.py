@@ -570,6 +570,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
         # The stop will end up setting self._communicator_thread to None
         self._loop.add_callback(stop_loop)
+        ioloop.IOLoop.clear_current()
         comm_thread.join()
         stop_future.result()
 

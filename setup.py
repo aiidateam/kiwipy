@@ -28,6 +28,7 @@ setup(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
     ],
     keywords='communication messaging rpc broadcast',
     install_requires=[
@@ -42,8 +43,9 @@ setup(
         'rmq': [
             'pika>=1.0.0b2',
             'topika>=0.2.0, <0.3.0',
-            'tornado>=4; python_version<"3"',
-            'tornado<5; python_version>="3"',
+            # 'tornado>=4; python_version<"3"',
+            # 'tornado<5; python_version>="3"',
+            'tornado>=4,<6.0',
             'pyyaml'
         ],
         'dev': [
