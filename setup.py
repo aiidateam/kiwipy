@@ -43,7 +43,7 @@ setup(
         'rmq': [
             'pika>=1.0.0b2',
             'topika>=0.2.0, <0.3.0',
-            'tornado>=4; python_version<"3"',
+            'tornado<6; python_version<"3"',
             'tornado<5; python_version>="3"',
             'pyyaml'
         ],
@@ -52,12 +52,17 @@ setup(
             'pre-commit',
             'pytest>=4',
             'pytest-cov',
-            'ipython',
+            'ipython<6',
             'twine',
             'yapf',
             'prospector',
             'pylint<2; python_version<"3"',
             'pylint; python_version>="3"',
+        ],
+        "docs": [
+          "Sphinx==1.8.4",
+          "Pygments==2.3.1",
+          "docutils==0.14",
         ],
     },
     packages=['kiwipy', 'kiwipy.rmq'],

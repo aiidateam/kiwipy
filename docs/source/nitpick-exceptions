@@ -1,0 +1,23 @@
+py:class  object
+py:class  bool
+py:class  str
+py:class  int
+py:class  dict
+py:class  Exception
+py:class  basestring
+
+py:class  Future
+
+py:class  kiwipy.Future
+
+py:class  concurrent.futures._base.Error
+
+py:class  topika.Connection
+py:class  topika.connection.Connection
+py:class  topika.IncomingMessage
+py:class  topika.message.IncomingMessage
+py:class  topika.Message
+
+py:class  six.string_types
+
+py:class  tornado.concurrent.Future

@@ -97,7 +97,7 @@ class Communicator(object):
         :param no_reply: Do not send a reply containing the result of the task
         :type no_reply: bool
         :return: A future corresponding to the outcome of the task
-        :rtype: :class:`kiwi.Future`
+        :rtype: :class:`kiwipy.Future`
         """
 
     @abc.abstractmethod
@@ -109,7 +109,7 @@ class Communicator(object):
         :param recipient_id: The recipient identifier
         :param msg: The body of the message
         :return: A future corresponding to the outcome of the call
-        :rtype: :class:`kiwi.Future`
+        :rtype: :class:`kiwipy.Future`
         """
         pass
 
