@@ -1,8 +1,8 @@
 kiwipy
 ======
 
-.. image:: https://travis-ci.org/muhrin/kiwipy.svg
-    :target: https://travis-ci.org/muhrin/kiwipy
+.. image:: https://travis-ci.org/aiidateam/kiwipy.svg
+    :target: https://travis-ci.org/aiidateam/kiwipy
     :alt: Travis CI
 
 .. image:: https://img.shields.io/pypi/v/kiwipy.svg
@@ -19,7 +19,10 @@ kiwipy
     :target: https://pypi.python.org/pypi/kiwipy/
 
 
-kiwipy is a library that makes remote messaging using RabbitMQ (and any other protocol for which a backend is written) EASY.  I don't know about you but I find RabbitMQ HARD.  It's all too easy to make a configuration mistake which is then difficult to debug.  With kiwipy, there's none of this, just messaging, made simple, with all the nice properties and guarantees of AMQP.
+kiwipy is a library that makes remote messaging using RabbitMQ (and any other protocol for which a backend is written) EASY.
+I don't know about you but I find RabbitMQ HARD.
+It's all too easy to make a configuration mistake which is then difficult to debug.
+With kiwipy, there's none of this, just messaging, made simple, with all the nice properties and guarantees of AMQP.
 
 Here's what you get:
 
@@ -45,7 +48,7 @@ The client:
     response = communicator.rpc_send('fib', 30).result()
     print((" [.] Got %r" % response))
 
-`(rmq_rpc_client.py source) <https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_rpc_client.py>`_
+`(rmq_rpc_client.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/develop/examples/rmq_rpc_client.py>`_
 
 
 The server:
@@ -73,7 +76,7 @@ The server:
     # Now wait indefinitely for fibonacci calls
     threading.Event().wait()
 
-`(rmq_rpc_server.py source) <https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_rpc_server.py>`_
+`(rmq_rpc_server.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/develop/examples/rmq_rpc_server.py>`_
 
 
 Worker
@@ -92,7 +95,7 @@ Create a new task:
     with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://localhost'}) as communicator:
         communicator.task_send(message)
 
-`(rmq_new_task.py source) <https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_new_task.py>`_
+`(rmq_new_task.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/develop/examples/rmq_new_task.py>`_
 
 
 And the worker:
@@ -120,7 +123,7 @@ And the worker:
     except KeyboardInterrupt:
         pass
 
-`(rmq_worker.py source) <https://raw.githubusercontent.com/muhrin/kiwipy/develop/examples/rmq_worker.py>`_
+`(rmq_worker.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/develop/examples/rmq_worker.py>`_
 
 
 Versioning
