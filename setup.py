@@ -38,15 +38,13 @@ setup(
         'enum34; python_version<"3.4"',
         'backports.tempfile; python_version<"3.2"',
         'futures; python_version == "2.7"',
+        'pika>=1.0.0b2',
+        'topika>=0.2.0, <0.3.0',
+        'tornado>=4; python_version<"3"',
+        'tornado<5; python_version>="3"',
+        'pyyaml',
     ],
     extras_require={
-        'rmq': [
-            'pika>=1.0.0b2',
-            'topika>=0.2.0, <0.3.0',
-            'tornado>=4; python_version<"3"',
-            'tornado<5; python_version>="3"',
-            'pyyaml'
-        ],
         'dev': [
             'pip',
             'pre-commit',
