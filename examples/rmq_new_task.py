@@ -7,5 +7,6 @@ from kiwipy import rmq
 
 message = ' '.join(sys.argv[1:]) or "Hello World!"
 
-with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://localhost'}) as communicator:
-    communicator.task_send(message)
+with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://127.0.0.1'}) as communicator:
+    result = communicator.task_send(message).result(timeout=5.0)
+    print(result)
