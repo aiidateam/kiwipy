@@ -13,7 +13,6 @@ def on_broadcast_filter(comm, body, sender=None, subject=None, correlation_id=No
     print(" [x] listening on_broadcast_filter:")
     print(" body: {}, sender {}, subject {}\n".format(body, sender, subject))
 filtered = kiwipy.BroadcastFilter(on_broadcast_filter)
-filtered.add_sender_filter("*.jones")
 filtered.add_subject_filter("purchase.*")
 
 try:

@@ -1,14 +1,14 @@
 .. _concepts:
 
-Here I preparing to firstly introduce the differences between task, rpc, and broadcast and their usage scenario, because the task in kiwipy is slightly different from the task defined in RabbitMQ's tutorial. The task in kiwipy is bidirectional and the return value can be obtained in client, which is more like a simple rpc. Thus easy to be confused with rpc mode.
+Here we introduce the meaning of task, rpc, and broadcast and their usage scenarios, since the meaning of a the task in ``kiwipy`` differs slightly from the one in RabbitMQ's tutorial.
 
-Secondly, I prepare to introduce the concepts of loop dependent communicator and thread dependent communicator, which are objects might be used by other library directly.
+Furthermore, we introduce the concepts of loop-dependent and thread-dependent communicators, which are objects that might be used directly by dependent libraries.
 
 ***********************
 Task
 ***********************
 
-One-to-one
+The task in kiwipy is bidirectional and the return value can be obtained by the client, which is more like a simple rpc. Thus easy to be confused with rpc mode.
 
 *********
 Rpc

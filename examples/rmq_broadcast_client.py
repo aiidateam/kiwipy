@@ -15,12 +15,8 @@ with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://127.0.0
     subj = 'purchase.car'
     communicator.broadcast_send(body, sender=sendr, subject=subj)
 
-    # filtered by filter subscriber because sender not matched
-    sendr = 'bob.smith'
-    subj = 'purchase.car'
-    communicator.broadcast_send(body, sender=sendr, subject=subj)
-
-    # filtered by filter subscriber because subject not matched
+    # Filtered by filter subscriber because subject not matched with "purchase.*" pattern
+    # Therefore filterd.
     sendr = 'bob.jones'
     subj = 'sell.car'
     communicator.broadcast_send(body, sender=sendr, subject=subj)
