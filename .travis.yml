@@ -1,12 +1,10 @@
 language: python
 cache: pip
 
-before_install:
-  - sudo apt-get install rabbitmq-server
-
 addons:
   apt:
-    update: true
+    packages:
+    - rabbitmq-server
 
 python:
   - 2.7
