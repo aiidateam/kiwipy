@@ -42,7 +42,7 @@ setup(name="kiwipy",
       extras_require={
           'rmq': [
               'pika>=1.0.0', 'topika>=0.2.0, <0.3.0', 'tornado<6; python_version<"3"', 'tornado<5; python_version>="3"',
-              'pyyaml'
+              'pyyaml~=5.1'
           ],
           'dev': [
               'pip',
