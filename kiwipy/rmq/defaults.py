@@ -18,4 +18,4 @@ TASK_PREFETCH_SIZE = 0
 TASK_PREFETCH_COUNT = 0
 
 ENCODER = partial(yaml.dump, encoding='utf-8')
-DECODER = partial(yaml.load, Loader=yaml.Loader)
+DECODER = partial(yaml.load, Loader=yaml.FullLoader)
