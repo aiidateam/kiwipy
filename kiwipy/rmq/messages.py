@@ -188,7 +188,7 @@ class BasePublisherWithReplyQueue(object):
 
         :param message: The message to execute
         :return: A future corresponding to action
-        :rtype: :class:`kiwi.Future`
+        :rtype: :class:`kiwipy.Future`
         """
         message.send(self)
         return message.future

@@ -34,23 +34,20 @@ git tag -a $tag -m "Version $version"
 # Merge into master
 
 git checkout master
-git merge --no-ff $relbranch
+git merge $relbranch
 
+# And back into the working branch (usually develop)
 git checkout $current_branch
-git merge --no-ff $relbranch
+git merge $relbranch
 
 git branch -d $relbranch
 
 # Push everything
-
 git push --tags origin master $current_branch
 
 
 # Release on pypi
-
-rm -r dist
-rm -r build
-rm -r *.egg-info
+rm -r dist build *.egg-info
 python setup.py sdist
 python setup.py bdist_wheel --universal
 

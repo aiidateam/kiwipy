@@ -208,8 +208,10 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
 
     @gen.coroutine
     def task_send(self, task, no_reply=False):
-        """
-        Send a task for processing by a task subscriber
+        """Send a task for processing by a task subscriber.
+
+        All task messages will be set to be persistent by setting `delivery_mode=2`.
+
         :param task: The task payload
         :param no_reply: Don't send a reply containing the result of the task
         :type no_reply: bool
@@ -219,7 +221,12 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
         # Build the full message body and encode as a tuple
         body = self._encode((task, no_reply))
         # Now build up the full topika message
-        task_msg = topika.Message(body=body, correlation_id=str(uuid.uuid4()), reply_to=self._reply_queue.name)
+        task_msg = topika.Message(
+            body=body,
+            correlation_id=str(uuid.uuid4()),
+            reply_to=self._reply_queue.name,
+            delivery_mode=2  # Task messages need to be persistent
+        )
 
         result_future = None
         if no_reply:

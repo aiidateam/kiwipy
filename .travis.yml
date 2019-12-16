@@ -1,18 +1,18 @@
 language: python
 cache: pip
 
-services:
-  - rabbitmq
+addons:
+  apt:
+    packages:
+    - rabbitmq-server
 
 python:
-  - "2.7"
-  - "3.4"
-  - "3.5"
-  - "3.6"
+  - 2.7
+  - 3.4
+  - 3.5
+  - 3.6
 
 matrix:
-  allow_failures:
-    - python: 3.7
   include:
     - python: 3.7
       dist: xenial    # required for Python 3.7 (travis-ci/travis-ci#9069)
@@ -33,3 +33,13 @@ before_script:
 
 script:
   - py.test
+
+jobs:
+  include:
+    - stage: docs-test
+      python: 3.6
+      install:
+          - pip install .[rmq,dev,docs]
+          - pip install flake8
+      script:
+          - sphinx-build -nT -b dummy docs/source build/html
