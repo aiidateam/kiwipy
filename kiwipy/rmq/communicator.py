@@ -62,7 +62,7 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
         return result
 
 
-class RmqSubscriber(object):
+class RmqSubscriber:
     """
     Subscriber for receiving a range of messages over RMQ
     """
@@ -265,7 +265,7 @@ class RmqSubscriber(object):
         return result
 
 
-class RmqCommunicator(object):
+class RmqCommunicator:
     """
     A publisher and subscriber using aio_pika and an asyncio event loop
     """

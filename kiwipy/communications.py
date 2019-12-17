@@ -38,7 +38,7 @@ TimeoutError = concurrent.futures.TimeoutError  # pylint: disable=redefined-buil
 
 
 @six.add_metaclass(abc.ABCMeta)
-class Communicator(object):
+class Communicator:
     """
     The interface for a communicator used to both send and receive various
     types of message.

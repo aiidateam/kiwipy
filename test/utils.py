@@ -13,7 +13,7 @@ import kiwipy
 
 
 @six.add_metaclass(abc.ABCMeta)
-class CommunicatorTester(object):
+class CommunicatorTester:
     # Disable invalid name because I use caps for constants which the linter doesn't like
     # also disable no-member for superclass calls because we use this as a mixin that gets used
     # with unittest.TestCase

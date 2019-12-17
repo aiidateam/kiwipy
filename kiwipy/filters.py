@@ -6,7 +6,7 @@ import six
 __all__ = ['BroadcastFilter']
 
 
-class BroadcastFilter(object):
+class BroadcastFilter:
 
     def __init__(self, subscriber, subject=None, sender=None):
         self._subscriber = subscriber

@@ -7,7 +7,7 @@ __all__ = ['EventHelper']
 _LOGGER = logging.getLogger(__name__)
 
 
-class EventHelper(object):  # pylint: disable=useless-object-inheritance
+class EventHelper:
 
     def __init__(self, listener_type):
         assert listener_type is not None, "Must provide valid listener type"
