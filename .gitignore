@@ -67,3 +67,5 @@ target/
 
 # Virtual environment directories
 /venv*/
+
+*.swp # Vim files

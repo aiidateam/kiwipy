@@ -1,12 +1,13 @@
 from __future__ import absolute_import
+import asyncio
 import collections
 import logging
 import uuid
 import sys
 import traceback
+import typing
 
-from tornado import gen, concurrent
-import topika
+import aio_pika
 
 import kiwipy
 from . import defaults
@@ -39,7 +40,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         # pylint: disable=too-many-arguments
         """
         :param connection: An RMQ connection
-        :type connection: :class:`topika.Connection`
+        :type connection: :class:`aio_pika.Connection`
         :param exchange_name: the name of the exchange to use
         :type exchange_name: :class:`six.string_types`
         :param queue_name: the name of the task queue to use
@@ -47,8 +48,10 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         :param decoder: A message decoder
         :param encoder: A response encoder
         """
-        super(RmqTaskSubscriber, self).__init__(
-            connection, exchange_name=exchange_name, exchange_params=exchange_params, testing_mode=testing_mode)
+        super(RmqTaskSubscriber, self).__init__(connection,
+                                                exchange_name=exchange_name,
+                                                exchange_params=exchange_params,
+                                                testing_mode=testing_mode)
 
         self._task_queue_name = queue_name
         self._testing_mode = testing_mode
@@ -58,34 +61,32 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._prefetch_count = prefetch_count
         self._consumer_tag = None
 
-        self._task_queue = None  # type: topika.Queue
+        self._task_queue = None  # type: typing.Optional[aio_pika.Queue]
         self._subscribers = []
         self._pending_tasks = []
 
-    def add_task_subscriber(self, subscriber):
+    async def add_task_subscriber(self, subscriber):
         self._subscribers.append(subscriber)
         if self._consumer_tag is None:
-            self._consumer_tag = self._task_queue.consume(self._on_task)
+            self._consumer_tag = await self._task_queue.consume(self._on_task)
 
-    def remove_task_subscriber(self, subscriber):
+    async def remove_task_subscriber(self, subscriber):
         self._subscribers.remove(subscriber)
         if not self._subscribers:
-            self._task_queue.cancel(self._consumer_tag)
+            await self._task_queue.cancel(self._consumer_tag)
             self._consumer_tag = None
 
-    @gen.coroutine
-    def connect(self):
+    async def connect(self):
         if self.channel():
             # Already connected
             return
 
-        yield super(RmqTaskSubscriber, self).connect()
-        yield self.channel().set_qos(prefetch_count=self._prefetch_count, prefetch_size=self._prefetch_size)
+        await super(RmqTaskSubscriber, self).connect()
+        await self.channel().set_qos(prefetch_count=self._prefetch_count, prefetch_size=self._prefetch_size)
 
-        yield self._create_task_queue()
+        await self._create_task_queue()
 
-    @gen.coroutine
-    def _create_task_queue(self):
+    async def _create_task_queue(self):
         """Create and bind the task queue"""
         arguments = dict(self.TASK_QUEUE_ARGUMENTS)
         if self._testing_mode:
@@ -93,18 +94,16 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         # x-expires means how long does the queue stay alive after no clients
         # x-message-ttl means what is the default ttl for a message arriving in the queue
-        self._task_queue = yield self._channel.declare_queue(
-            name=self._task_queue_name,
-            durable=not self._testing_mode,
-            auto_delete=self._testing_mode,
-            arguments=arguments)
-        yield self._task_queue.bind(self._exchange, routing_key=self._task_queue.name)
+        self._task_queue = await self._channel.declare_queue(name=self._task_queue_name,
+                                                             durable=not self._testing_mode,
+                                                             auto_delete=self._testing_mode,
+                                                             arguments=arguments)
+        await self._task_queue.bind(self._exchange, routing_key=self._task_queue.name)
 
-    @gen.coroutine
-    def _on_task(self, message):
+    async def _on_task(self, message):
         """
-        :param message: The topika RMQ message
-        :type message: :class:`topika.IncomingMessage`
+        :param message: The aio_pika RMQ message
+        :type message: :class:`aio_pika.IncomingMessage`
         """
         # pylint: disable=too-many-branches
 
@@ -115,15 +114,15 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             for subscriber in self._subscribers:
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
-                    result = yield subscriber(self, task_body.task)
+                    result = await subscriber(self, task_body.task)
 
                     # If a task returns a future it is not considered done until the chain of futures
                     # (i.e. if the first future resolves to a future and so on) finishes and produces
                     # a concrete result
-                    while concurrent.is_future(result):
+                    while asyncio.isfuture(result):
                         if not task_body.no_reply:
-                            yield self._send_response(utils.pending_response(), message)
-                        result = yield result
+                            await self._send_response(utils.pending_response(), message)
+                        result = await result
                 except kiwipy.TaskRejected:
                     # Keep trying to find one that will accept the task
                     continue
@@ -139,7 +138,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                         _LOGGER.exception('The task excepted')
                     else:
                         # Send the exception back to the other side but log here at INFO level also
-                        reply_body = utils.exception_response(sys.exc_info()[1:])
+                        reply_body = utils.exception_response(*sys.exc_info()[1:])
                         _LOGGER.info('There was an exception in a task %s:\n%s', exc, traceback.format_exc())
                     handled = True  # Finished
                 else:
@@ -151,7 +150,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 if handled:
                     message.ack()
                     if not task_body.no_reply:
-                        yield self._send_response(reply_body, message)
+                        await self._send_response(reply_body, message)
                     break  # Done, do break the loop
 
             if not handled:
@@ -160,25 +159,24 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
     def _build_response_message(self, body, incoming_message):
         """
-        Create a topika Message as a response to a task being deal with.
+        Create a aio_pika Message as a response to a task being deal with.
 
         :param body: The message body dictionary
         :type body: dict
         :param incoming_message: The original message we are responding to
-        :type incoming_message: :class:`topika.IncomingMessage`
+        :type incoming_message: :class:`aio_pika.IncomingMessage`
         :return: The response message
-        :rtype: :class:`topika.Message`
+        :rtype: :class:`aio_pika.Message`
         """
         # Add host info
         body[utils.HOST_KEY] = utils.get_host_info()
-        message = topika.Message(body=self._encode(body), correlation_id=incoming_message.correlation_id)
+        message = aio_pika.Message(body=self._encode(body), correlation_id=incoming_message.correlation_id)
 
         return message
 
-    @gen.coroutine
-    def _send_response(self, msg_body, incoming_message):
+    async def _send_response(self, msg_body, incoming_message):
         msg = self._build_response_message(msg_body, incoming_message)
-        yield self._exchange.publish(msg, routing_key=incoming_message.reply_to)
+        await self._exchange.publish(msg, routing_key=incoming_message.reply_to)
 
 
 class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
@@ -196,18 +194,16 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                  confirm_deliveries=True,
                  testing_mode=False):
         # pylint: disable=too-many-arguments
-        super(RmqTaskPublisher, self).__init__(
-            connection,
-            exchange_name=exchange_name,
-            exchange_params=exchange_params,
-            encoder=encoder,
-            decoder=decoder,
-            confirm_deliveries=confirm_deliveries,
-            testing_mode=testing_mode)
+        super(RmqTaskPublisher, self).__init__(connection,
+                                               exchange_name=exchange_name,
+                                               exchange_params=exchange_params,
+                                               encoder=encoder,
+                                               decoder=decoder,
+                                               confirm_deliveries=confirm_deliveries,
+                                               testing_mode=testing_mode)
         self._task_queue_name = task_queue_name
 
-    @gen.coroutine
-    def task_send(self, task, no_reply=False):
+    async def task_send(self, task, no_reply=False):
         """Send a task for processing by a task subscriber.
 
         All task messages will be set to be persistent by setting `delivery_mode=2`.
@@ -216,12 +212,12 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
         :param no_reply: Don't send a reply containing the result of the task
         :type no_reply: bool
         :return: A future representing the result of the task
-        :rtype: :class:`tornado.concurrent.Future`
+        :rtype: :class:`asyncio.Future`
         """
         # Build the full message body and encode as a tuple
         body = self._encode((task, no_reply))
-        # Now build up the full topika message
-        task_msg = topika.Message(
+        # Now build up the full aio_pika message
+        task_msg = aio_pika.Message(
             body=body,
             correlation_id=str(uuid.uuid4()),
             reply_to=self._reply_queue.name,
@@ -230,10 +226,11 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
 
         result_future = None
         if no_reply:
-            published = yield self.publish(task_msg, routing_key=self._task_queue_name, mandatory=True)
+            published = await self.publish(task_msg, routing_key=self._task_queue_name, mandatory=True)
         else:
-            published, result_future = yield self.publish_expect_response(
-                task_msg, routing_key=self._task_queue_name, mandatory=True)
+            published, result_future = await self.publish_expect_response(task_msg,
+                                                                          routing_key=self._task_queue_name,
+                                                                          mandatory=True)
 
         assert published, "The task was not published to the exchange"
-        raise gen.Return(result_future)
+        return result_future
