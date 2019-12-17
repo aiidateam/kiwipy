@@ -14,7 +14,7 @@ from . import utils
 _LOGGER = logging.getLogger(__name__)
 
 
-class BroadcastMessage(object):
+class BroadcastMessage:
     BODY = 'body'
     SENDER = 'sender'
     SUBJECT = 'subject'
@@ -31,7 +31,7 @@ class BroadcastMessage(object):
         return message_dict
 
 
-class BaseConnectionWithExchange(object):
+class BaseConnectionWithExchange:
     """
     An RMQ connection with a channel and exchange
     """
@@ -87,7 +87,7 @@ class BaseConnectionWithExchange(object):
                 self._channel = None
 
 
-class BasePublisherWithReplyQueue(object):
+class BasePublisherWithReplyQueue:
     """
     A base class for any object that needs to be able to publish a message and to potentially expect a reply.
     """
