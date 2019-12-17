@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import asyncio
 import concurrent.futures
 import contextlib
 import logging
@@ -8,9 +9,15 @@ __all__ = ['Future', 'chain', 'copy_future', 'CancelledError', 'capture_exceptio
 _LOGGER = logging.getLogger(__name__)
 
 CancelledError = concurrent.futures.CancelledError
-Future = concurrent.futures.Future
 wait = concurrent.futures.wait  # pylint: disable=invalid-name
 as_completed = concurrent.futures.as_completed  # pylint: disable=invalid-name
+
+
+class Future(concurrent.futures.Future):
+    """Just a concurrent Future that can be awaited in an event loop"""
+
+    def __await__(self):
+        return asyncio.wrap_future(self).__await__()
 
 
 def copy_future(source, target):

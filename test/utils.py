@@ -37,7 +37,6 @@ class CommunicatorTester(object):
         :return: A constructed communicator
         :rtype: :class:`kiwi.Communicator`
         """
-        pass
 
     def destroy_communicator(self, communicator):
         pass
@@ -104,7 +103,7 @@ class CommunicatorTester(object):
 
     def test_rpc_exception(self):
         MESSAGE = 'The meaning?'  # pylint: disable=invalid-name
-        EXCEPTION = RuntimeError("I cannea do it Captain!")  # pylint: disable=invalid-name
+        EXCEPTION = RuntimeError("I cannae do it Captain!")  # pylint: disable=invalid-name
 
         messages = []
 
@@ -336,7 +335,6 @@ class CommunicatorTester(object):
 
     def test_broadcast_noone_listening(self):
         """ Check that it's not an error to send a broadcast if no one is listening"""
-        result = self.communicator.broadcast_send('into the ether')
-        self.assertIs(True, result)
+        self.communicator.broadcast_send('into the ether')
 
     # endregion

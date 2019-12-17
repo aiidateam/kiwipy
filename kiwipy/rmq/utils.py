@@ -1,10 +1,11 @@
 from __future__ import absolute_import
+import asyncio
 import collections
+import functools
 import inspect
 import os
 import socket
-import tornado.concurrent
-from tornado import gen, ioloop
+import traceback
 
 import kiwipy
 
@@ -46,7 +47,7 @@ def exception_response(exception, trace=None):
     """
     msg = str(exception)
     if trace is not None:
-        msg += "\n{}".format(trace)
+        msg += "\n{}".format("".join(traceback.format_tb(trace)[0]))
     return {EXCEPTION_KEY: msg}
 
 
@@ -59,7 +60,7 @@ def pending_response(msg=None):
 
 
 def response_result(response):
-    future = tornado.concurrent.Future()
+    future = asyncio.Future()
     response_to_future(response, future)
     return future.result()
 
@@ -75,7 +76,7 @@ def response_to_future(response, future=None):
         raise TypeError("Response must be a mapping")
 
     if future is None:
-        future = tornado.concurrent.Future()
+        future = asyncio.Future()
 
     if CANCELLED_KEY in response:
         future.cancel()
@@ -84,7 +85,7 @@ def response_to_future(response, future=None):
     elif RESULT_KEY in response:
         future.set_result(response[RESULT_KEY])
     elif PENDING_KEY in response:
-        future.set_result(tornado.concurrent.Future())
+        future.set_result(asyncio.Future())
     else:
         raise ValueError("Unknown response type '{}'".format(response))
 
@@ -108,42 +109,16 @@ def future_to_response(future):
 
 
 def ensure_coroutine(coro_or_fn):
-    if gen.is_coroutine_function(coro_or_fn):
+    if asyncio.iscoroutinefunction(coro_or_fn):
         return coro_or_fn
     if callable(coro_or_fn):
         if inspect.isclass(coro_or_fn):
             coro_or_fn = coro_or_fn.__call__
-        return gen.coroutine(coro_or_fn)
+
+        @functools.wraps(coro_or_fn)
+        async def wrap(*args, **kwargs):
+            return coro_or_fn(*args, **kwargs)
+
+        return wrap
 
     raise TypeError('coro_or_fn must be a callable')
-
-
-@gen.convert_yielded.register(kiwipy.Future)
-def _register_concurrent_future(concurrent_future):
-    """Register concurrent.future.Future to be compatible with tornado yield"""
-    tornado_future = tornado.concurrent.Future()
-    tornado.concurrent.chain_future(concurrent_future, tornado_future)
-    return tornado_future
-
-
-def create_task(coro, loop=None):
-    """
-    Schedule a call to a coroutine in the event loop and wrap the outcome
-    in a future.
-
-    :param coro: the coroutine to schedule
-    :param loop: the event loop to schedule it in
-    :return: the future representing the outcome of the coroutine
-    :rtype: :class:`tornado.concurrent.Future`
-    """
-    loop = loop or ioloop.IOLoop.current()
-
-    future = tornado.concurrent.Future()
-
-    @gen.coroutine
-    def run_task():
-        with kiwipy.capture_exceptions(future):
-            future.set_result((yield coro()))
-
-    loop.add_callback(run_task)
-    return future

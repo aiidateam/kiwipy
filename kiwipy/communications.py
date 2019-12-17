@@ -56,7 +56,6 @@ class Communicator(object):
 
         :param identifier: The RPC subscriber identifier
         """
-        pass
 
     @abc.abstractmethod
     def add_task_subscriber(self, subscriber):
@@ -75,7 +74,6 @@ class Communicator(object):
         :param identifier: an optional identifier for the subscriber
         :return: an identifier for the subscriber and can be subsequently used to remove it
         """
-        pass
 
     @abc.abstractmethod
     def remove_broadcast_subscriber(self, identifier):
@@ -84,10 +82,9 @@ class Communicator(object):
 
         :param identifier: the identifier of the subscriber to remove
         """
-        pass
 
     @abc.abstractmethod
-    def task_send(self, task, no_reply=False):
+    def task_send(self, task, no_reply=False) -> futures.Future:
         """
         Send a task messages, this will be queued and picked up by a
         worker at some point in the future.  The method returns a future
@@ -97,7 +94,6 @@ class Communicator(object):
         :param no_reply: Do not send a reply containing the result of the task
         :type no_reply: bool
         :return: A future corresponding to the outcome of the task
-        :rtype: :class:`kiwipy.Future`
         """
 
     @abc.abstractmethod
@@ -111,10 +107,9 @@ class Communicator(object):
         :return: A future corresponding to the outcome of the call
         :rtype: :class:`kiwipy.Future`
         """
-        pass
 
     @abc.abstractmethod
-    def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
+    def broadcast_send(self, body, sender=None, subject=None, correlation_id=None) -> bool:
         pass
 
 

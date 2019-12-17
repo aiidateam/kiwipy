@@ -1,12 +1,12 @@
 from __future__ import absolute_import
+import asyncio
 from collections import deque
 import copy
 import logging
 import traceback
 import uuid
 
-from tornado import gen, concurrent
-import topika
+import aio_pika
 
 from . import defaults
 from . import utils
@@ -35,11 +35,11 @@ class BaseConnectionWithExchange(object):
     """
     An RMQ connection with a channel and exchange
     """
-    DEFAULT_EXCHANGE_PARAMS = {'type': topika.ExchangeType.TOPIC}
+    DEFAULT_EXCHANGE_PARAMS = {'type': aio_pika.ExchangeType.TOPIC}
 
     def __init__(self, connection, exchange_name=defaults.MESSAGE_EXCHANGE, exchange_params=None, testing_mode=False):
         """
-        :type connection: :class:`topika.Connection`
+        :type connection: :class:`aio_pika.Connection`
         :type exchange_name: str
         :type exchange_params: dict or NoneType
         """
@@ -56,8 +56,8 @@ class BaseConnectionWithExchange(object):
         self._exchange_params = exchange_params
         self._loop = self._connection.loop
 
-        self._channel = None  # type: topika.Channel
-        self._exchange = None  # type: topika.Exchange
+        self._channel = None  # type: aio_pika.Channel
+        self._exchange = None  # type: aio_pika.Exchange
         self._is_closing = False
 
     @property
@@ -70,22 +70,20 @@ class BaseConnectionWithExchange(object):
     def channel(self):
         return self._channel
 
-    @gen.coroutine
-    def connect(self):
+    async def connect(self):
         if self._channel:
             return
 
         # Create the channel
-        self._channel = yield self._connection.channel()
+        self._channel = await self._connection.channel()
         # Create the exchange
-        self._exchange = yield self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
+        self._exchange = await self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
 
-    @gen.coroutine
-    def disconnect(self):
+    async def disconnect(self):
         if not self.is_closing:
             self._is_closing = True
             if self.channel() is not None:
-                yield self.channel().close()
+                await self.channel().close()
                 self._channel = None
 
 
@@ -95,7 +93,7 @@ class BasePublisherWithReplyQueue(object):
     """
     # pylint: disable=too-many-instance-attributes
 
-    DEFAULT_EXCHANGE_PARAMS = {'type': topika.ExchangeType.TOPIC}
+    DEFAULT_EXCHANGE_PARAMS = {'type': aio_pika.ExchangeType.TOPIC}
 
     def __init__(self,
                  connection,
@@ -107,8 +105,8 @@ class BasePublisherWithReplyQueue(object):
                  testing_mode=False):
         # pylint: disable=too-many-arguments
         """
-        :param connection: The topika RMQ connection
-        :type connection: :class:`topika.connection.Connection`
+        :param connection: The aio_pika RMQ connection
+        :type connection: :class:`aio_pika.connection.Connection`
         :param exchange_name:
         :param exchange_params:
         :param encoder:
@@ -136,9 +134,9 @@ class BasePublisherWithReplyQueue(object):
         self._awaiting_response = {}
 
         self._connection = connection
-        self._channel = None  # type: topika.Channel
-        self._exchange = None  # type: topika.Exchange
-        self._reply_queue = None  # type: topika.Queue
+        self._channel = None  # type: aio_pika.Channel
+        self._exchange = None  # type: aio_pika.Exchange
+        self._reply_queue = None  # type: aio_pika.Queue
 
         self._is_closing = False
 
@@ -150,34 +148,31 @@ class BasePublisherWithReplyQueue(object):
     def is_connected(self):
         return self._channel
 
-    @gen.coroutine
-    def connect(self):
+    async def connect(self):
         if self.is_connected:
             return
 
-        self._channel = yield self._connection.channel(
-            publisher_confirms=self._confirm_deliveries, on_return_raises=True)
+        self._channel = await self._connection.channel(publisher_confirms=self._confirm_deliveries,
+                                                       on_return_raises=True)
         self._channel.add_close_callback(self._on_channel_close)
 
-        self._exchange = yield self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
+        self._exchange = await self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
 
         # Declare the reply queue
         reply_queue_name = "{}-reply-{}".format(self._exchange_name, str(uuid.uuid4()))
-        self._reply_queue = yield self._channel.declare_queue(
-            name=reply_queue_name,
-            exclusive=True,
-            auto_delete=self._testing_mode,
-            arguments={"x-expires": defaults.REPLY_QUEUE_EXPIRES})
+        self._reply_queue = await self._channel.declare_queue(name=reply_queue_name,
+                                                              exclusive=True,
+                                                              auto_delete=self._testing_mode,
+                                                              arguments={"x-expires": defaults.REPLY_QUEUE_EXPIRES})
 
-        yield self._reply_queue.bind(self._exchange, routing_key=reply_queue_name)
-        yield self._reply_queue.consume(self._on_response, no_ack=True)
+        await self._reply_queue.bind(self._exchange, routing_key=reply_queue_name)
+        await self._reply_queue.consume(self._on_response, no_ack=True)
 
-    @gen.coroutine
-    def disconnect(self):
+    async def disconnect(self):
         if not self.is_closing:
             self._is_closing = True
             if self.channel() is not None and not self.channel().is_closed:
-                yield self._channel.close()
+                await self._channel.close()
             self._channel = None
 
     def action_message(self, message):
@@ -193,8 +188,7 @@ class BasePublisherWithReplyQueue(object):
         message.send(self)
         return message.future
 
-    @gen.coroutine
-    def publish(self, message, routing_key, mandatory=True):
+    async def publish(self, message, routing_key, mandatory=True):
         """
         Send a fire-and-forget message i.e. no response expected.
 
@@ -203,21 +197,19 @@ class BasePublisherWithReplyQueue(object):
         :param mandatory: If the message cannot be routed this will raise an UnroutableException
         :return:
         """
-        result = yield self._exchange.publish(
-            message, routing_key=routing_key, mandatory=mandatory)
-        raise gen.Return(result)
+        result = await self._exchange.publish(message, routing_key=routing_key, mandatory=mandatory)
+        return result
 
-    @gen.coroutine
-    def publish_expect_response(self, message, routing_key, mandatory=True):
+    async def publish_expect_response(self, message, routing_key, mandatory=True):
         # If there is no correlation id we have to set on so that we know what the response will be to
         if not message.correlation_id:
-            message.correlation_id = str(uuid.uuid4()).encode()
+            message.correlation_id = str(uuid.uuid4())
         correlation_id = message.correlation_id
 
-        response_future = concurrent.Future()
+        response_future = asyncio.Future()
         self._awaiting_response[correlation_id] = response_future
-        result = yield self.publish(message, routing_key=routing_key, mandatory=mandatory)
-        raise gen.Return((result, response_future))
+        result = await self.publish(message, routing_key=routing_key, mandatory=mandatory)
+        return result, response_future
 
     def get_exchange_name(self):
         return self._exchange_name
@@ -227,13 +219,12 @@ class BasePublisherWithReplyQueue(object):
 
     # region RMQ communications
 
-    @gen.coroutine
-    def _on_response(self, message):
+    async def _on_response(self, message):
         """
         Called when we get a message on our response queue
 
         :param message: The response message
-        :type message: :class:`topika.message.IncomingMessage`
+        :type message: :class:`aio_pika.message.IncomingMessage`
         """
         correlation_id = message.correlation_id
         try:
@@ -251,7 +242,7 @@ class BasePublisherWithReplyQueue(object):
                 try:
                     # If the response was a future it means we should another message that resolves
                     # that future
-                    if concurrent.is_future(response_future.result()):
+                    if asyncio.isfuture(response_future.result()):
                         self._awaiting_response[correlation_id] = response_future.result()
                 except Exception:  # pylint: disable=broad-except
                     pass
