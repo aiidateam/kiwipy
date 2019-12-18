@@ -34,6 +34,7 @@ setup(name="kiwipy",
       extras_require={
           'rmq': ['aio-pika', 'pyyaml'],
           'dev': [
+              'async_generator',
               'pip',
               'pre-commit',
               'pytest>=4',

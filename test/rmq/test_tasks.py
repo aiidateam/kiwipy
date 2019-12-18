@@ -7,11 +7,13 @@ import pytest
 # pylint: disable=redefined-outer-name
 
 try:
+    from async_generator import yield_, async_generator
     import aio_pika
     import aio_pika.exceptions
     from kiwipy import rmq
 
     @pytest.fixture
+    @async_generator
     async def task_publisher(connection):
         exchange_name = "{}.{}".format(__file__, uuid.uuid4())
         task_queue_name = "{}.{}".format(__file__, uuid.uuid4())
@@ -21,7 +23,7 @@ try:
                                         exchange_name=exchange_name,
                                         testing_mode=True)
         await task_pub.connect()
-        yield task_pub
+        await yield_(task_pub)
         await task_pub.disconnect()
 
 except ImportError:
