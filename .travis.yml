@@ -1,16 +1,23 @@
-dist: bionic
 language: python
 cache: pip
 
 addons:
   apt:
     packages:
-      - rabbitmq-server
+    - rabbitmq-server
 
 python:
   - 3.5
   - 3.6
-  - 3.7
+
+matrix:
+  include:
+    - python: 3.7
+      dist: xenial    # required for Python 3.7 (travis-ci/travis-ci#9069)
+      sudo: required  # required for Python 3.7 (travis-ci/travis-ci#9069)
+      install:
+        - pip install .[rmq,dev]
+        - pip install flake8
 
 install:
   - pip install .[rmq,dev]
@@ -30,7 +37,7 @@ jobs:
     - stage: docs-test
       python: 3.6
       install:
-        - pip install .[rmq,dev,docs]
-        - pip install flake8
+          - pip install .[rmq,dev,docs]
+          - pip install flake8
       script:
-        - sphinx-build -nT -b dummy docs/source build/html
+          - sphinx-build -nT -b dummy docs/source build/html

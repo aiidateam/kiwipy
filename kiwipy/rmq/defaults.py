@@ -9,7 +9,11 @@ TASK_QUEUE = 'kiwipy.tasks'
 MESSAGE_EXCHANGE = 'kiwipy.messages'
 BROADCAST_TOPIC = '[broadcast]'
 RPC_TOPIC = '[rpc]'
-MESSAGE_TTL = 60 * 1000  # One minute
+# Have to set MESSAGE_TTL to > 65535 because of a bug in aio-pika which fails when using RabbitMQ
+# 3.5 (as present in Ubuntu 16.04) and likely earlier.  If you have a newer version of RabbitMQ
+# it's fine to set this lower.  See:
+# https://github.com/mosquito/aio-pika/issues/165
+MESSAGE_TTL = 66 * 1000
 TEST_QUEUE_EXPIRES = 10 * 1000
 QUEUE_EXPIRES = 60 * 1000
 REPLY_QUEUE_EXPIRES = 60 * 1000
