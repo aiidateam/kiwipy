@@ -1,45 +1,26 @@
 import abc
-import concurrent.futures
 import sys
 
 import shortuuid
 
+from . import exceptions
 from . import futures
 
-__all__ = [
-    'Communicator', 'CommunicatorHelper', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError',
-    'TimeoutError', 'DuplicateSubscriberIdentifier'
-]
-
-
-class RemoteException(Exception):
-    """An exception occurred at the remote end of the call """
-
-
-class DeliveryFailed(Exception):
-    """Failed to deliver a message """
-
-
-class UnroutableError(DeliveryFailed):
-    """The messages was unroutable """
-
-
-class TaskRejected(Exception):
-    """ A task was rejected at the remote end """
-
-
-class DuplicateSubscriberIdentifier(Exception):
-    """Failed to add a subscriber because the identifier supplied is already in use"""
-
-
-TimeoutError = concurrent.futures.TimeoutError  # pylint: disable=redefined-builtin
+__all__ = ['Communicator', 'CommunicatorHelper']
 
 
 class Communicator:
     """
-    The interface for a communicator used to both send and receive various
-    types of message.
+    The interface for a communicator used to both send and receive various types of message.
     """
+
+    @abc.abstractmethod
+    def is_closed(self) -> bool:
+        """Return `True` if the event loop was closed"""
+
+    @abc.abstractmethod
+    def close(self):
+        """Close a communicator, free up all resources and do not allow any further operations"""
 
     @abc.abstractmethod
     def add_rpc_subscriber(self, subscriber, identifier=None):
@@ -119,14 +100,28 @@ class CommunicatorHelper(Communicator):
         self._task_subscribers = []
         self._broadcast_subscribers = {}
         self._rpc_subscribers = {}
+        self._closed = False
+
+    def is_closed(self) -> bool:
+        return self._closed
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        del self._task_subscribers
+        del self._broadcast_subscribers
+        del self._rpc_subscribers
 
     def add_rpc_subscriber(self, subscriber, identifier=None):
+        self._ensure_open()
         identifier = identifier or shortuuid.uuid()
         if identifier in self._rpc_subscribers:
-            raise DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
+            raise exceptions.DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
         self._rpc_subscribers[identifier] = subscriber
 
     def remove_rpc_subscriber(self, identifier):
+        self._ensure_open()
         try:
             self._rpc_subscribers.pop(identifier)
         except KeyError:
@@ -138,6 +133,7 @@ class CommunicatorHelper(Communicator):
 
         :param subscriber: The task callback function
         """
+        self._ensure_open()
         self._task_subscribers.append(subscriber)
 
     def remove_task_subscriber(self, subscriber):
@@ -146,26 +142,30 @@ class CommunicatorHelper(Communicator):
 
         :param subscriber: The task callback function
         """
+        self._ensure_open()
         try:
             self._task_subscribers.remove(subscriber)
         except ValueError:
             raise ValueError("Unknown subscriber: '{}'".format(subscriber))
 
     def add_broadcast_subscriber(self, subscriber, identifier=None):
+        self._ensure_open()
         identifier = identifier or shortuuid.uuid()
         if identifier in self._broadcast_subscribers:
-            raise DuplicateSubscriberIdentifier("Broadcast identifier '{}'".format(identifier))
+            raise exceptions.DuplicateSubscriberIdentifier("Broadcast identifier '{}'".format(identifier))
 
         self._broadcast_subscribers[identifier] = subscriber
         return identifier
 
     def remove_broadcast_subscriber(self, identifier):
+        self._ensure_open()
         try:
             del self._broadcast_subscribers[identifier]
         except KeyError:
             raise ValueError("Broadcast subscriber '{}' unknown".format(identifier))
 
     def fire_task(self, msg, no_reply=False):
+        self._ensure_open()
         future = futures.Future()
         handled = False
 
@@ -175,15 +175,15 @@ class CommunicatorHelper(Communicator):
                 future.set_result(result)
                 handled = True
                 break
-            except TaskRejected:
+            except exceptions.TaskRejected:
                 pass
             except Exception:  # pylint: disable=broad-except
-                future.set_exception(RemoteException(sys.exc_info()))
+                future.set_exception(exceptions.RemoteException(sys.exc_info()))
                 handled = True
                 break
 
         if not handled:
-            future.set_exception(TaskRejected("Rejected by all subscribers"))
+            future.set_exception(exceptions.TaskRejected("Rejected by all subscribers"))
 
         if no_reply:
             return None
@@ -191,20 +191,26 @@ class CommunicatorHelper(Communicator):
         return future
 
     def fire_rpc(self, recipient_id, msg):
+        self._ensure_open()
         try:
             subscriber = self._rpc_subscribers[recipient_id]
         except KeyError:
-            raise UnroutableError("Unknown rpc recipient '{}'".format(recipient_id))
+            raise exceptions.UnroutableError("Unknown rpc recipient '{}'".format(recipient_id))
         else:
             future = futures.Future()
             try:
                 future.set_result(subscriber(self, msg))
             except Exception:  # pylint: disable=broad-except
-                future.set_exception(RemoteException(sys.exc_info()))
+                future.set_exception(exceptions.RemoteException(sys.exc_info()))
 
             return future
 
     def fire_broadcast(self, body, sender=None, subject=None, correlation_id=None):
+        self._ensure_open()
         for subscriber in self._broadcast_subscribers.values():
             subscriber(self, body=body, sender=sender, subject=subject, correlation_id=correlation_id)
         return True
+
+    def _ensure_open(self):
+        if self.is_closed():
+            raise exceptions.CommunicatorClosed
