@@ -1,6 +1,6 @@
-from __future__ import absolute_import
-import kiwipy
 import unittest
+
+import kiwipy
 
 from .utils import CommunicatorTester
 

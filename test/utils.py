@@ -5,15 +5,12 @@ I've had to disable invalid-name for some portions of this file as I use the con
 that all caps 'variable' names mean that it's a constant.
 """
 
-from __future__ import absolute_import
 import abc
-import six
 
 import kiwipy
 
 
-@six.add_metaclass(abc.ABCMeta)
-class CommunicatorTester:
+class CommunicatorTester(metaclass=abc.ABCMeta):
     # Disable invalid name because I use caps for constants which the linter doesn't like
     # also disable no-member for superclass calls because we use this as a mixin that gets used
     # with unittest.TestCase
@@ -24,7 +21,7 @@ class CommunicatorTester:
     communicator = None
 
     def setUp(self):
-        super(CommunicatorTester, self).setUp()
+        super().setUp()
         self.communicator = self.create_communicator()
 
     def tearDown(self):
@@ -335,6 +332,7 @@ class CommunicatorTester:
 
     def test_broadcast_noone_listening(self):
         """ Check that it's not an error to send a broadcast if no one is listening"""
-        self.communicator.broadcast_send('into the ether')
+        result = self.communicator.broadcast_send('into the ether')
+        self.assertIs(True, result)
 
     # endregion

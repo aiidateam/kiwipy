@@ -1,10 +1,8 @@
-from __future__ import absolute_import
 import abc
 import concurrent.futures
 import sys
 
 import shortuuid
-import six
 
 from . import futures
 
@@ -37,7 +35,6 @@ class DuplicateSubscriberIdentifier(Exception):
 TimeoutError = concurrent.futures.TimeoutError  # pylint: disable=redefined-builtin
 
 
-@six.add_metaclass(abc.ABCMeta)
 class Communicator:
     """
     The interface for a communicator used to both send and receive various

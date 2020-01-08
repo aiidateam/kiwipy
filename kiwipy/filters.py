@@ -1,7 +1,5 @@
-from __future__ import absolute_import
 import re
 import typing
-import six
 
 __all__ = ['BroadcastFilter']
 
@@ -40,7 +38,7 @@ class BroadcastFilter:
 
     @classmethod
     def _ensure_filter(cls, filter_value):
-        if isinstance(filter_value, six.string_types):
+        if isinstance(filter_value, str):
             return re.compile(filter_value.replace('.', '[.]').replace('*', '.*')).match
         if isinstance(filter_value, typing.re.Pattern):
             return filter_value.match

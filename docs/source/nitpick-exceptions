@@ -18,6 +18,6 @@ py:class  topika.IncomingMessage
 py:class  topika.message.IncomingMessage
 py:class  topika.Message
 
-py:class  six.string_types
+py:class  str
 
 py:class  tornado.concurrent.Future

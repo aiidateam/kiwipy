@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-from __future__ import print_function
 import asyncio
 import concurrent.futures
 from concurrent.futures import Future as ThreadFuture
@@ -11,6 +9,7 @@ import threading
 
 import shortuuid
 import aio_pika
+import pamqp
 
 import kiwipy
 from . import defaults
@@ -92,7 +91,7 @@ class RmqSubscriber:
         :param testing_mode: Run in testing mode: all queues and exchanges
             will be temporary
         """
-        super(RmqSubscriber, self).__init__()
+        super().__init__()
 
         self._connection = connection
         self._channel = None  # type: aio_pika.Channel
@@ -299,7 +298,7 @@ class RmqCommunicator:
         :param testing_mode: Run in testing mode: all queues and exchanges
             will be temporary
         """
-        super(RmqCommunicator, self).__init__()
+        super().__init__()
 
         self._connection = connection
         self._loop = connection.loop
@@ -529,7 +528,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         comm_thread.join()
 
     def add_rpc_subscriber(self, subscriber, identifier=None):
-
         coro = self._communicator.add_rpc_subscriber(self._wrap_subscriber(subscriber), identifier)
         return self._run_task(coro)
 
@@ -571,7 +569,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                                                  sender=sender,
                                                  subject=subject,
                                                  correlation_id=correlation_id)
-        return self._run_task(coro)
+        result = self._run_task(coro)
+        return isinstance(result, pamqp.specification.Basic.Ack)
 
     def _send_message(self, coro):
         send_future = kiwipy.Future()

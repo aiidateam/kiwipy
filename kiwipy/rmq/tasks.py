@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import asyncio
 import collections
 import logging
@@ -42,16 +41,16 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         :param connection: An RMQ connection
         :type connection: :class:`aio_pika.Connection`
         :param exchange_name: the name of the exchange to use
-        :type exchange_name: :class:`six.string_types`
+        :type exchange_name: :class:`str`
         :param queue_name: the name of the task queue to use
-        :type queue_name: :class:`six.string_types`
+        :type queue_name: :class:`str`
         :param decoder: A message decoder
         :param encoder: A response encoder
         """
-        super(RmqTaskSubscriber, self).__init__(connection,
-                                                exchange_name=exchange_name,
-                                                exchange_params=exchange_params,
-                                                testing_mode=testing_mode)
+        super().__init__(connection,
+                         exchange_name=exchange_name,
+                         exchange_params=exchange_params,
+                         testing_mode=testing_mode)
 
         self._task_queue_name = queue_name
         self._testing_mode = testing_mode
@@ -81,7 +80,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             # Already connected
             return
 
-        await super(RmqTaskSubscriber, self).connect()
+        await super().connect()
         await self.channel().set_qos(prefetch_count=self._prefetch_count, prefetch_size=self._prefetch_size)
 
         await self._create_task_queue()
@@ -194,13 +193,13 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                  confirm_deliveries=True,
                  testing_mode=False):
         # pylint: disable=too-many-arguments
-        super(RmqTaskPublisher, self).__init__(connection,
-                                               exchange_name=exchange_name,
-                                               exchange_params=exchange_params,
-                                               encoder=encoder,
-                                               decoder=decoder,
-                                               confirm_deliveries=confirm_deliveries,
-                                               testing_mode=testing_mode)
+        super().__init__(connection,
+                         exchange_name=exchange_name,
+                         exchange_params=exchange_params,
+                         encoder=encoder,
+                         decoder=decoder,
+                         confirm_deliveries=confirm_deliveries,
+                         testing_mode=testing_mode)
         self._task_queue_name = task_queue_name
 
     async def task_send(self, task, no_reply=False):
