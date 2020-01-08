@@ -16,10 +16,6 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
 import os
 import sys
 
@@ -35,7 +31,6 @@ author = 'Martin Uhrin'
 version = '.'.join(kiwipy.__version__.split('.')[:2])
 # The full version, including alpha/beta/rc tags.
 release = kiwipy.__version__
-
 
 # -- General configuration ---------------------------------------------------
 
@@ -79,7 +74,6 @@ exclude_patterns = []
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
 
-
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
@@ -108,12 +102,10 @@ html_static_path = ['_static']
 #
 # html_sidebars = {}
 
-
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'kiwipydoc'
-
 
 # -- Options for LaTeX output ------------------------------------------------
 
@@ -139,9 +131,9 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'kiwipy.tex', 'kiwipy Documentation',
-     'Martin Uhrin', 'manual'),
+    (master_doc, 'kiwipy.tex', 'kiwipy Documentation', 'Martin Uhrin', 'manual'),
 ]
+
 
 def run_apidoc(_):
     """Runs sphinx-apidoc when building the documentation.
@@ -167,19 +159,23 @@ def run_apidoc(_):
         cmd_path = os.path.abspath(os.path.join(sys.prefix, 'bin', 'sphinx-apidoc'))
 
     options = [
-        '-o', apidoc_dir, package_dir,
+        '-o',
+        apidoc_dir,
+        package_dir,
         '--private',
         '--force',
         '--no-headings',
         '--module-first',
         '--no-toc',
-        '--maxdepth', '4',
+        '--maxdepth',
+        '4',
     ]
 
     # See https://stackoverflow.com/a/30144019
     env = os.environ.copy()
     env["SPHINX_APIDOC_OPTIONS"] = 'members,special-members,private-members,undoc-members,show-inheritance'
     subprocess.check_call([cmd_path] + options, env=env)
+
 
 def setup(app):
     app.connect('builder-inited', run_apidoc)
@@ -189,11 +185,7 @@ def setup(app):
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, 'kiwipy', 'kiwipy Documentation',
-     [author], 1)
-]
-
+man_pages = [(master_doc, 'kiwipy', 'kiwipy Documentation', [author], 1)]
 
 # -- Options for Texinfo output ----------------------------------------------
 
@@ -201,11 +193,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'kiwipy', 'kiwipy Documentation',
-     author, 'kiwipy', 'One line description of project.',
+    (master_doc, 'kiwipy', 'kiwipy Documentation', author, 'kiwipy', 'One line description of project.',
      'Miscellaneous'),
 ]
-
 
 # -- Options for Epub output -------------------------------------------------
 
@@ -224,12 +214,11 @@ epub_title = project
 # A list of files that should not be packed into the epub file.
 epub_exclude_files = ['search.html']
 
-
 # -- Extension configuration -------------------------------------------------
 
 # Warnings to ignore when using the -n (nitpicky) option
 # We should ignore any python built-in exception, for instance
-nitpick_ignore = [('py:class','Warning'), ('py:class', 'exceptions.Warning')]
+nitpick_ignore = [('py:class', 'Warning'), ('py:class', 'exceptions.Warning')]
 
 for line in open('nitpick-exceptions'):
     if line.strip() == "" or line.startswith("#"):

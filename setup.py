@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
 from setuptools import setup
 
 __author__ = "Martin Uhrin"
@@ -30,9 +29,9 @@ setup(name="kiwipy",
       install_requires=[
           'shortuuid',
       ],
-      python_requires=">=2.7,!=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*",
+      python_requires=">=3.5",
       extras_require={
-          'rmq': ['aio-pika', 'pyyaml'],
+          'rmq': ['aio-pika', 'pyyaml~=5.1'],
           'dev': [
               'async_generator',
               'pip',

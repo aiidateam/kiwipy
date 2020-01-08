@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import asyncio
 from collections import deque
 import copy
@@ -43,7 +42,7 @@ class BaseConnectionWithExchange:
         :type exchange_name: str
         :type exchange_params: dict or NoneType
         """
-        super(BaseConnectionWithExchange, self).__init__()
+        super().__init__()
 
         if exchange_params is None:
             exchange_params = copy.copy(self.DEFAULT_EXCHANGE_PARAMS)
@@ -113,7 +112,7 @@ class BasePublisherWithReplyQueue:
         :param decoder:
         :param confirm_deliveries:
         """
-        super(BasePublisherWithReplyQueue, self).__init__()
+        super().__init__()
 
         if exchange_params is None:
             exchange_params = copy.copy(self.DEFAULT_EXCHANGE_PARAMS)
