@@ -18,7 +18,7 @@ try:
         task_queue_name = "{}.{}".format(__file__, uuid.uuid4())
 
         task_pub = rmq.RmqTaskPublisher(connection,
-                                        task_queue_name=task_queue_name,
+                                        queue_name=task_queue_name,
                                         exchange_name=exchange_name,
                                         testing_mode=True)
         await task_pub.connect()

@@ -15,7 +15,7 @@ from . import utils
 
 _LOGGER = logging.getLogger(__name__)
 
-__all__ = ['RmqTaskSubscriber', 'RmqTaskPublisher']
+__all__ = ('RmqTaskSubscriber', 'RmqTaskPublisher', 'TaskQueue')
 
 TaskBody = collections.namedtuple('TaskBody', ('task', 'no_reply'))
 
@@ -60,7 +60,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._prefetch_count = prefetch_count
         self._consumer_tag = None
 
-        self._task_queue = None  # type: typing.Optional[aio_pika.Queue]
+        self._task_queue: typing.Optional[aio_pika.Queue] = None
         self._subscribers = []
         self._pending_tasks = []
 
@@ -84,6 +84,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         await self.channel().set_qos(prefetch_count=self._prefetch_count, prefetch_size=self._prefetch_size)
 
         await self._create_task_queue()
+
+    async def get(self, fail=True, timeout=5):
+        pass
 
     async def _create_task_queue(self):
         """Create and bind the task queue"""
@@ -185,7 +188,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
 
     def __init__(self,
                  connection,
-                 task_queue_name=defaults.TASK_QUEUE,
+                 queue_name=defaults.TASK_QUEUE,
                  exchange_name=defaults.MESSAGE_EXCHANGE,
                  exchange_params=None,
                  encoder=defaults.ENCODER,
@@ -200,7 +203,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                          decoder=decoder,
                          confirm_deliveries=confirm_deliveries,
                          testing_mode=testing_mode)
-        self._task_queue_name = task_queue_name
+        self._task_queue_name = queue_name
 
     async def task_send(self, task, no_reply=False):
         """Send a task for processing by a task subscriber.
@@ -220,7 +223,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
             body=body,
             correlation_id=str(uuid.uuid4()),
             reply_to=self._reply_queue.name,
-            delivery_mode=2  # Task messages need to be persistent
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT  # Task messages need to be persistent
         )
 
         result_future = None
@@ -233,3 +236,52 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
 
         assert published, "The task was not published to the exchange"
         return result_future
+
+
+class TaskQueue:
+    """Combines a task publisher and subscriber to create a work queue where you can do both"""
+
+    def __init__(self,
+                 connection,
+                 exchange_name=defaults.MESSAGE_EXCHANGE,
+                 queue_name=defaults.TASK_QUEUE,
+                 decoder=defaults.DECODER,
+                 encoder=defaults.ENCODER,
+                 exchange_params=None,
+                 prefetch_size=defaults.TASK_PREFETCH_SIZE,
+                 prefetch_count=defaults.TASK_PREFETCH_COUNT,
+                 testing_mode=False):
+        # pylint: disable=too-many-arguments
+        self._publisher = RmqTaskPublisher(connection,
+                                           exchange_name=exchange_name,
+                                           exchange_params=exchange_params,
+                                           queue_name=queue_name,
+                                           decoder=decoder,
+                                           encoder=encoder,
+                                           testing_mode=testing_mode)
+        self._subscriber = RmqTaskSubscriber(connection,
+                                             exchange_name=exchange_name,
+                                             exchange_params=exchange_params,
+                                             queue_name=queue_name,
+                                             decoder=decoder,
+                                             encoder=encoder,
+                                             prefetch_size=prefetch_size,
+                                             prefetch_count=prefetch_count,
+                                             testing_mode=testing_mode)
+
+    async def task_send(self, task, no_reply=False):
+        return await self._publisher.task_send(task, no_reply)
+
+    async def add_task_subscriber(self, subscriber):
+        return await self._subscriber.add_task_subscriber(subscriber)
+
+    async def remove_task_subscriber(self, subscriber):
+        return await self._subscriber.remove_task_subscriber(subscriber)
+
+    async def connect(self):
+        await self._subscriber.connect()
+        await self._publisher.connect()
+
+    async def disconnect(self):
+        await self._subscriber.disconnect()
+        await self._publisher.disconnect()

@@ -150,6 +150,34 @@ async def test_task_no_reply(communicator: kiwipy.rmq.RmqCommunicator):
     assert result is None
 
 
+@pytest.mark.asyncio
+async def test_custom_tasks_queue(communicator: kiwipy.rmq.RmqCommunicator):
+    """Test that we don't get a reply if we don't ask for one, i.e. fire-and-forget"""
+    TASK = 'The meaning?'  # pylint: disable=invalid-name
+    RESULT = 42  # pylint: disable=invalid-name
+
+    tasks = []
+
+    task_future = asyncio.Future()
+
+    def on_task(_comm, task):
+        tasks.append(task)
+        task_future.set_result(RESULT)
+        return RESULT
+
+    custom_queue = await communicator.task_queue('custom-queue')
+
+    await custom_queue.add_task_subscriber(on_task)
+    result = await custom_queue.task_send(TASK, no_reply=True)
+
+    # Make sure the task actually gets done
+    await task_future
+
+    assert len(tasks) == 1
+    assert tasks[0] == TASK
+    assert result is None
+
+
 # endregion
 
 # region Broadcast

@@ -8,7 +8,7 @@ import traceback
 
 import kiwipy
 
-__all__ = []
+__all__ = ()
 
 # The key used in messages to give information about the host that send a message
 HOST_KEY = 'host'

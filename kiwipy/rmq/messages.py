@@ -3,6 +3,7 @@ from collections import deque
 import copy
 import logging
 import traceback
+import typing
 import uuid
 
 import aio_pika
@@ -55,8 +56,8 @@ class BaseConnectionWithExchange:
         self._exchange_params = exchange_params
         self._loop = self._connection.loop
 
-        self._channel = None  # type: aio_pika.Channel
-        self._exchange = None  # type: aio_pika.Exchange
+        self._channel: typing.Optional[aio_pika.Channel] = None
+        self._exchange: typing.Optional[aio_pika.Exchange] = None
         self._is_closing = False
 
     @property
@@ -133,9 +134,9 @@ class BasePublisherWithReplyQueue:
         self._awaiting_response = {}
 
         self._connection = connection
-        self._channel = None  # type: aio_pika.Channel
-        self._exchange = None  # type: aio_pika.Exchange
-        self._reply_queue = None  # type: aio_pika.Queue
+        self._channel: typing.Optional[type:aio_pika.Channel] = None
+        self._exchange: typing.Optional[aio_pika.Exchange] = None
+        self._reply_queue: typing.Optional[aio_pika.Queue] = None
 
         self._is_closing = False
 

@@ -41,3 +41,27 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
 
         message = rpc_future.result(self.WAIT_TIMEOUT)
         self.assertEqual(MESSAGE, message)
+
+    def test_custom_task_queue(self):
+        """Test creating a custom task queue"""
+        TASK = 'The meaning?'
+        RESULT = 42
+        result_future = kiwipy.Future()
+
+        tasks = []
+
+        def on_task(_comm, task):
+            tasks.append(task)
+            return result_future
+
+        task_queue = self.communicator.task_queue('test-queue')
+
+        task_queue.add_task_subscriber(on_task)
+        task_future = task_queue.task_send(TASK).result(timeout=self.WAIT_TIMEOUT)
+
+        result_future.set_result(42)
+
+        result = task_future.result(timeout=self.WAIT_TIMEOUT)
+
+        self.assertEqual(TASK, tasks[0])
+        self.assertEqual(RESULT, result)
