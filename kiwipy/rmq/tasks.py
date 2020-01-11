@@ -210,7 +210,7 @@ class RmqIncomingTask:
     def state(self) -> str:
         return self._state
 
-    def process(self):
+    def process(self) -> asyncio.Future:
         if self._state != TASK_PENDING:
             raise asyncio.InvalidStateError("The task is {}".format(self._state))
 

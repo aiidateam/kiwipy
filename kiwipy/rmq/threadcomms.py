@@ -3,19 +3,18 @@ from contextlib import contextmanager
 import concurrent.futures
 from concurrent.futures import Future as ThreadFuture
 import functools
-from functools import partial
 import logging
-import threading
 
 import aio_pika
 import pamqp
 
 import kiwipy
+from . import aiothreads
 from . import defaults
 from . import communicator
 from . import tasks
 
-__all__ = ('RmqThreadCommunicator',)
+__all__ = ('RmqThreadCommunicator', 'RmqThreadTaskQueue')
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,7 +99,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                                                           task_prefetch_count=task_prefetch_count,
                                                           testing_mode=testing_mode)
         self._loop = self._communicator.loop  # type: asyncio.AbstractEventLoop
-        self._communicator_thread = None
+        self._loop_scheduler = aiothreads.LoopScheduler(self._loop, 'RMQ communicator', self.TASK_TIMEOUT)
         self._stop_signal = None
         self._closed = False
 
@@ -124,67 +123,45 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._closed = True
 
     def start(self):
-        assert self._communicator_thread is None, "Already running"
-
-        start_future = ThreadFuture()
-
-        self._communicator_thread = threading.Thread(target=self._run_loop,
-                                                     name="Communications thread for '{}'".format(self._communicator),
-                                                     args=(start_future,),
-                                                     daemon=True)
-        self._communicator_thread.start()
-        start_future.result()
+        self._loop_scheduler.start()
+        self._loop_scheduler.arun(self._communicator.connect)
 
     def stop(self):
-        comm_thread = self._communicator_thread
-        if comm_thread is None:
+        if not self._loop_scheduler.is_running():
             return
 
-        stop_future = ThreadFuture()
-        # Send the stop signal
-        self._loop.call_soon_threadsafe(partial(self._stop_signal.set_result, stop_future))
-        # Wait for the result in case there was an exception
-        stop_future.result()
-        comm_thread.join()
+        self._loop_scheduler.arun(self._communicator.disconnect)
+        self._loop_scheduler.stop()
 
     def add_rpc_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
-        coro = self._communicator.add_rpc_subscriber(self._wrap_subscriber(subscriber), identifier)
-        return self._run_task(coro)
+        return self._loop_scheduler.arun(self._communicator.add_rpc_subscriber, self._wrap_subscriber(subscriber),
+                                         identifier)
 
     def remove_rpc_subscriber(self, identifier):
         self._ensure_open()
-        coro = self._communicator.remove_rpc_subscriber(identifier)
-        return self._run_task(coro)
+        return self._loop_scheduler.arun(self._communicator.remove_rpc_subscriber, identifier)
 
     def add_task_subscriber(self, subscriber):
         self._ensure_open()
-        coro = self._communicator.add_task_subscriber(self._wrap_subscriber(subscriber))
-        return self._run_task(coro)
+        return self._loop_scheduler.arun(self._communicator.add_task_subscriber, self._wrap_subscriber(subscriber))
 
     def remove_task_subscriber(self, subscriber):
         self._ensure_open()
-        coro = self._communicator.remove_task_subscriber(subscriber)
-        return self._run_task(coro)
+        return self._loop_scheduler.arun(self._communicator.remove_task_subscriber, subscriber)
 
     def add_broadcast_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
-        coro = self._communicator.add_broadcast_subscriber(subscriber, identifier)
-        return self._run_task(coro)
+        return self._loop_scheduler.arun(self._communicator.add_broadcast_subscriber, subscriber, identifier)
 
     def remove_broadcast_subscriber(self, identifier):
         self._ensure_open()
-        coro = self._communicator.remove_broadcast_subscriber(identifier)
-        return self._run_task(coro)
+        return self._loop_scheduler.arun(self._communicator.remove_broadcast_subscriber, identifier)
 
     def task_send(self, task, no_reply=False):
         self._ensure_open()
         self._ensure_running()
-        future = self._run_task(self._communicator.task_send(task, no_reply))
-        if no_reply:
-            return None
-
-        return future
+        return self._loop_scheduler.arun(self._communicator.task_send, task, no_reply)
 
     def task_queue(self,
                    queue_name: str,
@@ -192,34 +169,23 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                    prefetch_count=defaults.TASK_PREFETCH_COUNT):
         self._ensure_open()
         self._ensure_running()
-        coro = self._communicator.task_queue(queue_name, prefetch_size, prefetch_count)
-        aioqueue = self._run_task(coro)
-        return RmqThreadTaskQueue(aioqueue, self._run_task, self._wrap_subscriber)
+        aioqueue = self._loop_scheduler.arun(self._communicator.task_queue, queue_name, prefetch_size, prefetch_count)
+        return RmqThreadTaskQueue(aioqueue, self._loop_scheduler, self._wrap_subscriber)
 
     def rpc_send(self, recipient_id, msg):
         self._ensure_open()
         self._ensure_running()
-        return self._run_task(self._communicator.rpc_send(recipient_id, msg))
+        return self._loop_scheduler.arun(self._communicator.rpc_send, recipient_id, msg)
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         self._ensure_open()
         self._ensure_running()
-        coro = self._communicator.broadcast_send(body=body,
-                                                 sender=sender,
-                                                 subject=subject,
-                                                 correlation_id=correlation_id)
-        result = self._run_task(coro)
+        result = self._loop_scheduler.arun(self._communicator.broadcast_send,
+                                           body=body,
+                                           sender=sender,
+                                           subject=subject,
+                                           correlation_id=correlation_id)
         return isinstance(result, pamqp.specification.Basic.Ack)
-
-    def _send_message(self, coro):
-        send_future = kiwipy.Future()
-
-        async def do_task():
-            with kiwipy.capture_exceptions(send_future):
-                send_future.set_result((await coro()))
-
-        self._loop.call_soon(do_task)
-        return send_future.result()
 
     def _wrap_subscriber(self, subscriber):
         """"
@@ -230,7 +196,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         @functools.wraps(subscriber)
         def wrapper(*args, **kwargs):
             result = subscriber(*args, **kwargs)
-            if isinstance(result, kiwipy.Future):
+            if isinstance(result, ThreadFuture):
                 result = self._wrap_future(result)
             return result
 
@@ -254,100 +220,10 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         kiwi_future.add_done_callback(done)
         return aio_future
 
-    def _loop_chain_future(self, aio_future: asyncio.Future, kiwi_future: kiwipy.Future):
-
-        def done(done_future: asyncio.Future):
-            # Copy over the future
-            try:
-                result = done_future.result()
-                if asyncio.isfuture(result):
-                    # Change the future type to a kiwi one
-                    fut = kiwipy.Future()
-                    self._loop_chain_future(result, fut)
-                    result = fut
-
-                kiwi_future.set_result(result)
-            except asyncio.CancelledError:
-                kiwi_future.cancel()
-            except Exception as exception:  # pylint: disable=broad-except
-                kiwi_future.set_exception(exception)
-
-        aio_future.add_done_callback(done)
-        return kiwi_future
-
-    def _run_task(self, coro):
-        """
-        Run a coroutine on the event loop and return the result.  It may take a little time for the loop
-        to get around to scheduling it so we use a timeout as set by the TASK_TIMEOUT class constant.
-
-        :param coro: the coroutine to run
-        :return: the result of running the coroutine
-        """
-        return self._schedule_task(coro).result(timeout=self.TASK_TIMEOUT)
-
-    def _schedule_task(self, coro) -> kiwipy.Future:
-        """
-        Schedule a coroutine on the loop and return the corresponding future
-        """
-        kiwi_future = kiwipy.Future()
-
-        def loop_schedule():
-            # Here we're on the comms thread again
-            async def proxy():
-                if not kiwi_future.cancelled():
-                    return await coro
-
-            coro_future = asyncio.ensure_future(proxy(), loop=self._loop)
-            self._loop_chain_future(coro_future, kiwi_future)
-
-        handle = self._loop.call_soon_threadsafe(loop_schedule)
-
-        def handle_cancel(done_future: kiwipy.Future):
-            """Function to propagate a cancellation of the kiwipy future up to the loop callback"""
-            if done_future.cancelled():
-                # Don't know if we're allowed to call cancel from a thread other than comms thread!
-                # If not, we'll need to call_soon_threadsafe
-                handle.cancel()
-
-        kiwi_future.add_done_callback(handle_cancel)
-
-        return kiwi_future
-
     def _ensure_running(self):
-        if self._communicator_thread is not None:
+        if self._loop_scheduler.is_running():
             return
         self.start()
-
-    def _run_loop(self, start_future):
-        """Here we are on the comms thread"""
-        _LOGGER.debug('Starting event loop (id %s) on %s', id(self._loop), threading.current_thread())
-
-        self._stop_signal = self._loop.create_future()
-
-        async def do_connect():
-            try:
-                # Connect
-                await self._communicator.connect()
-                start_future.set_result(True)
-            except Exception as exception:  # pylint: disable=broad-except
-                start_future.set_exception(exception)
-            else:
-                # Wait to stop
-                stop_future = await self._stop_signal
-                try:
-                    # Now disconnect
-                    with kiwipy.capture_exceptions(stop_future):
-                        await self._communicator.disconnect()
-                finally:
-                    stop_future.set_result(True)
-
-        self._loop.run_until_complete(do_connect())
-
-        # The loop is finished and the connection has been disconnected
-        self._communicator_thread = None
-
-        _LOGGER.debug('Event loop stopped on %s', threading.current_thread())
-        asyncio.set_event_loop(None)
 
     def _ensure_open(self):
         if self.is_closed():
@@ -355,40 +231,64 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
 
 class RmqThreadTaskQueue:
+    """
+    Thread task queue.
+    """
 
-    def __init__(self, task_queue: tasks.RmqTaskQueue, run_task, wrap_subscriber):
+    def __init__(self, task_queue: tasks.RmqTaskQueue, loop_scheduler: aiothreads.LoopScheduler, wrap_subscriber):
         self._task_queue = task_queue
-        self._run_task = run_task
+        self._loop_scheduler = loop_scheduler
         self._wrap_subscriber = wrap_subscriber
 
-    def task_send(self, task, no_reply=False):
-        future = self._run_task(self._task_queue.task_send(task, no_reply))
-        if no_reply:
-            return None
+    def __iter__(self):
+        for task in self._loop_scheduler.aiter(self._task_queue):
+            yield RmqThreadIncomingTask(task, self._loop_scheduler)
 
-        return future
+    def task_send(self, task, no_reply=False):
+        return self._loop_scheduler.arun(self._task_queue.task_send, task, no_reply)
 
     def add_task_subscriber(self, subscriber):
-        coro = self._task_queue.add_task_subscriber(self._wrap_subscriber(subscriber))
-        return self._run_task(coro)
+        return self._loop_scheduler.arun(self._task_queue.add_task_subscriber, self._wrap_subscriber(subscriber))
 
     def remove_task_subscriber(self, subscriber):
-        coro = self._task_queue.remove_task_subscriber(subscriber)
-        return self._run_task(coro)
+        # Note: This probably doesn't work as in add_task_subscriber we wrap it and so
+        # it will be a different function here
+        return self._loop_scheduler.arun(self._task_queue.remove_task_subscriber, subscriber)
 
     @contextmanager
-    def next_task(self):
+    def next_task(self, timeout=5.):
+        with self._loop_scheduler.actx(self._task_queue.next_task(timeout=timeout)) as task:
+            yield RmqThreadIncomingTask(task, self._loop_scheduler)
 
-        async def get_next_task():
-            async with self._task_queue.next_task() as task:
-                task.process()
-                return task
 
-        task = self._run_task(get_next_task())
-        try:
-            yield task
-        finally:
-            pass
+class RmqThreadIncomingTask:
+
+    def __init__(self, task: tasks.RmqIncomingTask, loop_scheduler):
+        self._task = task
+        self._loop_scheduler = loop_scheduler
+
+    @property
+    def body(self) -> str:
+        return self._task.body
+
+    @property
+    def no_reply(self) -> bool:
+        return self._task.no_reply
+
+    @property
+    def state(self) -> str:
+        return self._task.state
+
+    def process(self) -> ThreadFuture:
+        return aiothreads.aio_future_to_thread(self._task.process())
+
+    def requeue(self):
+        self._task.requeue()
+
+    @contextmanager
+    def processing(self):
+        with self._loop_scheduler.ctx(self._task.processing()) as outcome:
+            yield outcome
 
 
 def connect(connection_params=None,
