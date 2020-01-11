@@ -64,6 +64,9 @@ class BaseConnectionWithExchange:
     def is_closing(self):
         return self._is_closing
 
+    def loop(self) -> asyncio.BaseEventLoop:
+        return self._loop
+
     def get_exchange_name(self):
         return self._exchange_name
 

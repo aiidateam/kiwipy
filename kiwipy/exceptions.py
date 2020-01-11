@@ -3,7 +3,7 @@ import concurrent.futures
 
 __all__ = [
     'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError', 'TimeoutError',
-    'DuplicateSubscriberIdentifier', 'CommunicatorClosed'
+    'DuplicateSubscriberIdentifier', 'CommunicatorClosed', 'InvalidStateError'
 ]
 
 
@@ -29,6 +29,10 @@ class DuplicateSubscriberIdentifier(Exception):
 
 class CommunicatorClosed(Exception):
     """Raised when an operation is attempted on a closed communicator"""
+
+
+class InvalidStateError(Exception):
+    """Raise when an object is in an invalid state to perform the desired action"""
 
 
 TimeoutError = concurrent.futures.TimeoutError  # pylint: disable=redefined-builtin

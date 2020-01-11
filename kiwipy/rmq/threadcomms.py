@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import contextmanager
 import concurrent.futures
 from concurrent.futures import Future as ThreadFuture
 import functools
@@ -98,7 +99,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                                                           task_prefetch_size=task_prefetch_size,
                                                           task_prefetch_count=task_prefetch_count,
                                                           testing_mode=testing_mode)
-        self._loop: asyncio.AbstractEventLoop = self._communicator.loop
+        self._loop = self._communicator.loop  # type: asyncio.AbstractEventLoop
         self._communicator_thread = None
         self._stop_signal = None
         self._closed = False
@@ -355,7 +356,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
 class RmqThreadTaskQueue:
 
-    def __init__(self, task_queue: tasks.TaskQueue, run_task, wrap_subscriber):
+    def __init__(self, task_queue: tasks.RmqTaskQueue, run_task, wrap_subscriber):
         self._task_queue = task_queue
         self._run_task = run_task
         self._wrap_subscriber = wrap_subscriber
@@ -374,6 +375,20 @@ class RmqThreadTaskQueue:
     def remove_task_subscriber(self, subscriber):
         coro = self._task_queue.remove_task_subscriber(subscriber)
         return self._run_task(coro)
+
+    @contextmanager
+    def next_task(self):
+
+        async def get_next_task():
+            async with self._task_queue.next_task() as task:
+                task.process()
+                return task
+
+        task = self._run_task(get_next_task())
+        try:
+            yield task
+        finally:
+            pass
 
 
 def connect(connection_params=None,

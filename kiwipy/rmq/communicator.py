@@ -266,7 +266,7 @@ class RmqCommunicator:
     """
 
     def __init__(self,
-                 connection,
+                 connection: aio_pika.Connection,
                  message_exchange=defaults.MESSAGE_EXCHANGE,
                  task_exchange=defaults.TASK_EXCHANGE,
                  task_queue=defaults.TASK_QUEUE,
@@ -279,7 +279,6 @@ class RmqCommunicator:
         # pylint: disable=too-many-arguments
         """
         :param connection: The RMQ connector object
-        :type connection: :class:`aio_pika.Connection`
         :param message_exchange: The name of the RMQ message exchange to use
         :type message_exchange: str
         :param task_exchange: The name of the RMQ task exchange to use
@@ -318,14 +317,14 @@ class RmqCommunicator:
                                                decoder=decoder,
                                                testing_mode=testing_mode)
 
-        self._default_task_queue = tasks.TaskQueue(connection,
-                                                   exchange_name=task_exchange,
-                                                   queue_name=task_queue,
-                                                   decoder=decoder,
-                                                   encoder=encoder,
-                                                   prefetch_size=task_prefetch_size,
-                                                   prefetch_count=task_prefetch_count,
-                                                   testing_mode=testing_mode)
+        self._default_task_queue = tasks.RmqTaskQueue(connection,
+                                                      exchange_name=task_exchange,
+                                                      queue_name=task_queue,
+                                                      decoder=decoder,
+                                                      encoder=encoder,
+                                                      prefetch_size=task_prefetch_size,
+                                                      prefetch_count=task_prefetch_count,
+                                                      testing_mode=testing_mode)
 
     async def __aenter__(self):
         await self.connect()
@@ -406,16 +405,16 @@ class RmqCommunicator:
     async def task_queue(self,
                          queue_name: str,
                          prefetch_size=defaults.TASK_PREFETCH_SIZE,
-                         prefetch_count=defaults.TASK_PREFETCH_COUNT) -> tasks.TaskQueue:
+                         prefetch_count=defaults.TASK_PREFETCH_COUNT) -> tasks.RmqTaskQueue:
         """Create a new task queue"""
-        queue = tasks.TaskQueue(self._connection,
-                                exchange_name=self._task_exchange,
-                                queue_name=queue_name,
-                                decoder=self._decoder,
-                                encoder=self._encoder,
-                                prefetch_size=prefetch_size,
-                                prefetch_count=prefetch_count,
-                                testing_mode=self._testing_mode)
+        queue = tasks.RmqTaskQueue(self._connection,
+                                   exchange_name=self._task_exchange,
+                                   queue_name=queue_name,
+                                   decoder=self._decoder,
+                                   encoder=self._encoder,
+                                   prefetch_size=prefetch_size,
+                                   prefetch_count=prefetch_count,
+                                   testing_mode=self._testing_mode)
         await queue.connect()
         self._task_queues.append(queue)
         return queue

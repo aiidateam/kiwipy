@@ -1,12 +1,14 @@
 import asyncio
 import collections
+import contextlib
 import logging
 import uuid
 import sys
-import traceback
-import typing
+from typing import Optional
+import weakref
 
 import aio_pika
+from async_generator import async_generator, yield_, asynccontextmanager
 
 import kiwipy
 from . import defaults
@@ -15,9 +17,9 @@ from . import utils
 
 _LOGGER = logging.getLogger(__name__)
 
-__all__ = ('RmqTaskSubscriber', 'RmqTaskPublisher', 'TaskQueue')
+__all__ = ('RmqTaskSubscriber', 'RmqTaskPublisher', 'RmqTaskQueue', 'RmqIncomingTask')
 
-TaskBody = collections.namedtuple('TaskBody', ('task', 'no_reply'))
+TaskInfo = collections.namedtuple('TaskBody', ('task', 'no_reply'))
 
 
 class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
@@ -60,7 +62,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._prefetch_count = prefetch_count
         self._consumer_tag = None
 
-        self._task_queue: typing.Optional[aio_pika.Queue] = None
+        self._task_queue: Optional[aio_pika.Queue] = None
         self._subscribers = []
         self._pending_tasks = []
 
@@ -85,8 +87,32 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         await self._create_task_queue()
 
-    async def get(self, fail=True, timeout=5):
-        pass
+    @async_generator
+    async def __aiter__(self):
+        tasks = []
+        try:
+            while True:
+                task = RmqIncomingTask(self, await self._task_queue.get(timeout=1.))
+                tasks.append(task)
+                await yield_(task)
+        except aio_pika.exceptions.QueueEmpty:
+            return
+        finally:
+            # Put back any tasks that are still pending (i.e. not processed or to be processed)
+            for task in tasks:
+                if task.state == TASK_PENDING:
+                    task.requeue()
+
+    @asynccontextmanager
+    @async_generator
+    async def next_task(self, no_ack=False, fail=True, timeout=defaults.TASK_FETCH_TIMEOUT):
+        message = await self._task_queue.get(no_ack=no_ack, fail=fail, timeout=timeout)
+        task = RmqIncomingTask(self, message)
+        try:
+            await yield_(task)
+        finally:
+            if task.state == TASK_PENDING:
+                task.requeue()
 
     async def _create_task_queue(self):
         """Create and bind the task queue"""
@@ -102,62 +128,38 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                                                              arguments=arguments)
         await self._task_queue.bind(self._exchange, routing_key=self._task_queue.name)
 
-    async def _on_task(self, message):
+    async def _on_task(self, message: aio_pika.IncomingMessage):
         """
         :param message: The aio_pika RMQ message
-        :type message: :class:`aio_pika.IncomingMessage`
         """
-        # pylint: disable=too-many-branches
-
-        with message.process(ignore_processed=True):
-            handled = False
-            # Decode the message tuple into a task body for easier use
-            task_body = TaskBody(*self._decode(message.body))  # type: TaskBody
+        # Decode the message tuple into a task body for easier use
+        rmq_task = RmqIncomingTask(self, message)
+        with rmq_task.processing() as outcome:
             for subscriber in self._subscribers:
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
-                    result = await subscriber(self, task_body.task)
+                    result = await subscriber(self, rmq_task.body)
 
                     # If a task returns a future it is not considered done until the chain of futures
                     # (i.e. if the first future resolves to a future and so on) finishes and produces
                     # a concrete result
                     while asyncio.isfuture(result):
-                        if not task_body.no_reply:
+                        if not rmq_task.no_reply:
                             await self._send_response(utils.pending_response(), message)
                         result = await result
                 except kiwipy.TaskRejected:
-                    # Keep trying to find one that will accept the task
+                    # Task was rejected by this subscriber, keep trying
                     continue
-                except kiwipy.CancelledError as exception:
-                    if not task_body.no_reply:
-                        reply_body = utils.cancelled_response(str(exception))
-                    handled = True  # Finished
-                except KeyboardInterrupt:  # pylint: disable=try-except-raise
-                    raise
+                except kiwipy.CancelledError:
+                    # The subscriber has cancelled their processing of the task
+                    outcome.cancel()
                 except Exception as exc:  # pylint: disable=broad-except
-                    if task_body.no_reply:
-                        # The user has asked for no reply so log an error so they see this exception
-                        _LOGGER.exception('The task excepted')
-                    else:
-                        # Send the exception back to the other side but log here at INFO level also
-                        reply_body = utils.exception_response(*sys.exc_info()[1:])
-                        _LOGGER.info('There was an exception in a task %s:\n%s', exc, traceback.format_exc())
-                    handled = True  # Finished
+                    # There was an exception during the processing of this task
+                    outcome.set_exception(exc)
                 else:
-                    # Create a reply message
-                    if not task_body.no_reply:
-                        reply_body = utils.result_response(result)
-                    handled = True  # Finished
-
-                if handled:
-                    message.ack()
-                    if not task_body.no_reply:
-                        await self._send_response(reply_body, message)
-                    break  # Done, do break the loop
-
-            if not handled:
-                # No one handled the task
-                message.reject(requeue=True)
+                    # All good
+                    outcome.set_result(result)
+                    break  # Got handled
 
     def _build_response_message(self, body, incoming_message):
         """
@@ -179,6 +181,108 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     async def _send_response(self, msg_body, incoming_message):
         msg = self._build_response_message(msg_body, incoming_message)
         await self._exchange.publish(msg, routing_key=incoming_message.reply_to)
+
+
+TASK_PENDING = 'pending'
+TASK_FINISHED = 'finished'
+TASK_PROCESSING = 'processing'
+TASK_REQUEUED = 'requeued'
+
+
+class RmqIncomingTask:
+
+    def __init__(self, subscriber: RmqTaskSubscriber, message: aio_pika.IncomingMessage):
+        self._subscriber = subscriber
+        self._message = message
+        self._task_info = TaskInfo(*subscriber._decode(message.body))  # pylint: disable=protected-access
+        self._state = TASK_PENDING
+        self._outcome_ref = None  # type: Optional[weakref.ReferenceType]
+
+    @property
+    def body(self) -> str:
+        return self._task_info.task
+
+    @property
+    def no_reply(self) -> bool:
+        return self._task_info.no_reply
+
+    @property
+    def state(self) -> str:
+        return self._state
+
+    def process(self):
+        if self._state != TASK_PENDING:
+            raise asyncio.InvalidStateError("The task is {}".format(self._state))
+
+        self._state = TASK_PROCESSING
+        outcome = self._subscriber.loop().create_future()
+        # Rely on the done callback to signal the end of processing
+        outcome.add_done_callback(self._task_done)
+        # Or the user let's the future get destroyed
+        self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
+
+        return outcome
+
+    def requeue(self):
+        if self._state not in [TASK_PENDING, TASK_PROCESSING]:
+            raise asyncio.InvalidStateError("The task is {}".format(self._state))
+
+        self._state = TASK_REQUEUED
+        self._message.nack(requeue=True)
+        self._finalise()
+
+    @contextlib.contextmanager
+    def processing(self):
+        """Processing context.  The task should be done at the end otherwise it's assumed the caller doesn't
+        want to process it and it's sent back to the queue"""
+        if self._state != TASK_PENDING:
+            raise asyncio.InvalidStateError("The task is {}".format(self._state))
+
+        self._state = TASK_PROCESSING
+        outcome = self._subscriber.loop().create_future()
+        try:
+            yield outcome
+        finally:
+            if outcome.done():
+                self._task_done(outcome)
+            else:
+                self.requeue()
+
+    def _task_done(self, outcome: asyncio.Future):
+        assert outcome.done()
+        self._outcome_ref = None
+
+        if outcome.cancelled():
+            # Whoever took the task decided not to process it
+            self._state = TASK_PENDING
+        else:
+            # Permanently store the outcome
+            self._state = TASK_FINISHED
+            self._message.ack()
+            if not self.no_reply:
+                # Schedule a task to send the appropriate response
+                if outcome.exception():
+                    reply_body = utils.exception_response(*sys.exc_info()[1:])
+                else:
+                    reply_body = utils.result_response(outcome.result())
+                # pylint: disable=protected-access
+                self._subscriber.loop().create_task(self._subscriber._send_response(reply_body, self._message))
+
+        # Clean up
+        self._finalise()
+
+    def _outcome_destroyed(self, outcome_ref):
+        # This only happens if someone called self.process() and then let the future
+        # get destroyed without setting an outcome
+        assert outcome_ref is self._outcome_ref
+        # This task will no be processed
+        self._outcome_ref = None
+        self.requeue()
+
+    def _finalise(self):
+        self._outcome_ref = None
+        self._subscriber = None
+        self._message = None
 
 
 class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
@@ -238,7 +342,7 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
         return result_future
 
 
-class TaskQueue:
+class RmqTaskQueue:
     """Combines a task publisher and subscriber to create a work queue where you can do both"""
 
     def __init__(self,
@@ -269,7 +373,16 @@ class TaskQueue:
                                              prefetch_count=prefetch_count,
                                              testing_mode=testing_mode)
 
-    async def task_send(self, task, no_reply=False):
+    @async_generator
+    async def __aiter__(self):
+        # Have to do it this way rather than the more convenient yield from style because
+        # python doesn't support it for coroutines.  See:
+        # https://stackoverflow.com/questions/47376408/why-cant-i-yield-from-inside-an-async-function
+        async for task in self._subscriber:
+            await yield_(task)
+
+    async def task_send(self, task, no_reply: bool = False):
+        """Send a task to the queue"""
         return await self._publisher.task_send(task, no_reply)
 
     async def add_task_subscriber(self, subscriber):
@@ -277,6 +390,12 @@ class TaskQueue:
 
     async def remove_task_subscriber(self, subscriber):
         return await self._subscriber.remove_task_subscriber(subscriber)
+
+    @asynccontextmanager
+    @async_generator
+    async def next_task(self, no_ack=False, fail=True, timeout=defaults.TASK_FETCH_TIMEOUT):
+        async with self._subscriber.next_task(no_ack=no_ack, fail=fail, timeout=timeout) as task:
+            await yield_(task)
 
     async def connect(self):
         await self._subscriber.connect()
