@@ -2,7 +2,7 @@ import asyncio
 from functools import partial
 import copy
 import logging
-import typing
+import typing  # pylint: disable=unused-import
 
 import shortuuid
 import aio_pika
@@ -90,8 +90,8 @@ class RmqSubscriber:
         super().__init__()
 
         self._connection = connection
-        self._channel: typing.Optional[aio_pika.Channel] = None
-        self._exchange: typing.Optional[aio_pika.Exchange] = None
+        self._channel = None  # type: typing.Optional[aio_pika.Channel]
+        self._exchange = None  # type: typing.Optional[aio_pika.Exchange]
         self._exchange_name = message_exchange
         self._decode = decoder
         self._testing_mode = testing_mode
@@ -105,7 +105,7 @@ class RmqSubscriber:
 
         self._rpc_subscribers = {}
         self._broadcast_subscribers = {}
-        self._broadcast_queue: typing.Optional[aio_pika.Queue] = None  # type:
+        self._broadcast_queue = None  # type: typing.Optional[aio_pika.Queue]
         self._broadcast_consumer_tag = None
 
         self._active = False

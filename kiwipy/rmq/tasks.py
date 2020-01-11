@@ -4,7 +4,7 @@ import contextlib
 import logging
 import uuid
 import sys
-from typing import Optional
+from typing import Optional  # pylint: disable=unused-import
 import weakref
 
 import aio_pika
@@ -62,7 +62,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._prefetch_count = prefetch_count
         self._consumer_tag = None
 
-        self._task_queue: Optional[aio_pika.Queue] = None
+        self._task_queue = None  # type: Optional[aio_pika.Queue]
         self._subscribers = []
         self._pending_tasks = []
 
