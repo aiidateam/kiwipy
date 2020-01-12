@@ -7,9 +7,9 @@ import logging
 
 import aio_pika
 import pamqp
+from pytray import aiothreads
 
 import kiwipy
-from . import aiothreads
 from . import defaults
 from . import communicator
 from . import tasks

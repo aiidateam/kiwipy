@@ -26,7 +26,7 @@ setup(name="kiwipy",
           'Programming Language :: Python :: 3.7',
       ],
       keywords='communication messaging rpc broadcast',
-      install_requires=['shortuuid', 'async_generator'],
+      install_requires=['shortuuid', 'async_generator', 'pytray==0.1.0'],
       python_requires=">=3.5",
       extras_require={
           'rmq': ['aio-pika', 'pyyaml~=5.1'],
