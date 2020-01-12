@@ -140,19 +140,19 @@ class LoopScheduler:
         stop_future.result()
         aio_thread.join()
 
-    def arun(self, coro, *args, **kwargs):
+    def await_(self, awaitable: typing.Awaitable):
         """
-        Run a coroutine on the event loop and return the result.  It may take a little time for the loop
+        Await an awaitable on the event loop and return the result.  It may take a little time for the loop
         to get around to scheduling it so we use a timeout as set by the TASK_TIMEOUT class constant.
 
-        :param coro: the coroutine to run
+        :param awaitable: the coroutine to run
         :return: the result of running the coroutine
         """
-        return self.asubmit(coro, *args, **kwargs).result(timeout=self.TASK_TIMEOUT)
+        return self.await_submit(awaitable).result(timeout=self.TASK_TIMEOUT)
 
-    def asubmit(self, coro, *args, **kwargs) -> ThreadFuture:
+    def await_submit(self, awaitable: typing.Awaitable) -> ThreadFuture:
         """
-        Schedule a coroutine on the loop and return the corresponding future
+        Schedule an awaitable on the loop and return the corresponding future
         """
         self._ensure_running()
 
@@ -162,7 +162,7 @@ class LoopScheduler:
             # Here we're on the comms thread again
             async def proxy():
                 if not future.cancelled():
-                    return await coro(*args, **kwargs)
+                    return await awaitable
 
             coro_future = asyncio.ensure_future(proxy(), loop=self._loop)
             aio_future_chain_thread(coro_future, future)
@@ -217,19 +217,19 @@ class LoopScheduler:
         return future
 
     @contextmanager
-    def actx(self, ctx_manager: typing.AsyncContextManager):
+    def async_ctx(self, ctx_manager: typing.AsyncContextManager):
         """Can be used to turn an async context manager into a synchronous one"""
         aexit = ctx_manager.__aexit__
         aenter = ctx_manager.__aenter__
 
-        result = self.arun(aenter)
+        result = self.await_(aenter())
         try:
             yield result
         except Exception:  # pylint: disable=broad-except
-            if not self.arun(aexit, *sys.exc_info()):
+            if not self.await_(aexit(*sys.exc_info())):
                 raise
         else:
-            self.arun(aexit, None, None, None)
+            self.await_(aexit(None, None, None))
 
     @contextmanager
     def ctx(self, ctx_manager: typing.ContextManager):
@@ -246,13 +246,13 @@ class LoopScheduler:
         else:
             self.run(ctx_exit, None, None, None)
 
-    def aiter(self, aiterable: typing.AsyncIterable):
+    def async_iter(self, aiterable: typing.AsyncIterable):
         """Iterate an async iterable from this thread"""
         iterator = aiterable.__aiter__()
         running = True
         while running:
             try:
-                target = self.arun(iterator.__anext__)
+                target = self.await_(iterator.__anext__())
             except StopAsyncIteration:
                 running = False
             else:
