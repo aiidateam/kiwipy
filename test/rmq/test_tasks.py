@@ -262,7 +262,7 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
     async with task_queue.next_task() as task:
         outcome = task.process()
 
-    with pytest.raises(aio_pika.exceptions.QueueEmpty):
+    with pytest.raises(kiwipy.exceptions.QueueEmpty):
         async with task_queue.next_task():
             pass
 
@@ -275,3 +275,11 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
 
     await asyncio.wait(outcomes)
     assert outcomes[0].result() == 10
+
+
+@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@pytest.mark.asyncio
+async def test_empty_queue(task_queue: rmq.RmqTaskQueue):
+    with pytest.raises(kiwipy.exceptions.QueueEmpty):
+        async with task_queue.next_task(timeout=5.):
+            pass

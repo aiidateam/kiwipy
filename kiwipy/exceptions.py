@@ -23,6 +23,10 @@ class TaskRejected(Exception):
     """ A task was rejected at the remote end """
 
 
+class QueueEmpty(Exception):
+    """Could not get the next message from the queue because it is empty"""
+
+
 class DuplicateSubscriberIdentifier(Exception):
     """Failed to add a subscriber because the identifier supplied is already in use"""
 

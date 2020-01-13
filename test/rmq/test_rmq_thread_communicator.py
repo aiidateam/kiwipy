@@ -184,9 +184,7 @@ def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
     with thread_task_queue.next_task() as task:
         outcome = task.process()
 
-    import aio_pika
-
-    with pytest.raises(aio_pika.exceptions.QueueEmpty):
+    with pytest.raises(kiwipy.exceptions.QueueEmpty):
         with thread_task_queue.next_task():
             pass
 
@@ -199,3 +197,9 @@ def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
 
     concurrent.futures.wait(outcomes)
     assert outcomes[0].result() == 10
+
+
+def test_empty_queue(thread_task_queue: rmq.RmqThreadTaskQueue):
+    with pytest.raises(kiwipy.exceptions.QueueEmpty):
+        with thread_task_queue.next_task(timeout=5.):
+            pass

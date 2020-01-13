@@ -1,5 +1,5 @@
 import asyncio
-import collections
+import collections.abc
 import functools
 import inspect
 import os
@@ -71,7 +71,7 @@ def response_to_future(response, future=None):
     :param future:
     :return:
     """
-    if not isinstance(response, collections.Mapping):
+    if not isinstance(response, collections.abc.Mapping):
         raise TypeError("Response must be a mapping")
 
     if future is None:

@@ -106,13 +106,23 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     @asynccontextmanager
     @async_generator
     async def next_task(self, no_ack=False, fail=True, timeout=defaults.TASK_FETCH_TIMEOUT):
-        message = await self._task_queue.get(no_ack=no_ack, fail=fail, timeout=timeout)
-        task = RmqIncomingTask(self, message)
+        """
+        Get the next task from the queue.
+
+        raises:
+            kiwipy.exceptions.QueueEmpty: When the queue has no tasks within the timeout
+        """
         try:
-            await yield_(task)
-        finally:
-            if task.state == TASK_PENDING:
-                task.requeue()
+            message = await self._task_queue.get(no_ack=no_ack, fail=fail, timeout=timeout)
+        except aio_pika.exceptions.QueueEmpty as exc:
+            raise kiwipy.exceptions.QueueEmpty(str(exc))
+        else:
+            task = RmqIncomingTask(self, message)
+            try:
+                await yield_(task)
+            finally:
+                if task.state == TASK_PENDING:
+                    task.requeue()
 
     async def _create_task_queue(self):
         """Create and bind the task queue"""
