@@ -5,6 +5,8 @@ import pytest
 
 # pylint: disable=redefined-outer-name, invalid-name
 
+WAIT_TIMEOUT = 5.
+
 try:
     import asyncio
 
@@ -281,5 +283,27 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
 @pytest.mark.asyncio
 async def test_empty_queue(task_queue: rmq.RmqTaskQueue):
     with pytest.raises(kiwipy.exceptions.QueueEmpty):
-        async with task_queue.next_task(timeout=5.):
+        async with task_queue.next_task(timeout=WAIT_TIMEOUT):
+            pass
+
+
+@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@pytest.mark.asyncio
+async def test_task_processing_exception(task_queue: rmq.RmqTaskQueue):
+    """Check that if there is an exception processing a task that it is removed from the queue"""
+    task_future = await task_queue.task_send('Do this')
+
+    # The error should still get propageted in the 'worker'
+    with pytest.raises(RuntimeError):
+        async with task_queue.next_task() as task:
+            with task.processing():
+                raise RuntimeError('Cannea do it captain!')
+
+    # And the task sender should get a remote exception to inform them of the problem
+    with pytest.raises(kiwipy.RemoteException):
+        await task_future
+
+    # The queue should now be empty
+    with pytest.raises(kiwipy.QueueEmpty):
+        async with task_queue.next_task(timeout=1.):
             pass

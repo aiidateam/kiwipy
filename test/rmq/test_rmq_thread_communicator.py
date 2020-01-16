@@ -11,6 +11,8 @@ from ..utils import CommunicatorTester
 
 # pylint: disable=invalid-name, redefined-outer-name
 
+WAIT_TIMEOUT = 5.
+
 
 @pytest.fixture
 def thread_communicator():
@@ -202,4 +204,24 @@ def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
 def test_empty_queue(thread_task_queue: rmq.RmqThreadTaskQueue):
     with pytest.raises(kiwipy.exceptions.QueueEmpty):
         with thread_task_queue.next_task(timeout=5.):
+            pass
+
+
+def test_task_processing_exception(thread_task_queue: rmq.RmqThreadTaskQueue):
+    """Check that if there is an exception processing a task that it is removed from the queue"""
+    task_future = thread_task_queue.task_send('Do this')
+
+    # The error should still get propageted in the 'worker'
+    with pytest.raises(RuntimeError):
+        with thread_task_queue.next_task(timeout=WAIT_TIMEOUT) as task:
+            with task.processing():
+                raise RuntimeError('Cannea do it captain!')
+
+    # And the task sender should get a remote exception to inform them of the problem
+    with pytest.raises(kiwipy.RemoteException):
+        task_future.result(timeout=WAIT_TIMEOUT)
+
+    # The queue should now be empty
+    with pytest.raises(kiwipy.QueueEmpty):
+        with thread_task_queue.next_task(timeout=1.):
             pass

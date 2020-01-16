@@ -3,7 +3,7 @@ import concurrent.futures
 
 __all__ = [
     'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError', 'TimeoutError',
-    'DuplicateSubscriberIdentifier', 'CommunicatorClosed', 'InvalidStateError'
+    'DuplicateSubscriberIdentifier', 'CommunicatorClosed', 'InvalidStateError', 'QueueEmpty'
 ]
 
 

@@ -4,7 +4,7 @@ import contextlib
 import logging
 import uuid
 import sys
-from typing import Optional  # pylint: disable=unused-import
+from typing import Optional
 import weakref
 
 import aio_pika
@@ -252,6 +252,12 @@ class RmqIncomingTask:
         outcome = self._subscriber.loop().create_future()
         try:
             yield outcome
+        except KeyboardInterrupt:  # pylint: disable=try-except-raise
+            raise
+        except Exception as exc:
+            # Set the exception on the task and re-raise so the client also sees it
+            outcome.set_exception(exc)
+            raise
         finally:
             if outcome.done():
                 self._task_done(outcome)
@@ -319,16 +325,14 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
                          testing_mode=testing_mode)
         self._task_queue_name = queue_name
 
-    async def task_send(self, task, no_reply=False):
+    async def task_send(self, task, no_reply: bool = False) -> asyncio.Future:
         """Send a task for processing by a task subscriber.
 
         All task messages will be set to be persistent by setting `delivery_mode=2`.
 
         :param task: The task payload
         :param no_reply: Don't send a reply containing the result of the task
-        :type no_reply: bool
         :return: A future representing the result of the task
-        :rtype: :class:`asyncio.Future`
         """
         # Build the full message body and encode as a tuple
         body = self._encode((task, no_reply))
