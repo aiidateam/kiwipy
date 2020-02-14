@@ -14,7 +14,7 @@ from . import defaults
 from . import communicator
 from . import tasks
 
-__all__ = ('RmqThreadCommunicator', 'RmqThreadTaskQueue')
+__all__ = ('RmqThreadCommunicator', 'RmqThreadTaskQueue', 'connect')
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     @classmethod
     def connect(cls,
-                connection_params=None,
+                connection_params: (str, dict) = None,
                 connection_factory=aio_pika.connect_robust,
                 loop=None,
                 message_exchange=defaults.MESSAGE_EXCHANGE,
@@ -43,6 +43,10 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                 testing_mode=False):
         # pylint: disable=too-many-arguments
         connection_params = connection_params or {}
+        if isinstance(connection_params, str):
+            # Have to convert it to a dictionary as we inject the loop next
+            params_dict = {'url': connection_params}
+            connection_params = params_dict
         # Create a new loop if one isn't supplied
         loop = loop or asyncio.new_event_loop()
         loop.set_debug(testing_mode)
@@ -288,7 +292,7 @@ class RmqThreadIncomingTask:
             yield outcome
 
 
-def connect(connection_params=None,
+def connect(connection_params: (str, dict) = None,
             connection_factory=aio_pika.connect_robust,
             loop=None,
             message_exchange=defaults.MESSAGE_EXCHANGE,
@@ -299,6 +303,9 @@ def connect(connection_params=None,
             encoder=defaults.ENCODER,
             decoder=defaults.DECODER,
             testing_mode=False) -> RmqThreadCommunicator:
+    """
+    Establish a RabbitMQ communicator connection
+    """
     # pylint: disable=too-many-arguments
     return RmqThreadCommunicator.connect(connection_params=connection_params,
                                          connection_factory=connection_factory,
