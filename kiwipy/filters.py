@@ -1,7 +1,7 @@
 import re
 import typing
 
-__all__ = ['BroadcastFilter']
+__all__ = ('BroadcastFilter',)
 
 
 class BroadcastFilter:

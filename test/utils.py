@@ -23,9 +23,11 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
     def setUp(self):
         super().setUp()
         self.communicator = self.create_communicator()
+        kiwipy.set_communicator(self.communicator)
 
     def tearDown(self):
         self.destroy_communicator(self.communicator)
+        kiwipy.set_communicator(None)
         self.communicator = None
 
     @abc.abstractmethod

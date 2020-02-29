@@ -6,7 +6,7 @@ import shortuuid
 from . import exceptions
 from . import futures
 
-__all__ = ['Communicator', 'CommunicatorHelper']
+__all__ = 'Communicator', 'CommunicatorHelper'
 
 
 class Communicator:
