@@ -1,5 +1,10 @@
-kiwipy
+kiwiPy
 ======
+
+.. image:: docs/source/img/kiwipy.svg
+   :height: 64px
+   :width: 64px
+   :alt: kiwiPy
 
 .. image:: https://travis-ci.org/aiidateam/kiwipy.svg
     :target: https://travis-ci.org/aiidateam/kiwipy
