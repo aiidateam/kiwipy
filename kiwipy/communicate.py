@@ -1,23 +1,12 @@
-__all__ = 'create_default_communicator', 'get_communicator', 'set_communicator'
+__all__ = ('connect',)
 
-# pylint: disable=global-statement,invalid-name
-
-# The global communicator
-_communicator = None
+DEFAULT_COMM_URI = 'amqp://guest:guest@127.0.0.1/'
 
 
-def create_default_communicator():
-    from . import rmq
-    return rmq.connect()
+def connect(uri: str = DEFAULT_COMM_URI, **kwargs):
+    """Create a connection using a URI"""
+    if uri.startswith('amqp'):
+        from . import rmq
+        return rmq.connect(connection_params=uri, **kwargs)
 
-
-def set_communicator(communicator):
-    global _communicator
-    _communicator = communicator
-
-
-def get_communicator():
-    global _communicator
-    if _communicator is None:
-        _communicator = create_default_communicator()
-    return _communicator
+    raise ValueError("Uknown communicator uri '{}'".format(uri))

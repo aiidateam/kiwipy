@@ -1,3 +1,6 @@
+import random
+import string
+
 import shortuuid
 
 import kiwipy
@@ -19,3 +22,7 @@ async def new_communicator(connection, settings=None) -> kiwipy.rmq.RmqCommunica
                                        **settings)
     await communicator.connect()
     return communicator
+
+
+def rand_string(length):
+    return ''.join(random.choice(string.ascii_letters) for _ in range(length))
