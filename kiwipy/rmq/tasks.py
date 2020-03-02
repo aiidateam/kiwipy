@@ -4,7 +4,7 @@ import contextlib
 import logging
 import uuid
 import sys
-from typing import Optional
+from typing import Optional  # pylint: disable=unused-import
 import weakref
 
 import aio_pika
@@ -29,9 +29,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     TASK_QUEUE_ARGUMENTS = {"x-message-ttl": defaults.TASK_MESSAGE_TTL}
 
     def __init__(self,
-                 connection,
-                 exchange_name=defaults.MESSAGE_EXCHANGE,
-                 queue_name=defaults.TASK_QUEUE,
+                 connection: aio_pika.Connection,
+                 exchange_name: str = defaults.MESSAGE_EXCHANGE,
+                 queue_name: str = defaults.TASK_QUEUE,
                  testing_mode=False,
                  decoder=defaults.DECODER,
                  encoder=defaults.ENCODER,
@@ -41,11 +41,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         # pylint: disable=too-many-arguments
         """
         :param connection: An RMQ connection
-        :type connection: :class:`aio_pika.Connection`
         :param exchange_name: the name of the exchange to use
-        :type exchange_name: :class:`str`
         :param queue_name: the name of the task queue to use
-        :type queue_name: :class:`str`
         :param decoder: A message decoder
         :param encoder: A response encoder
         """
@@ -83,7 +80,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             return
 
         await super().connect()
-        await self.channel().set_qos(prefetch_count=self._prefetch_count, prefetch_size=self._prefetch_size)
+        await self.channel().set_qos(prefetch_count=self._prefetch_count,
+                                     prefetch_size=self._prefetch_size)
 
         await self._create_task_queue()
 
@@ -112,6 +110,27 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         raises:
             kiwipy.exceptions.QueueEmpty: When the queue has no tasks within the timeout
         """
+        # got_message = self.loop().create_future()
+        #
+        # def consumer(message: aio_pika.IncomingMessage):
+        #     got_message.set_result(message)
+        #
+        # consumer_id = None
+        # try:
+        #     consumer_id = await self._task_queue.consume(consumer, no_ack=no_ack, timeout=timeout)
+        # except asyncio.TimeoutError:
+        #     raise kiwipy.TimeoutError
+        # else:
+        #     task = RmqIncomingTask(self, await got_message)
+        #     try:
+        #         await yield_(task)
+        #     finally:
+        #         if task.state == TASK_PENDING:
+        #             task.requeue()
+        # finally:
+        #     if consumer_id is not None:
+        #         await self._task_queue.cancel(consumer_id)
+
         try:
             message = await self._task_queue.get(no_ack=no_ack, fail=fail, timeout=timeout)
         except aio_pika.exceptions.QueueEmpty as exc:
@@ -150,9 +169,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                     subscriber = utils.ensure_coroutine(subscriber)
                     result = await subscriber(self, rmq_task.body)
 
-                    # If a task returns a future it is not considered done until the chain of futures
-                    # (i.e. if the first future resolves to a future and so on) finishes and produces
-                    # a concrete result
+                    # If a task returns a future it is not considered done until the chain of
+                    # futures (i.e. if the first future resolves to a future and so on) finishes
+                    # and produces a concrete result
                     while asyncio.isfuture(result):
                         if not rmq_task.no_reply:
                             await self._send_response(utils.pending_response(), message)
@@ -184,7 +203,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         """
         # Add host info
         body[utils.HOST_KEY] = utils.get_host_info()
-        message = aio_pika.Message(body=self._encode(body), correlation_id=incoming_message.correlation_id)
+        message = aio_pika.Message(body=self._encode(body),
+                                   correlation_id=incoming_message.correlation_id)
 
         return message
 
@@ -225,7 +245,7 @@ class RmqIncomingTask:
             raise asyncio.InvalidStateError("The task is {}".format(self._state))
 
         self._state = TASK_PROCESSING
-        outcome = self._subscriber.loop().create_future()
+        outcome = self._create_future()
         # Rely on the done callback to signal the end of processing
         outcome.add_done_callback(self._task_done)
         # Or the user let's the future get destroyed
@@ -243,8 +263,8 @@ class RmqIncomingTask:
 
     @contextlib.contextmanager
     def processing(self):
-        """Processing context.  The task should be done at the end otherwise it's assumed the caller doesn't
-        want to process it and it's sent back to the queue"""
+        """Processing context.  The task should be done at the end otherwise it's assumed the
+        caller doesn't want to process it and it's sent back to the queue"""
         if self._state != TASK_PENDING:
             raise asyncio.InvalidStateError("The task is {}".format(self._state))
 
@@ -282,7 +302,8 @@ class RmqIncomingTask:
                 else:
                     reply_body = utils.result_response(outcome.result())
                 # pylint: disable=protected-access
-                self._subscriber.loop().create_task(self._subscriber._send_response(reply_body, self._message))
+                self._subscriber.loop().create_task(
+                    self._subscriber._send_response(reply_body, self._message))
 
         # Clean up
         self._finalise()
@@ -299,6 +320,9 @@ class RmqIncomingTask:
         self._outcome_ref = None
         self._subscriber = None
         self._message = None
+
+    def _create_future(self) -> asyncio.Future:
+        return self._subscriber.loop().create_future()
 
 
 class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
@@ -346,11 +370,12 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
 
         result_future = None
         if no_reply:
-            published = await self.publish(task_msg, routing_key=self._task_queue_name, mandatory=True)
+            published = await self.publish(task_msg,
+                                           routing_key=self._task_queue_name,
+                                           mandatory=True)
         else:
-            published, result_future = await self.publish_expect_response(task_msg,
-                                                                          routing_key=self._task_queue_name,
-                                                                          mandatory=True)
+            published, result_future = await self.publish_expect_response(
+                task_msg, routing_key=self._task_queue_name, mandatory=True)
 
         assert published, "The task was not published to the exchange"
         return result_future

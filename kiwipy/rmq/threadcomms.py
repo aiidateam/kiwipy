@@ -30,7 +30,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     @classmethod
     def connect(cls,
-                connection_params: (str, dict) = None,
+                connection_params: [str, dict] = None,
                 connection_factory=aio_pika.connect_robust,
                 loop=None,
                 message_exchange=defaults.MESSAGE_EXCHANGE,
@@ -103,7 +103,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                                                           task_prefetch_count=task_prefetch_count,
                                                           testing_mode=testing_mode)
         self._loop = self._communicator.loop  # type: asyncio.AbstractEventLoop
-        self._loop_scheduler = aiothreads.LoopScheduler(self._loop, 'RMQ communicator', self.TASK_TIMEOUT)
+        self._loop_scheduler = aiothreads.LoopScheduler(self._loop, 'RMQ communicator',
+                                                        self.TASK_TIMEOUT)
         self._stop_signal = None
         self._closed = False
 
@@ -148,7 +149,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     def add_task_subscriber(self, subscriber):
         self._ensure_open()
-        return self._loop_scheduler.await_(self._communicator.add_task_subscriber(self._wrap_subscriber(subscriber)))
+        return self._loop_scheduler.await_(
+            self._communicator.add_task_subscriber(self._wrap_subscriber(subscriber)))
 
     def remove_task_subscriber(self, subscriber):
         self._ensure_open()
@@ -156,11 +158,13 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     def add_broadcast_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
-        return self._loop_scheduler.await_(self._communicator.add_broadcast_subscriber(subscriber, identifier))
+        return self._loop_scheduler.await_(
+            self._communicator.add_broadcast_subscriber(subscriber, identifier))
 
     def remove_broadcast_subscriber(self, identifier):
         self._ensure_open()
-        return self._loop_scheduler.await_(self._communicator.remove_broadcast_subscriber(identifier))
+        return self._loop_scheduler.await_(
+            self._communicator.remove_broadcast_subscriber(identifier))
 
     def task_send(self, task, no_reply=False):
         self._ensure_open()
@@ -173,7 +177,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                    prefetch_count=defaults.TASK_PREFETCH_COUNT):
         self._ensure_open()
         self._ensure_running()
-        aioqueue = self._loop_scheduler.await_(self._communicator.task_queue(queue_name, prefetch_size, prefetch_count))
+        aioqueue = self._loop_scheduler.await_(
+            self._communicator.task_queue(queue_name, prefetch_size, prefetch_count))
         return RmqThreadTaskQueue(aioqueue, self._loop_scheduler, self._wrap_subscriber)
 
     def rpc_send(self, recipient_id, msg):
@@ -185,13 +190,17 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._ensure_open()
         self._ensure_running()
         result = self._loop_scheduler.await_(
-            self._communicator.broadcast_send(body=body, sender=sender, subject=subject, correlation_id=correlation_id))
+            self._communicator.broadcast_send(body=body,
+                                              sender=sender,
+                                              subject=subject,
+                                              correlation_id=correlation_id))
         return isinstance(result, pamqp.specification.Basic.Ack)
 
     def _wrap_subscriber(self, subscriber):
         """"
-        We need to convert any kiwipy.Futures we get from a subscriber call into asyncio ones for the event loop
-        based communicator.  Do this by wrapping any subscriber methods and intercepting the return values.
+        We need to convert any kiwipy.Futures we get from a subscriber call into asyncio ones for
+        the event loop based communicator.  Do this by wrapping any subscriber methods and
+        intercepting the return values.
         """
 
         @functools.wraps(subscriber)
@@ -236,7 +245,8 @@ class RmqThreadTaskQueue:
     Thread task queue.
     """
 
-    def __init__(self, task_queue: tasks.RmqTaskQueue, loop_scheduler: aiothreads.LoopScheduler, wrap_subscriber):
+    def __init__(self, task_queue: tasks.RmqTaskQueue, loop_scheduler: aiothreads.LoopScheduler,
+                 wrap_subscriber):
         self._task_queue = task_queue
         self._loop_scheduler = loop_scheduler
         self._wrap_subscriber = wrap_subscriber
@@ -249,7 +259,8 @@ class RmqThreadTaskQueue:
         return self._loop_scheduler.await_(self._task_queue.task_send(task, no_reply))
 
     def add_task_subscriber(self, subscriber):
-        return self._loop_scheduler.await_(self._task_queue.add_task_subscriber(self._wrap_subscriber(subscriber)))
+        return self._loop_scheduler.await_(
+            self._task_queue.add_task_subscriber(self._wrap_subscriber(subscriber)))
 
     def remove_task_subscriber(self, subscriber):
         # Note: This probably doesn't work as in add_task_subscriber we wrap it and so
@@ -257,8 +268,9 @@ class RmqThreadTaskQueue:
         return self._loop_scheduler.await_(self._task_queue.remove_task_subscriber(subscriber))
 
     @contextmanager
-    def next_task(self, timeout=5.):
-        with self._loop_scheduler.async_ctx(self._task_queue.next_task(timeout=timeout)) as task:
+    def next_task(self, timeout=5., fail=True):
+        with self._loop_scheduler.async_ctx(self._task_queue.next_task(timeout=timeout,
+                                                                       fail=fail)) as task:
             yield RmqThreadIncomingTask(task, self._loop_scheduler)
 
 
@@ -292,7 +304,7 @@ class RmqThreadIncomingTask:
             yield outcome
 
 
-def connect(connection_params: (str, dict) = None,
+def connect(connection_params: [str, dict] = None,
             connection_factory=aio_pika.connect_robust,
             loop=None,
             message_exchange=defaults.MESSAGE_EXCHANGE,

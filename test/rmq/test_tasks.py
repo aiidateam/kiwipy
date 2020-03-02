@@ -252,8 +252,8 @@ async def test_queue_iter_not_process(task_queue: rmq.RmqTaskQueue):
 async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
     """
     Check what happens when we forget to process a task we said we would
-    WARNING: This test mail fail when running with a debugger as it relies on the 'outcome' reference
-    count dropping to zero but the debugger may be preventing this.
+    WARNING: This test mail fail when running with a debugger as it relies on the 'outcome'
+    reference count dropping to zero but the debugger may be preventing this.
     """
     outcomes = list()
 
@@ -265,7 +265,7 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
         outcome = task.process()
 
     with pytest.raises(kiwipy.exceptions.QueueEmpty):
-        async with task_queue.next_task():
+        async with task_queue.next_task(timeout=1.):
             pass
 
     # Now let's 'forget' i.e. lose the outcome
