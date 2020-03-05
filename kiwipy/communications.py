@@ -4,6 +4,8 @@ import sys
 import shortuuid
 
 from . import exceptions
+# For backwards compatibility import exceptions too
+from .exceptions import *  # pylint: disable=wildcard-import, redefined-builtin, unused-wildcard-import
 from . import futures
 
 __all__ = 'Communicator', 'CommunicatorHelper'

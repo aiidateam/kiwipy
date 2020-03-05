@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import concurrent.futures
 
 __all__ = ('RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError', 'TimeoutError',
