@@ -10,6 +10,11 @@ kiwiPy
     :target: https://travis-ci.org/aiidateam/kiwipy
     :alt: Travis CI
 
+.. image:: https://readthedocs.org/projects/kiwipy/badge
+    :target: http://kiwipy.readthedocs.io/
+    :alt: Docs status
+
+
 .. image:: https://img.shields.io/pypi/v/kiwipy.svg
     :target: https://pypi.python.org/pypi/kiwipy/
     :alt: Latest Version
