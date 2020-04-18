@@ -35,14 +35,12 @@ def result_response(result):
     return {RESULT_KEY: result}
 
 
-def exception_response(exception, trace=None):
+def exception_response(exception: Exception, trace=None) -> dict:
     """
     Create an exception response dictionary
     :param exception: The exception to encode
-    :type exception: :class:`Exception`
     :param trace: Optional traceback
-    :return: A response dictionary
-    :rtype: dict
+    :return: An exception response dictionary
     """
     msg = str(exception)
     if trace is not None:

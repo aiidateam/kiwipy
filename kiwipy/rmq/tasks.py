@@ -3,12 +3,12 @@ import collections
 import contextlib
 import logging
 import uuid
-import sys
 from typing import Optional  # pylint: disable=unused-import
 import weakref
 
 import aio_pika
 from async_generator import async_generator, yield_, asynccontextmanager
+import shortuuid
 
 import kiwipy
 from . import defaults
@@ -17,7 +17,7 @@ from . import utils
 
 _LOGGER = logging.getLogger(__name__)
 
-__all__ = ('RmqTaskSubscriber', 'RmqTaskPublisher', 'RmqTaskQueue', 'RmqIncomingTask')
+__all__ = 'RmqTaskSubscriber', 'RmqTaskPublisher', 'RmqTaskQueue', 'RmqIncomingTask'
 
 TaskInfo = collections.namedtuple('TaskBody', ('task', 'no_reply'))
 
@@ -60,16 +60,22 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._consumer_tag = None
 
         self._task_queue = None  # type: Optional[aio_pika.Queue]
-        self._subscribers = []
+        self._subscribers = {}
         self._pending_tasks = []
 
-    async def add_task_subscriber(self, subscriber):
-        self._subscribers.append(subscriber)
+    async def add_task_subscriber(self, subscriber, identifier=None):
+        identifier = identifier or shortuuid.uuid()
+        if identifier in self._subscribers:
+            raise kiwipy.DuplicateSubscriberIdentifier("Task identifier '{}'".format(identifier))
+
+        self._subscribers[identifier] = subscriber
         if self._consumer_tag is None:
             self._consumer_tag = await self._task_queue.consume(self._on_task)
 
-    async def remove_task_subscriber(self, subscriber):
-        self._subscribers.remove(subscriber)
+        return identifier
+
+    async def remove_task_subscriber(self, identifier):
+        self._subscribers.pop(identifier)
         if not self._subscribers:
             await self._task_queue.cancel(self._consumer_tag)
             self._consumer_tag = None
@@ -80,8 +86,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             return
 
         await super().connect()
-        await self.channel().set_qos(prefetch_count=self._prefetch_count,
-                                     prefetch_size=self._prefetch_size)
+        await self.channel().set_qos(prefetch_count=self._prefetch_count, prefetch_size=self._prefetch_size)
 
         await self._create_task_queue()
 
@@ -110,27 +115,6 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         raises:
             kiwipy.exceptions.QueueEmpty: When the queue has no tasks within the timeout
         """
-        # got_message = self.loop().create_future()
-        #
-        # def consumer(message: aio_pika.IncomingMessage):
-        #     got_message.set_result(message)
-        #
-        # consumer_id = None
-        # try:
-        #     consumer_id = await self._task_queue.consume(consumer, no_ack=no_ack, timeout=timeout)
-        # except asyncio.TimeoutError:
-        #     raise kiwipy.TimeoutError
-        # else:
-        #     task = RmqIncomingTask(self, await got_message)
-        #     try:
-        #         await yield_(task)
-        #     finally:
-        #         if task.state == TASK_PENDING:
-        #             task.requeue()
-        # finally:
-        #     if consumer_id is not None:
-        #         await self._task_queue.cancel(consumer_id)
-
         try:
             message = await self._task_queue.get(no_ack=no_ack, fail=fail, timeout=timeout)
         except aio_pika.exceptions.QueueEmpty as exc:
@@ -153,7 +137,6 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         # x-message-ttl means what is the default ttl for a message arriving in the queue
         self._task_queue = await self._channel.declare_queue(name=self._task_queue_name,
                                                              durable=not self._testing_mode,
-                                                             auto_delete=self._testing_mode,
                                                              arguments=arguments)
         await self._task_queue.bind(self._exchange, routing_key=self._task_queue.name)
 
@@ -164,7 +147,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         # Decode the message tuple into a task body for easier use
         rmq_task = RmqIncomingTask(self, message)
         with rmq_task.processing() as outcome:
-            for subscriber in self._subscribers:
+            for subscriber in self._subscribers.values():
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
                     result = await subscriber(self, rmq_task.body)
@@ -203,8 +186,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         """
         # Add host info
         body[utils.HOST_KEY] = utils.get_host_info()
-        message = aio_pika.Message(body=self._encode(body),
-                                   correlation_id=incoming_message.correlation_id)
+        message = aio_pika.Message(body=self._encode(body), correlation_id=incoming_message.correlation_id)
 
         return message
 
@@ -298,12 +280,11 @@ class RmqIncomingTask:
             if not self.no_reply:
                 # Schedule a task to send the appropriate response
                 if outcome.exception():
-                    reply_body = utils.exception_response(*sys.exc_info()[1:])
+                    reply_body = utils.exception_response(outcome.exception())
                 else:
                     reply_body = utils.result_response(outcome.result())
                 # pylint: disable=protected-access
-                self._subscriber.loop().create_task(
-                    self._subscriber._send_response(reply_body, self._message))
+                self._subscriber.loop().create_task(self._subscriber._send_response(reply_body, self._message))
 
         # Clean up
         self._finalise()
@@ -370,12 +351,11 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
 
         result_future = None
         if no_reply:
-            published = await self.publish(task_msg,
-                                           routing_key=self._task_queue_name,
-                                           mandatory=True)
+            published = await self.publish(task_msg, routing_key=self._task_queue_name, mandatory=True)
         else:
-            published, result_future = await self.publish_expect_response(
-                task_msg, routing_key=self._task_queue_name, mandatory=True)
+            published, result_future = await self.publish_expect_response(task_msg,
+                                                                          routing_key=self._task_queue_name,
+                                                                          mandatory=True)
 
         assert published, "The task was not published to the exchange"
         return result_future
@@ -424,11 +404,11 @@ class RmqTaskQueue:
         """Send a task to the queue"""
         return await self._publisher.task_send(task, no_reply)
 
-    async def add_task_subscriber(self, subscriber):
-        return await self._subscriber.add_task_subscriber(subscriber)
+    async def add_task_subscriber(self, subscriber, identifier=None):
+        return await self._subscriber.add_task_subscriber(subscriber, identifier)
 
-    async def remove_task_subscriber(self, subscriber):
-        return await self._subscriber.remove_task_subscriber(subscriber)
+    async def remove_task_subscriber(self, identifier):
+        return await self._subscriber.remove_task_subscriber(identifier)
 
     @asynccontextmanager
     @async_generator

@@ -6,16 +6,16 @@ from kiwipy import rmq
 
 body = ' '.join(sys.argv[1:]) or "___"
 
-with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://127.0.0.1'}) as communicator:
+with rmq.RmqThreadCommunicator.connect('amqp://127.0.0.1') as comm:
     # send message with different sender and subject
 
     # listen by two subscriber
     sendr = 'bob.jones'
     subj = 'purchase.car'
-    communicator.broadcast_send(body, sender=sendr, subject=subj)
+    comm.broadcast_send(body, sender=sendr, subject=subj)
 
     # Filtered by filter subscriber because subject not matched with "purchase.*" pattern
     # Therefore filterd.
     sendr = 'bob.jones'
     subj = 'sell.car'
-    communicator.broadcast_send(body, sender=sendr, subject=subj)
+    comm.broadcast_send(body, sender=sendr, subject=subj)

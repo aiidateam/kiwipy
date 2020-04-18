@@ -23,8 +23,8 @@ import kiwipy
 
 # -- Project information -----------------------------------------------------
 
-project = 'kiwipy'
-copyright = '2019, Martin Uhrin'
+project = 'kiwiPy'
+copyright = '2020, Martin Uhrin'
 author = 'Martin Uhrin'
 
 # The short X.Y version.
@@ -45,6 +45,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.doctest',
     'sphinx.ext.viewcode',
+    'nbsphinx',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -79,13 +80,24 @@ pygments_style = None
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'alabaster'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
 # html_theme_options = {}
+html_theme_options = {
+    'codecov_button': True,
+    'description': 'Robust, high-volume, message based communication made easy',
+    'github_button': True,
+    'github_repo': 'mincepy',
+    'github_type': 'star',
+    'github_user': 'aiidateam',
+    'travis_button': True,
+    'logo': 'logo.svg',
+    'logo_name': True,
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -100,7 +112,13 @@ html_static_path = ['_static']
 # default: ``['localtoc.html', 'relations.html', 'sourcelink.html',
 # 'searchbox.html']``.
 #
-# html_sidebars = {}
+html_sidebars = {
+    '**': [
+        'about.html',
+        'navigation.html',
+        'searchbox.html',
+    ]
+}
 
 # -- Options for HTMLHelp output ---------------------------------------------
 
@@ -133,53 +151,6 @@ latex_elements = {
 latex_documents = [
     (master_doc, 'kiwipy.tex', 'kiwipy Documentation', 'Martin Uhrin', 'manual'),
 ]
-
-
-def run_apidoc(_):
-    """Runs sphinx-apidoc when building the documentation.
-
-    Needs to be done in conf.py in order to include the APIdoc in the
-    build on readthedocs.
-
-    See also https://github.com/rtfd/readthedocs.org/issues/1139
-    """
-    source_dir = os.path.abspath(os.path.dirname(__file__))
-    apidoc_dir = os.path.join(source_dir, 'apidoc')
-    package_dir = os.path.join(source_dir, os.pardir, os.pardir, 'kiwipy')
-
-    # In #1139, they suggest the route below, but for me this ended up
-    # calling sphinx-build, not sphinx-apidoc
-    #from sphinx.apidoc import main
-    #main([None, '-e', '-o', apidoc_dir, package_dir, '--force'])
-
-    import subprocess
-    cmd_path = 'sphinx-apidoc'
-    if hasattr(sys, 'real_prefix'):  # Check to see if we are in a virtualenv
-        # If we are, assemble the path manually
-        cmd_path = os.path.abspath(os.path.join(sys.prefix, 'bin', 'sphinx-apidoc'))
-
-    options = [
-        '-o',
-        apidoc_dir,
-        package_dir,
-        '--private',
-        '--force',
-        '--no-headings',
-        '--module-first',
-        '--no-toc',
-        '--maxdepth',
-        '4',
-    ]
-
-    # See https://stackoverflow.com/a/30144019
-    env = os.environ.copy()
-    env["SPHINX_APIDOC_OPTIONS"] = 'members,special-members,private-members,undoc-members,show-inheritance'
-    subprocess.check_call([cmd_path] + options, env=env)
-
-
-def setup(app):
-    app.connect('builder-inited', run_apidoc)
-
 
 # -- Options for manual page output ------------------------------------------
 

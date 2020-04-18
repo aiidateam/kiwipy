@@ -13,7 +13,7 @@ RPC_TOPIC = '[rpc]'
 # it's fine to set this lower.  See:
 # https://github.com/mosquito/aio-pika/issues/165
 MESSAGE_TTL = 66 * 1000
-TEST_QUEUE_EXPIRES = 60 * 1000
+TEST_QUEUE_EXPIRES = 60
 QUEUE_EXPIRES = 60 * 1000
 REPLY_QUEUE_EXPIRES = 60 * 1000
 TASK_MESSAGE_TTL = 60000 * 60 * 24 * 7  # One week
