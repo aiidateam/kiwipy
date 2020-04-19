@@ -32,23 +32,25 @@ setup(
     extras_require={
         'rmq': ['aio-pika', 'pyyaml~=5.1'],
         'dev': [
-            'nbsphinx',  # Jupyter notebooks in docs
             'pip',
             'pre-commit',
             'pytest>=4',
             'pytest-asyncio',
-            'pytest-cov',
-            'jupyter<6',  # For running doc examples
             'twine',
             'yapf',
             'prospector',
             'pylint',
             'pytest-cov',
             'sphinx',
-            'sphinx-autobuild',
-            "Pygments==2.3.1",
-            "docutils==0.14",
         ],
+        'docs': [
+            'nbsphinx',  # Jupyter notebooks in docs
+            'jupyter<6',  # For running doc examples
+            'sphinx-autobuild',
+            "docutils==0.14",
+            "Pygments==2.3.1",
+            'pandoc'
+        ]
     },
     packages=['kiwipy', 'kiwipy.rmq'],
     test_suite='test')
