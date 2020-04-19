@@ -37,8 +37,8 @@ Coroutines vs Threads
 =====================
 
 KiwiPy's RabbitMQ backend has both coroutine and threaded version of the Communicator.  If you're in a coroutine
-environment you may prefer to use the :class:`mincepy.rmq.RmqCommunicator` which uses coroutines and ``asyncio``
-``Future`` s while if you don't have an event loop just stick with the :class:`mincepy.rmq.RmqThreadCommunicator` which
+environment you may prefer to use the :class:`mincepy.rmq.RmqCommunicator` which uses coroutines and
+:class:`asyncio.Future` s while if you don't have an event loop just stick with the :class:`mincepy.rmq.RmqThreadCommunicator` which
 runs an event loop in a separate thread allow it to do asynchronous communication while your application logic gets on
 with other stuff.
 
