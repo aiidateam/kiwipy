@@ -492,6 +492,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._loop = self._communicator.loop  # type: asyncio.AbstractEventLoop
         self._communicator_thread = None
         self._stop_signal = None
+        self._closed = False
 
     def __enter__(self):
         self._ensure_running()
@@ -502,6 +503,16 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     def loop(self):
         return self._loop
+
+    def is_closed(self) -> bool:
+        return self._closed
+
+    def close(self):
+        if self.is_closed():
+            return
+        self.stop()
+        self._loop = None
+        self._closed = True
 
     def start(self):
         assert self._communicator_thread is None, "Already running"
@@ -516,6 +527,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         start_future.result()
 
     def stop(self):
+        # Capture the comms thread reference here as self._communicator_thread will become None
         comm_thread = self._communicator_thread
         if comm_thread is None:
             return
@@ -528,30 +540,37 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         comm_thread.join()
 
     def add_rpc_subscriber(self, subscriber, identifier=None):
+        self._ensure_open()
         coro = self._communicator.add_rpc_subscriber(self._wrap_subscriber(subscriber), identifier)
         return self._run_task(coro)
 
     def remove_rpc_subscriber(self, identifier):
+        self._ensure_open()
         coro = self._communicator.remove_rpc_subscriber(identifier)
         return self._run_task(coro)
 
     def add_task_subscriber(self, subscriber):
+        self._ensure_open()
         coro = self._communicator.add_task_subscriber(self._wrap_subscriber(subscriber))
         return self._run_task(coro)
 
     def remove_task_subscriber(self, subscriber):
+        self._ensure_open()
         coro = self._communicator.remove_task_subscriber(subscriber)
         return self._run_task(coro)
 
     def add_broadcast_subscriber(self, subscriber, identifier=None):
+        self._ensure_open()
         coro = self._communicator.add_broadcast_subscriber(subscriber, identifier)
         return self._run_task(coro)
 
     def remove_broadcast_subscriber(self, identifier):
+        self._ensure_open()
         coro = self._communicator.remove_broadcast_subscriber(identifier)
         return self._run_task(coro)
 
     def task_send(self, task, no_reply=False):
+        self._ensure_open()
         self._ensure_running()
         future = self._run_task(self._communicator.task_send(task, no_reply))
         if no_reply:
@@ -560,10 +579,12 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         return future
 
     def rpc_send(self, recipient_id, msg):
+        self._ensure_open()
         self._ensure_running()
         return self._run_task(self._communicator.rpc_send(recipient_id, msg))
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
+        self._ensure_open()
         self._ensure_running()
         coro = self._communicator.broadcast_send(body=body,
                                                  sender=sender,
@@ -705,10 +726,15 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._loop.run_until_complete(do_connect())
 
         # The loop is finished and the connection has been disconnected
+        self._stop_signal = None  # This should be done before nullifying the communicator_thread
         self._communicator_thread = None
 
         _LOGGER.debug('Event loop stopped on %s', threading.current_thread())
         asyncio.set_event_loop(None)
+
+    def _ensure_open(self):
+        if self.is_closed():
+            raise kiwipy.CommunicatorClosed
 
 
 def connect(connection_params=None,

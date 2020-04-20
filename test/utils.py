@@ -38,6 +38,22 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
     def destroy_communicator(self, communicator):
         pass
 
+    def test_close(self):
+        """Make sure a closed communicator raises when trying to perform any communication operation"""
+        self.communicator.close()
+        with self.assertRaises(kiwipy.CommunicatorClosed):
+            self.communicator.add_rpc_subscriber(None, 'rpc')
+        with self.assertRaises(kiwipy.CommunicatorClosed):
+            self.communicator.rpc_send('rpc', None).result(timeout=self.WAIT_TIMEOUT)
+        with self.assertRaises(kiwipy.CommunicatorClosed):
+            self.communicator.add_task_subscriber(None)
+        with self.assertRaises(kiwipy.CommunicatorClosed):
+            self.communicator.task_send(None).result(timeout=self.WAIT_TIMEOUT)
+        with self.assertRaises(kiwipy.CommunicatorClosed):
+            self.communicator.add_broadcast_subscriber(None)
+        with self.assertRaises(kiwipy.CommunicatorClosed):
+            self.communicator.broadcast_send(None)
+
     # region RPC
 
     def test_rpc_send_receive(self):
