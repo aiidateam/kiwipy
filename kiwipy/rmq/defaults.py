@@ -19,6 +19,7 @@ REPLY_QUEUE_EXPIRES = 60 * 1000
 TASK_MESSAGE_TTL = 60000 * 60 * 24 * 7  # One week
 TASK_PREFETCH_SIZE = 0
 TASK_PREFETCH_COUNT = 0
+TASK_FETCH_TIMEOUT = 5.
 
 ENCODER = partial(yaml.dump, encoding='utf-8')
 DECODER = partial(yaml.load, Loader=yaml.FullLoader)

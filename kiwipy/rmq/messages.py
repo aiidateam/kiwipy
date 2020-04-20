@@ -3,6 +3,7 @@ from collections import deque
 import copy
 import logging
 import traceback
+import typing
 import uuid
 
 import aio_pika
@@ -55,13 +56,16 @@ class BaseConnectionWithExchange:
         self._exchange_params = exchange_params
         self._loop = self._connection.loop
 
-        self._channel = None  # type: aio_pika.Channel
-        self._exchange = None  # type: aio_pika.Exchange
+        self._channel = None  # type: typing.Optional[aio_pika.Channel]
+        self._exchange = None  # type: typing.Optional[aio_pika.Exchange]
         self._is_closing = False
 
     @property
     def is_closing(self):
         return self._is_closing
+
+    def loop(self) -> asyncio.BaseEventLoop:
+        return self._loop
 
     def get_exchange_name(self):
         return self._exchange_name
@@ -133,9 +137,9 @@ class BasePublisherWithReplyQueue:
         self._awaiting_response = {}
 
         self._connection = connection
-        self._channel = None  # type: aio_pika.Channel
-        self._exchange = None  # type: aio_pika.Exchange
-        self._reply_queue = None  # type: aio_pika.Queue
+        self._channel = None  # type: typing.Optional[type:aio_pika.Channel]
+        self._exchange = None  # type: typing.Optional[aio_pika.Exchange]
+        self._reply_queue = None  # type: typing.Optional[aio_pika.Queue]
 
         self._is_closing = False
 
