@@ -4,6 +4,7 @@ import concurrent.futures
 from concurrent.futures import Future as ThreadFuture
 import functools
 import logging
+from typing import Union
 
 import aio_pika
 import pamqp
@@ -14,7 +15,7 @@ from . import defaults
 from . import communicator
 from . import tasks
 
-__all__ = ('RmqThreadCommunicator', 'RmqThreadTaskQueue', 'connect')
+__all__ = 'RmqThreadCommunicator', 'RmqThreadTaskQueue', 'connect'
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     @classmethod
     def connect(cls,
-                connection_params: [str, dict] = None,
+                connection_params: Union[str, dict] = None,
                 connection_factory=aio_pika.connect_robust,
                 loop=None,
                 message_exchange=defaults.MESSAGE_EXCHANGE,
@@ -116,6 +117,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
+        self.close()
 
     def loop(self):
         return self._loop
@@ -304,7 +306,7 @@ class RmqThreadIncomingTask:
             yield outcome
 
 
-def connect(connection_params: [str, dict] = None,
+def connect(connection_params: Union[str, dict] = None,
             connection_factory=aio_pika.connect_robust,
             loop=None,
             message_exchange=defaults.MESSAGE_EXCHANGE,

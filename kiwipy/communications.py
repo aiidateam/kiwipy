@@ -18,6 +18,12 @@ class Communicator:
     The interface for a communicator used to both send and receive various types of message.
     """
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
     @abc.abstractmethod
     def is_closed(self) -> bool:
         """Return `True` if the communicator was closed"""
