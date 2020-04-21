@@ -12,9 +12,9 @@ with open('kiwipy/version.py') as f:
 setup(
     name="kiwipy",
     version=about['__version__'],
-    description='A python remote communications library',
+    description='Robust, high-volume, message based communication made easy',
     long_description=open('README.rst').read(),
-    url='https://github.com/muhrin/kiwipy.git',
+    url='https://github.com/aiidateam/kiwipy.git',
     author='Martin Uhrin',
     author_email='martin.uhrin.10@ucl.ac.uk',
     license=__license__,
@@ -45,10 +45,11 @@ setup(
         ],
         'docs': [
             'nbsphinx',  # Jupyter notebooks in docs
-            'jupyter<6',  # For running doc examples
+            'notebook < 6.0',  # Jupyter w/asyncio causes problems for examples
+            'tornado < 5.0',  # For same reason as above
+            'jupyter',  # For running doc examples
             'sphinx-autobuild',
             "docutils==0.14",
-            "Pygments==2.3.1",
             'pandoc'
         ]
     },
