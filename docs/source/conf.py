@@ -91,7 +91,7 @@ html_theme_options = {
     'codecov_button': True,
     'description': 'Robust, high-volume, message based communication made easy',
     'github_button': True,
-    'github_repo': 'mincepy',
+    'github_repo': 'kiwipy',
     'github_type': 'star',
     'github_user': 'aiidateam',
     'travis_button': True,
