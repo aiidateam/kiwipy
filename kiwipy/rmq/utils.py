@@ -1,5 +1,5 @@
 import asyncio
-import collections
+import collections.abc
 import functools
 import inspect
 import os
@@ -8,7 +8,7 @@ import traceback
 
 import kiwipy
 
-__all__ = []
+__all__ = ()
 
 # The key used in messages to give information about the host that send a message
 HOST_KEY = 'host'
@@ -71,7 +71,7 @@ def response_to_future(response, future=None):
     :param future:
     :return:
     """
-    if not isinstance(response, collections.Mapping):
+    if not isinstance(response, collections.abc.Mapping):
         raise TypeError("Response must be a mapping")
 
     if future is None:
