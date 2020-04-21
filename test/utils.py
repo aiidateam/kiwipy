@@ -57,6 +57,12 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
         with self.assertRaises(kiwipy.CommunicatorClosed):
             self.communicator.broadcast_send(None)
 
+    def test_context(self):
+        assert not self.communicator.is_closed()
+        with self.communicator:
+            pass
+        assert self.communicator.is_closed()
+
     # region RPC
 
     def test_rpc_send_receive(self):

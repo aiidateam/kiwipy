@@ -117,6 +117,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
+        self.close()
 
     def loop(self):
         return self._loop
