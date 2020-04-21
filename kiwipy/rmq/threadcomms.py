@@ -14,7 +14,7 @@ from . import defaults
 from . import communicator
 from . import tasks
 
-__all__ = ('RmqThreadCommunicator', 'RmqThreadTaskQueue')
+__all__ = ('RmqThreadCommunicator', 'RmqThreadTaskQueue', 'connect')
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     @classmethod
     def connect(cls,
-                connection_params=None,
+                connection_params: [str, dict] = None,
                 connection_factory=aio_pika.connect_robust,
                 loop=None,
                 message_exchange=defaults.MESSAGE_EXCHANGE,
@@ -40,9 +40,14 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                 task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
                 encoder=defaults.ENCODER,
                 decoder=defaults.DECODER,
-                testing_mode=False):
+                testing_mode=False,
+                async_task_timeout=TASK_TIMEOUT):
         # pylint: disable=too-many-arguments
         connection_params = connection_params or {}
+        if isinstance(connection_params, str):
+            # Have to convert it to a dictionary as we inject the loop next
+            params_dict = {'url': connection_params}
+            connection_params = params_dict
         # Create a new loop if one isn't supplied
         loop = loop or asyncio.new_event_loop()
         loop.set_debug(testing_mode)
@@ -58,7 +63,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                    task_prefetch_count=task_prefetch_count,
                    encoder=encoder,
                    decoder=decoder,
-                   testing_mode=testing_mode)
+                   testing_mode=testing_mode,
+                   async_task_timeout=async_task_timeout)
 
         # Start the communicator
         comm.start()
@@ -73,7 +79,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                  task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
                  encoder=defaults.ENCODER,
                  decoder=defaults.DECODER,
-                 testing_mode=False):
+                 testing_mode=False,
+                 async_task_timeout=TASK_TIMEOUT):
         # pylint: disable=too-many-arguments
         """
         :param connection: The RMQ connector object
@@ -99,7 +106,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                                                           task_prefetch_count=task_prefetch_count,
                                                           testing_mode=testing_mode)
         self._loop = self._communicator.loop  # type: asyncio.AbstractEventLoop
-        self._loop_scheduler = aiothreads.LoopScheduler(self._loop, 'RMQ communicator', self.TASK_TIMEOUT)
+        self._loop_scheduler = aiothreads.LoopScheduler(self._loop, 'RMQ communicator', async_task_timeout)
+        self._stop_signal = None
         self._closed = False
 
     def __enter__(self):
@@ -148,13 +156,14 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._ensure_open()
         return self._loop_scheduler.await_(self._communicator.remove_rpc_subscriber(identifier))
 
-    def add_task_subscriber(self, subscriber):
+    def add_task_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
-        return self._loop_scheduler.await_(self._communicator.add_task_subscriber(self._wrap_subscriber(subscriber)))
+        return self._loop_scheduler.await_(
+            self._communicator.add_task_subscriber(self._wrap_subscriber(subscriber), identifier))
 
-    def remove_task_subscriber(self, subscriber):
+    def remove_task_subscriber(self, identifier):
         self._ensure_open()
-        return self._loop_scheduler.await_(self._communicator.remove_task_subscriber(subscriber))
+        return self._loop_scheduler.await_(self._communicator.remove_task_subscriber(identifier))
 
     def add_broadcast_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
@@ -192,8 +201,9 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     def _wrap_subscriber(self, subscriber):
         """"
-        We need to convert any kiwipy.Futures we get from a subscriber call into asyncio ones for the event loop
-        based communicator.  Do this by wrapping any subscriber methods and intercepting the return values.
+        We need to convert any kiwipy.Futures we get from a subscriber call into asyncio ones for
+        the event loop based communicator.  Do this by wrapping any subscriber methods and
+        intercepting the return values.
         """
 
         @functools.wraps(subscriber)
@@ -259,8 +269,8 @@ class RmqThreadTaskQueue:
         return self._loop_scheduler.await_(self._task_queue.remove_task_subscriber(subscriber))
 
     @contextmanager
-    def next_task(self, timeout=5.):
-        with self._loop_scheduler.async_ctx(self._task_queue.next_task(timeout=timeout)) as task:
+    def next_task(self, timeout=5., fail=True):
+        with self._loop_scheduler.async_ctx(self._task_queue.next_task(timeout=timeout, fail=fail)) as task:
             yield RmqThreadIncomingTask(task, self._loop_scheduler)
 
 
@@ -294,7 +304,7 @@ class RmqThreadIncomingTask:
             yield outcome
 
 
-def connect(connection_params=None,
+def connect(connection_params: [str, dict] = None,
             connection_factory=aio_pika.connect_robust,
             loop=None,
             message_exchange=defaults.MESSAGE_EXCHANGE,
@@ -305,6 +315,9 @@ def connect(connection_params=None,
             encoder=defaults.ENCODER,
             decoder=defaults.DECODER,
             testing_mode=False) -> RmqThreadCommunicator:
+    """
+    Establish a RabbitMQ communicator connection
+    """
     # pylint: disable=too-many-arguments
     return RmqThreadCommunicator.connect(connection_params=connection_params,
                                          connection_factory=connection_factory,

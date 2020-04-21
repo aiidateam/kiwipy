@@ -7,6 +7,8 @@ that all caps 'variable' names mean that it's a constant.
 
 import abc
 
+import pytest
+
 import kiwipy
 
 
@@ -14,7 +16,7 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
     # Disable invalid name because I use caps for constants which the linter doesn't like
     # also disable no-member for superclass calls because we use this as a mixin that gets used
     # with unittest.TestCase
-    # pylint: disable=invalid-name, no-member
+    # pylint: disable=invalid-name, no-member, too-many-public-methods
 
     WAIT_TIMEOUT = 5.
 
@@ -39,7 +41,8 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
         pass
 
     def test_close(self):
-        """Make sure a closed communicator raises when trying to perform any communication operation"""
+        """Make sure a closed communicator raises when trying to perform any communication
+        operation"""
         self.communicator.close()
         with self.assertRaises(kiwipy.CommunicatorClosed):
             self.communicator.add_rpc_subscriber(None, 'rpc')
@@ -219,6 +222,22 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
         self.assertEqual(1, len(tasks))
         self.assertEqual(TASK, tasks[0])
         self.assertEqual(RESULT, result)
+
+    def test_add_remove_task_subscriber(self):
+
+        def worker(*_, **__):
+            pass
+
+        worker_id = self.communicator.add_task_subscriber(worker)
+        self.communicator.remove_task_subscriber(worker_id)
+
+        fut = self.communicator.task_send('task')
+        with pytest.raises(kiwipy.TimeoutError):
+            fut.result(0.01)
+
+    def test_remove_unknown_task_subscriber(self):
+        with pytest.raises(ValueError):
+            self.communicator.remove_task_subscriber('unknown')
 
     # endregion
 

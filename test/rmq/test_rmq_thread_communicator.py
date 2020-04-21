@@ -8,6 +8,7 @@ import kiwipy
 from kiwipy import rmq
 
 from ..utils import CommunicatorTester
+from . import utils
 
 # pylint: disable=invalid-name, redefined-outer-name
 
@@ -85,7 +86,7 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
             tasks.append(task)
             return result_future
 
-        task_queue = self.communicator.task_queue('test-queue')
+        task_queue = self.communicator.task_queue('test-queue-{}'.format(utils.rand_string(5)))
 
         task_queue.add_task_subscriber(on_task)
         task_future = task_queue.task_send(TASK).result(timeout=self.WAIT_TIMEOUT)
@@ -103,7 +104,7 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
         RESULT = 42
 
         # Create a new queue and sent the task
-        task_queue = self.communicator.task_queue('test-queue')
+        task_queue = self.communicator.task_queue('test-queue-{}'.format(utils.rand_string(5)))
         task_future = task_queue.task_send(TASK)
 
         # Get the task and carry it out
@@ -174,8 +175,8 @@ def test_queue_iter_not_process(thread_task_queue: rmq.RmqThreadTaskQueue):
 def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
     """
     Check what happens when we forget to process a task we said we would
-    WARNING: This test mail fail when running with a debugger as it relies on the 'outcome' reference
-    count dropping to zero but the debugger may be preventing this.
+    WARNING: This test mail fail when running with a debugger as it relies on the 'outcome'
+    reference count dropping to zero but the debugger may be preventing this.
     """
     outcomes = list()
 

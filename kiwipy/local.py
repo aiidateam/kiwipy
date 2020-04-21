@@ -1,6 +1,6 @@
 from . import communications
 
-__all__ = ['LocalCommunicator']
+__all__ = ('LocalCommunicator',)
 
 
 class LocalCommunicator(communications.CommunicatorHelper):

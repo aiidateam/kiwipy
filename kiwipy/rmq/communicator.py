@@ -203,9 +203,9 @@ class RmqSubscriber:
             try:
                 receiver = utils.ensure_coroutine(subscriber)
                 result = await receiver(self, msg)
-            except Exception as exception:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except
                 # We had an exception in  calling the receiver
-                await self._send_response(message.reply_to, message.correlation_id, utils.exception_response(exception))
+                await self._send_response(message.reply_to, message.correlation_id, utils.exception_response(exc))
             else:
                 if asyncio.isfuture(result):
                     await self._send_future_response(result, message.reply_to, message.correlation_id)
@@ -242,12 +242,12 @@ class RmqSubscriber:
                 # Send out a message saying that we're waiting for a future to complete
                 await self._send_response(reply_to, correlation_id, utils.pending_response())
                 future = await future
-        except kiwipy.CancelledError as exception:
+        except kiwipy.CancelledError as exc:
             # Send out a cancelled response
-            await self._send_response(reply_to, correlation_id, utils.cancelled_response(str(exception)))
-        except Exception as exception:  # pylint: disable=broad-except
+            await self._send_response(reply_to, correlation_id, utils.cancelled_response(str(exc)))
+        except Exception as exc:  # pylint: disable=broad-except
             # Send out an exception response
-            await self._send_response(reply_to, correlation_id, utils.exception_response(exception))
+            await self._send_response(reply_to, correlation_id, utils.exception_response(exc))
         else:
             # We have a final result so send that as the response
             await self._send_response(reply_to, correlation_id, utils.result_response(future))
@@ -361,11 +361,11 @@ class RmqCommunicator:
     async def remove_rpc_subscriber(self, identifier):
         await self._message_subscriber.remove_rpc_subscriber(identifier)
 
-    async def add_task_subscriber(self, subscriber):
-        await self._default_task_queue.add_task_subscriber(subscriber)
+    async def add_task_subscriber(self, subscriber, identifier=None):
+        return await self._default_task_queue.add_task_subscriber(subscriber, identifier)
 
-    async def remove_task_subscriber(self, subscriber):
-        await self._default_task_queue.remove_task_subscriber(subscriber)
+    async def remove_task_subscriber(self, identifier):
+        await self._default_task_queue.remove_task_subscriber(identifier)
 
     async def add_broadcast_subscriber(self, subscriber, identifier=None):
         identifier = await self._message_subscriber.add_broadcast_subscriber(subscriber, identifier)

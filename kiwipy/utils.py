@@ -1,7 +1,7 @@
 import logging
 import traceback
 
-__all__ = ['EventHelper']
+__all__ = ('EventHelper',)
 
 _LOGGER = logging.getLogger(__name__)
 
