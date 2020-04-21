@@ -1,0 +1,4 @@
+# ONLY FOR ReadTheDocs
+.[dev]
+autodoc
+nbsphinx

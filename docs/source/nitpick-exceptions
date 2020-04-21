@@ -8,16 +8,13 @@ py:class  basestring
 
 py:class  Future
 
+# These all come from concurrent.futures
+py:func   kiwipy.wait
 py:class  kiwipy.Future
+py:meth:  kiwipy.Future.exception
+py:meth   kiwipy.Future.result
+py:class  kiwipy.futures.Future
 
 py:class  concurrent.futures._base.Error
 
-py:class  topika.Connection
-py:class  topika.connection.Connection
-py:class  topika.IncomingMessage
-py:class  topika.message.IncomingMessage
-py:class  topika.Message
-
 py:class  str
-
-py:class  tornado.concurrent.Future
