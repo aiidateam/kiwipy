@@ -291,7 +291,7 @@ class RmqIncomingTask:
         # This only happens if someone called self.process() and then let the future
         # get destroyed without setting an outcome
         assert outcome_ref is self._outcome_ref
-        # This task will no be processed
+        # This task will not be processed
         self._outcome_ref = None
         self.requeue()
 

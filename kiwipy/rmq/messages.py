@@ -137,7 +137,7 @@ class BasePublisherWithReplyQueue:
         self._awaiting_response = {}
 
         self._connection = connection
-        self._channel = None  # type: typing.Optional[type:aio_pika.Channel]
+        self._channel = None  # type: typing.Optional[aio_pika.Channel]
         self._exchange = None  # type: typing.Optional[aio_pika.Exchange]
         self._reply_queue = None  # type: typing.Optional[aio_pika.Queue]
 
