@@ -75,7 +75,10 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         return identifier
 
     async def remove_task_subscriber(self, identifier):
-        self._subscribers.pop(identifier)
+        try:
+            self._subscribers.pop(identifier)
+        except KeyError:
+            raise ValueError("Unknown task subscriber '{}'".format(identifier))
         if not self._subscribers:
             await self._task_queue.cancel(self._consumer_tag)
             self._consumer_tag = None

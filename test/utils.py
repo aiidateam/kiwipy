@@ -235,6 +235,10 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
         with pytest.raises(kiwipy.TimeoutError):
             fut.result(0.01)
 
+    def test_remove_unknown_task_subscriber(self):
+        with pytest.raises(ValueError):
+            self.communicator.remove_task_subscriber('unknown')
+
     # endregion
 
     # region Broadcast

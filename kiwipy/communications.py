@@ -51,10 +51,14 @@ class Communicator:
 
     @abc.abstractmethod
     def remove_task_subscriber(self, identifier):
-        """Remove a task subscriber from the communicator's default queue"""
+        """Remove a task subscriber from the communicator's default queue.
+
+        :param identifier: the subscriber to remove
+        :raises: ValueError if identifier does not correspond to a known subscriber
+        """
 
     @abc.abstractmethod
-    def add_broadcast_subscriber(self, subscriber: types.BroadcastSubscriber, identifier=None):
+    def add_broadcast_subscriber(self, subscriber: types.BroadcastSubscriber, identifier=None) -> Any:
         """
         Add a broadcast subscriber that will receive all broadcast messages
 
@@ -123,12 +127,13 @@ class CommunicatorHelper(Communicator):
         del self._broadcast_subscribers
         del self._rpc_subscribers
 
-    def add_rpc_subscriber(self, subscriber, identifier=None):
+    def add_rpc_subscriber(self, subscriber, identifier=None) -> Any:
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
         if identifier in self._rpc_subscribers:
             raise exceptions.DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
         self._rpc_subscribers[identifier] = subscriber
+        return identifier
 
     def remove_rpc_subscriber(self, identifier):
         self._ensure_open()
@@ -155,15 +160,16 @@ class CommunicatorHelper(Communicator):
         """
         Remove a task subscriber
 
-        :param identifier: The task subscriber identifier
+        :param identifier: the subscriber to remove
+        :raises: ValueError if identifier does not correspond to a known subscriber
         """
         self._ensure_open()
         try:
             self._task_subscribers.pop(identifier)
-        except ValueError:
+        except KeyError:
             raise ValueError("Unknown subscriber: '{}'".format(identifier))
 
-    def add_broadcast_subscriber(self, subscriber, identifier=None):
+    def add_broadcast_subscriber(self, subscriber: types.BroadcastSubscriber, identifier=None) -> Any:
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
         if identifier in self._broadcast_subscribers:
