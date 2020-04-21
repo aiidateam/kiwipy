@@ -2,7 +2,7 @@ import concurrent.futures
 import contextlib
 import logging
 
-__all__ = ['Future', 'chain', 'copy_future', 'CancelledError', 'capture_exceptions', 'wait', 'as_completed']
+__all__ = 'Future', 'chain', 'copy_future', 'CancelledError', 'capture_exceptions', 'wait', 'as_completed'
 
 _LOGGER = logging.getLogger(__name__)
 

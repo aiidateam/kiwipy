@@ -3,12 +3,12 @@ import collections
 import contextlib
 import logging
 import uuid
-import sys
 from typing import Optional
 import weakref
 
 import aio_pika
 from async_generator import async_generator, yield_, asynccontextmanager
+import shortuuid
 
 import kiwipy
 from . import defaults
@@ -17,7 +17,7 @@ from . import utils
 
 _LOGGER = logging.getLogger(__name__)
 
-__all__ = ('RmqTaskSubscriber', 'RmqTaskPublisher', 'RmqTaskQueue', 'RmqIncomingTask')
+__all__ = 'RmqTaskSubscriber', 'RmqTaskPublisher', 'RmqTaskQueue', 'RmqIncomingTask'
 
 TaskInfo = collections.namedtuple('TaskBody', ('task', 'no_reply'))
 
@@ -29,9 +29,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     TASK_QUEUE_ARGUMENTS = {"x-message-ttl": defaults.TASK_MESSAGE_TTL}
 
     def __init__(self,
-                 connection,
-                 exchange_name=defaults.MESSAGE_EXCHANGE,
-                 queue_name=defaults.TASK_QUEUE,
+                 connection: aio_pika.Connection,
+                 exchange_name: str = defaults.MESSAGE_EXCHANGE,
+                 queue_name: str = defaults.TASK_QUEUE,
                  testing_mode=False,
                  decoder=defaults.DECODER,
                  encoder=defaults.ENCODER,
@@ -41,11 +41,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         # pylint: disable=too-many-arguments
         """
         :param connection: An RMQ connection
-        :type connection: :class:`aio_pika.Connection`
         :param exchange_name: the name of the exchange to use
-        :type exchange_name: :class:`str`
         :param queue_name: the name of the task queue to use
-        :type queue_name: :class:`str`
         :param decoder: A message decoder
         :param encoder: A response encoder
         """
@@ -63,16 +60,22 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         self._consumer_tag = None
 
         self._task_queue = None  # type: Optional[aio_pika.Queue]
-        self._subscribers = []
+        self._subscribers = {}
         self._pending_tasks = []
 
-    async def add_task_subscriber(self, subscriber):
-        self._subscribers.append(subscriber)
+    async def add_task_subscriber(self, subscriber, identifier=None):
+        identifier = identifier or shortuuid.uuid()
+        if identifier in self._subscribers:
+            raise kiwipy.DuplicateSubscriberIdentifier("Task identifier '{}'".format(identifier))
+
+        self._subscribers[identifier] = subscriber
         if self._consumer_tag is None:
             self._consumer_tag = await self._task_queue.consume(self._on_task)
 
-    async def remove_task_subscriber(self, subscriber):
-        self._subscribers.remove(subscriber)
+        return identifier
+
+    async def remove_task_subscriber(self, identifier):
+        self._subscribers.pop(identifier)
         if not self._subscribers:
             await self._task_queue.cancel(self._consumer_tag)
             self._consumer_tag = None
@@ -134,7 +137,6 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         # x-message-ttl means what is the default ttl for a message arriving in the queue
         self._task_queue = await self._channel.declare_queue(name=self._task_queue_name,
                                                              durable=not self._testing_mode,
-                                                             auto_delete=self._testing_mode,
                                                              arguments=arguments)
         await self._task_queue.bind(self._exchange, routing_key=self._task_queue.name)
 
@@ -145,14 +147,14 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         # Decode the message tuple into a task body for easier use
         rmq_task = RmqIncomingTask(self, message)
         with rmq_task.processing() as outcome:
-            for subscriber in self._subscribers:
+            for subscriber in self._subscribers.values():
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
                     result = await subscriber(self, rmq_task.body)
 
-                    # If a task returns a future it is not considered done until the chain of futures
-                    # (i.e. if the first future resolves to a future and so on) finishes and produces
-                    # a concrete result
+                    # If a task returns a future it is not considered done until the chain of
+                    # futures (i.e. if the first future resolves to a future and so on) finishes
+                    # and produces a concrete result
                     while asyncio.isfuture(result):
                         if not rmq_task.no_reply:
                             await self._send_response(utils.pending_response(), message)
@@ -225,7 +227,7 @@ class RmqIncomingTask:
             raise asyncio.InvalidStateError("The task is {}".format(self._state))
 
         self._state = TASK_PROCESSING
-        outcome = self._subscriber.loop().create_future()
+        outcome = self._create_future()
         # Rely on the done callback to signal the end of processing
         outcome.add_done_callback(self._task_done)
         # Or the user let's the future get destroyed
@@ -243,8 +245,8 @@ class RmqIncomingTask:
 
     @contextlib.contextmanager
     def processing(self):
-        """Processing context.  The task should be done at the end otherwise it's assumed the caller doesn't
-        want to process it and it's sent back to the queue"""
+        """Processing context.  The task should be done at the end otherwise it's assumed the
+        caller doesn't want to process it and it's sent back to the queue"""
         if self._state != TASK_PENDING:
             raise asyncio.InvalidStateError("The task is {}".format(self._state))
 
@@ -278,7 +280,7 @@ class RmqIncomingTask:
             if not self.no_reply:
                 # Schedule a task to send the appropriate response
                 if outcome.exception():
-                    reply_body = utils.exception_response(*sys.exc_info()[1:])
+                    reply_body = utils.exception_response(outcome.exception())
                 else:
                     reply_body = utils.result_response(outcome.result())
                 # pylint: disable=protected-access
@@ -299,6 +301,9 @@ class RmqIncomingTask:
         self._outcome_ref = None
         self._subscriber = None
         self._message = None
+
+    def _create_future(self) -> asyncio.Future:
+        return self._subscriber.loop().create_future()
 
 
 class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
@@ -399,11 +404,11 @@ class RmqTaskQueue:
         """Send a task to the queue"""
         return await self._publisher.task_send(task, no_reply)
 
-    async def add_task_subscriber(self, subscriber):
-        return await self._subscriber.add_task_subscriber(subscriber)
+    async def add_task_subscriber(self, subscriber, identifier=None):
+        return await self._subscriber.add_task_subscriber(subscriber, identifier)
 
-    async def remove_task_subscriber(self, subscriber):
-        return await self._subscriber.remove_task_subscriber(subscriber)
+    async def remove_task_subscriber(self, identifier):
+        return await self._subscriber.remove_task_subscriber(identifier)
 
     @asynccontextmanager
     @async_generator

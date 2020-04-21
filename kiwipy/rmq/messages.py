@@ -243,8 +243,8 @@ class BasePublisherWithReplyQueue:
             else:
                 utils.response_to_future(response, response_future)
                 try:
-                    # If the response was a future it means we should another message that resolves
-                    # that future
+                    # If the response was a future it means we should get another message that
+                    # resolves that future
                     if asyncio.isfuture(response_future.result()):
                         self._awaiting_response[correlation_id] = response_future.result()
                 except Exception:  # pylint: disable=broad-except

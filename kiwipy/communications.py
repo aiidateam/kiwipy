@@ -1,5 +1,6 @@
 import abc
 import sys
+from typing import Any
 
 import shortuuid
 
@@ -7,8 +8,9 @@ from . import exceptions
 # For backwards compatibility import exceptions too
 from .exceptions import *  # pylint: disable=wildcard-import, redefined-builtin, unused-wildcard-import
 from . import futures
+from . import types
 
-__all__ = ['Communicator', 'CommunicatorHelper']
+__all__ = 'Communicator', 'CommunicatorHelper'
 
 
 class Communicator:
@@ -25,8 +27,10 @@ class Communicator:
         """Close a communicator, free up all resources and do not allow any further operations"""
 
     @abc.abstractmethod
-    def add_rpc_subscriber(self, subscriber, identifier=None):
-        pass
+    def add_rpc_subscriber(self, subscriber: types.RpcSubscriber, identifier=None) -> Any:
+        """Add an RPC subscriber to the communicator with an optional identifier.  If an identifier
+        is not provided the communicator will generate a unique one.  In all cases the identifier
+        will be returned."""
 
     @abc.abstractmethod
     def remove_rpc_subscriber(self, identifier):
@@ -38,15 +42,19 @@ class Communicator:
         """
 
     @abc.abstractmethod
-    def add_task_subscriber(self, subscriber):
-        pass
+    def add_task_subscriber(self, subscriber: types.TaskSubscriber, identifier=None) -> Any:
+        """Add a task subscriber to the communicator's default queue.  Returns the identifier.
+
+        :param subscriber: The task callback function
+        :param identifier: the subscriber identifier
+        """
 
     @abc.abstractmethod
-    def remove_task_subscriber(self, subscriber):
-        pass
+    def remove_task_subscriber(self, identifier):
+        """Remove a task subscriber from the communicator's default queue"""
 
     @abc.abstractmethod
-    def add_broadcast_subscriber(self, subscriber, identifier=None):
+    def add_broadcast_subscriber(self, subscriber: types.BroadcastSubscriber, identifier=None):
         """
         Add a broadcast subscriber that will receive all broadcast messages
 
@@ -90,7 +98,7 @@ class Communicator:
 
     @abc.abstractmethod
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None) -> bool:
-        pass
+        """Broadcast a message to all subscribers"""
 
 
 class CommunicatorHelper(Communicator):
@@ -99,7 +107,7 @@ class CommunicatorHelper(Communicator):
     # pylint: disable=abstract-method
 
     def __init__(self):
-        self._task_subscribers = []
+        self._task_subscribers = {}
         self._broadcast_subscribers = {}
         self._rpc_subscribers = {}
         self._closed = False
@@ -129,26 +137,31 @@ class CommunicatorHelper(Communicator):
         except KeyError:
             raise ValueError("Unknown subscriber '{}'".format(identifier))
 
-    def add_task_subscriber(self, subscriber):
+    def add_task_subscriber(self, subscriber, identifier=None):
         """
         Register a task subscriber
 
         :param subscriber: The task callback function
+        :param identifier: the subscriber identifier
         """
         self._ensure_open()
-        self._task_subscribers.append(subscriber)
+        identifier = identifier or shortuuid.uuid()
+        if identifier in self._rpc_subscribers:
+            raise exceptions.DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
+        self._task_subscribers[identifier] = subscriber
+        return identifier
 
-    def remove_task_subscriber(self, subscriber):
+    def remove_task_subscriber(self, identifier):
         """
         Remove a task subscriber
 
-        :param subscriber: The task callback function
+        :param identifier: The task subscriber identifier
         """
         self._ensure_open()
         try:
-            self._task_subscribers.remove(subscriber)
+            self._task_subscribers.pop(identifier)
         except ValueError:
-            raise ValueError("Unknown subscriber: '{}'".format(subscriber))
+            raise ValueError("Unknown subscriber: '{}'".format(identifier))
 
     def add_broadcast_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
@@ -169,23 +182,17 @@ class CommunicatorHelper(Communicator):
     def fire_task(self, msg, no_reply=False):
         self._ensure_open()
         future = futures.Future()
-        handled = False
 
-        for subscriber in self._task_subscribers:
+        for subscriber in self._task_subscribers.values():
             try:
                 result = subscriber(self, msg)
                 future.set_result(result)
-                handled = True
                 break
             except exceptions.TaskRejected:
                 pass
             except Exception:  # pylint: disable=broad-except
                 future.set_exception(exceptions.RemoteException(sys.exc_info()))
-                handled = True
                 break
-
-        if not handled:
-            future.set_exception(exceptions.TaskRejected("Rejected by all subscribers"))
 
         if no_reply:
             return None
