@@ -1,10 +1,18 @@
 import re
 import typing
+try:
+    # py3.5 compatibility, see, e.g.:
+    # https://stackoverflow.com/questions/6102019/type-of-compiled-regex-object-in-python
+    import typing.re
+    RePattern = typing.re.Pattern  # pylint: disable=invalid-name
+except ImportError:
+    RePattern = typing.Pattern  # pylint: disable=invalid-name
 
 __all__ = ('BroadcastFilter',)
 
 
 class BroadcastFilter:
+    """A filter that can be used to limit the subjects and/or senders that will be received"""
 
     def __init__(self, subscriber, subject=None, sender=None):
         self._subscriber = subscriber
@@ -40,7 +48,7 @@ class BroadcastFilter:
     def _ensure_filter(cls, filter_value):
         if isinstance(filter_value, str):
             return re.compile(filter_value.replace('.', '[.]').replace('*', '.*')).match
-        if isinstance(filter_value, typing.re.Pattern):
+        if isinstance(filter_value, RePattern):
             return filter_value.match
 
         return lambda val: val == filter_value
