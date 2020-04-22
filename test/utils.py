@@ -6,6 +6,7 @@ that all caps 'variable' names mean that it's a constant.
 """
 
 import abc
+import re
 
 import pytest
 
@@ -308,8 +309,8 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
 
         self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
 
-        for sendr in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
-            self.communicator.broadcast_send(None, sender=sendr)
+        for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
+            self.communicator.broadcast_send(None, sender=sender)
 
         done.result(timeout=self.WAIT_TIMEOUT)
 
@@ -318,7 +319,7 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
 
     def test_broadcast_filter_sender_and_subject(self):
         # pylint: disable=invalid-name
-        senders_and_subects = set()
+        senders_and_subjects = set()
         EXPECTED = {
             ('bob.jones', 'purchase.car'),
             ('bob.jones', 'purchase.piano'),
@@ -329,8 +330,8 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
         done = kiwipy.Future()
 
         def on_broadcast_1(_communicator, _body, sender=None, subject=None, _correlation_id=None):
-            senders_and_subects.add((sender, subject))
-            if len(senders_and_subects) == len(EXPECTED):
+            senders_and_subjects.add((sender, subject))
+            if len(senders_and_subjects) == len(EXPECTED):
                 done.set_result(True)
 
         filtered = kiwipy.BroadcastFilter(on_broadcast_1)
@@ -338,14 +339,66 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
         filtered.add_subject_filter("purchase.*")
         self.communicator.add_broadcast_subscriber(filtered)
 
-        for sendr in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
+        for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
             for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
-                self.communicator.broadcast_send(None, sender=sendr, subject=subj)
+                self.communicator.broadcast_send(None, sender=sender, subject=subj)
 
         done.result(timeout=self.WAIT_TIMEOUT)
 
-        self.assertEqual(4, len(senders_and_subects))
-        self.assertSetEqual(EXPECTED, senders_and_subects)
+        self.assertEqual(4, len(senders_and_subjects))
+        self.assertSetEqual(EXPECTED, senders_and_subjects)
+
+    def test_broadcast_filter_sender_and_subject_regex(self):
+        """As the standard broadcast test but using regular expressions instead of wildcards"""
+        # pylint: disable=invalid-name
+        senders_and_subjects = set()
+        EXPECTED = {
+            ('bob.jones', 'purchase.car'),
+            ('bob.jones', 'purchase.piano'),
+            ('alice.jones', 'purchase.car'),
+            ('alice.jones', 'purchase.piano'),
+        }
+
+        done = kiwipy.Future()
+
+        def on_broadcast_1(_communicator, _body, sender=None, subject=None, _correlation_id=None):
+            senders_and_subjects.add((sender, subject))
+            if len(senders_and_subjects) == len(EXPECTED):
+                done.set_result(True)
+
+        filtered = kiwipy.BroadcastFilter(on_broadcast_1)
+        filtered.add_sender_filter(re.compile(".*.jones"))
+        filtered.add_subject_filter(re.compile("purchase.*"))
+        self.communicator.add_broadcast_subscriber(filtered)
+
+        for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
+            for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
+                self.communicator.broadcast_send(None, sender=sender, subject=subj)
+
+        done.result(timeout=self.WAIT_TIMEOUT)
+
+        self.assertSetEqual(EXPECTED, senders_and_subjects)
+
+    def test_broadcast_filter_match(self):
+        """Test exact match broadcast filter"""
+        EXPECTED_SENDERS = ['alice.jones']  # pylint: disable=invalid-name
+        senders = []
+
+        done = kiwipy.Future()
+
+        def on_broadcast_1(_comm, _body, sender=None, _subject=None, _correlation_id=None):
+            senders.append(sender)
+            if len(senders) == len(EXPECTED_SENDERS):
+                done.set_result(True)
+
+        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender="alice.jones"))
+
+        for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
+            self.communicator.broadcast_send(None, sender=sender)
+
+        done.result(timeout=self.WAIT_TIMEOUT)
+
+        self.assertListEqual(EXPECTED_SENDERS, senders)
 
     def test_add_remove_broadcast_subscriber(self):
         """Test adding, removing and readding a broadcast subscriber"""
