@@ -33,7 +33,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     def connect(cls,
                 connection_params: Union[str, dict] = None,
                 connection_factory=aio_pika.connect_robust,
-                loop=None,
                 message_exchange=defaults.MESSAGE_EXCHANGE,
                 task_exchange=defaults.TASK_EXCHANGE,
                 task_queue=defaults.TASK_QUEUE,
@@ -44,19 +43,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                 testing_mode=False,
                 async_task_timeout=TASK_TIMEOUT):
         # pylint: disable=too-many-arguments
-        connection_params = connection_params or {}
-        if isinstance(connection_params, str):
-            # Have to convert it to a dictionary as we inject the loop next
-            params_dict = {'url': connection_params}
-            connection_params = params_dict
-        # Create a new loop if one isn't supplied
-        loop = loop or asyncio.new_event_loop()
-        loop.set_debug(testing_mode)
-        connection_params['loop'] = loop
-
-        # Run the loop to create the connection
-        connection = loop.run_until_complete(connection_factory(**connection_params))
-        comm = cls(connection,
+        comm = cls(connection_params,
+                   connection_factory,
                    message_exchange=message_exchange,
                    task_exchange=task_exchange,
                    task_queue=task_queue,
@@ -72,8 +60,10 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         return comm
 
     def __init__(self,
-                 connection,
+                 connection_params: Union[str, dict] = None,
+                 connection_factory=aio_pika.connect_robust,
                  message_exchange: str = defaults.MESSAGE_EXCHANGE,
+                 queue_expires: int = defaults.QUEUE_EXPIRES,
                  task_exchange=defaults.TASK_EXCHANGE,
                  task_queue: str = defaults.TASK_QUEUE,
                  task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
@@ -84,30 +74,45 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                  async_task_timeout=TASK_TIMEOUT):
         # pylint: disable=too-many-arguments
         """
-        :param connection: The RMQ connector object
-        :type connection: :class:`aio_pika.Connection`
+        :param connection_params: the connection parameters that will be passed to the connection
+            factory to create the connection
+        :param connection_factory: the factory method to open the aio_pika connection with
         :param message_exchange: The name of the RMQ message exchange to use
-        :type message_exchange: str
+        :param queue_expires: the expiry time for standard queues in milliseconds.  This is the time
+            after which, if there are no subscribers, a queue will automatically be deleted by
+             RabbitMQ.
         :param task_exchange: The name of the RMQ task exchange to use
-        :type task_exchange: str
         :param task_queue: The name of the task queue to use
-        :type task_queue: str
+        :param task_prefetch_count: the number of tasks this communicator can fetch simultaneously
+        :param task_prefetch_size: the total size of the messages that the default queue can fetch
+            simultaneously
         :param encoder: The encoder to call for encoding a message
         :param decoder: The decoder to call for decoding a message
-        :param testing_mode: Run in testing mode: all queues and exchanges
-            will be temporary
+        :param testing_mode: Run in testing mode: all queues and exchanges will be temporary
         """
-        self._communicator = communicator.RmqCommunicator(connection,
-                                                          message_exchange=message_exchange,
-                                                          task_exchange=task_exchange,
-                                                          task_queue=task_queue,
-                                                          encoder=encoder,
-                                                          decoder=decoder,
-                                                          task_prefetch_size=task_prefetch_size,
-                                                          task_prefetch_count=task_prefetch_count,
-                                                          testing_mode=testing_mode)
-        self._loop = self._communicator.loop  # type: asyncio.AbstractEventLoop
+        # Always use a separate loop
+        self._loop = asyncio.new_event_loop()
+        self._loop.set_debug(testing_mode)
         self._loop_scheduler = aiothreads.LoopScheduler(self._loop, 'RMQ communicator', async_task_timeout)
+
+        self._communicator = communicator.RmqCommunicator(
+            connection_params=connection_params,
+            connection_factory=connection_factory,
+            loop=self._loop,
+
+            # Messages
+            message_exchange=message_exchange,
+            queue_expires=queue_expires,
+
+            # Tasks
+            task_exchange=task_exchange,
+            task_queue=task_queue,
+            task_prefetch_size=task_prefetch_size,
+            task_prefetch_count=task_prefetch_count,
+            encoder=encoder,
+            decoder=decoder,
+            testing_mode=testing_mode)
+
         self._stop_signal = None
         self._closed = False
 
@@ -120,7 +125,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self.close()
 
     def loop(self):
-        return self._loop
+        return self._loop_scheduler.loop()
 
     def is_closed(self) -> bool:
         return self._closed
@@ -130,7 +135,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             return
         self.stop()
         # Clean up
-        self._loop = None
         self._loop_scheduler = None
         self._closed = True
 
@@ -308,7 +312,6 @@ class RmqThreadIncomingTask:
 
 def connect(connection_params: Union[str, dict] = None,
             connection_factory=aio_pika.connect_robust,
-            loop=None,
             message_exchange=defaults.MESSAGE_EXCHANGE,
             task_exchange=defaults.TASK_EXCHANGE,
             task_queue=defaults.TASK_QUEUE,
@@ -323,7 +326,6 @@ def connect(connection_params: Union[str, dict] = None,
     # pylint: disable=too-many-arguments
     return RmqThreadCommunicator.connect(connection_params=connection_params,
                                          connection_factory=connection_factory,
-                                         loop=loop,
                                          message_exchange=message_exchange,
                                          task_exchange=task_exchange,
                                          task_queue=task_queue,

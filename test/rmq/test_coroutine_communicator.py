@@ -162,9 +162,9 @@ async def test_broadcast_filter_sender_and_subject(communicator: kiwipy.rmq.RmqC
 
 
 @pytest.mark.asyncio
-async def test_add_remove_broadcast_subscriber(connection: kiwipy.rmq.RmqCommunicator):
+async def test_add_remove_broadcast_subscriber(connection_params):
     # Set the expiry to something small so we know that the queues expire after we unsubscribe
-    communicator = await utils.new_communicator(connection, settings={'queue_expires': 1})
+    communicator = await utils.new_communicator(connection_params, settings={'queue_expires': 1})
 
     async with communicator:
         broadcast_received = asyncio.Future()

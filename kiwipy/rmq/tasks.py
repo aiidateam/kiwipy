@@ -171,6 +171,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 except Exception as exc:  # pylint: disable=broad-except
                     # There was an exception during the processing of this task
                     outcome.set_exception(exc)
+                    _LOGGER.exception("Exception occurred while processing task.")
                 else:
                     # All good
                     outcome.set_result(result)
