@@ -88,6 +88,7 @@ html_theme = 'alabaster'
 #
 # html_theme_options = {}
 html_theme_options = {
+    'analytics_id': 'UA-17296547-4',
     'codecov_button': True,
     'description': 'Robust, high-volume, message based communication made easy',
     'github_button': True,
