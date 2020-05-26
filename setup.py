@@ -28,7 +28,7 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
     keywords='communication messaging rpc broadcast',
-    install_requires=['shortuuid', 'async_generator', 'pytray>=0.2.2, <0.3.0'],
+    install_requires=['shortuuid', 'async_generator', 'pytray>=0.2.2, <0.3.0', 'deprecation'],
     python_requires=">=3.5",
     extras_require={
         'rmq': ['aio-pika', 'pyyaml~=5.1'],
@@ -47,8 +47,6 @@ setup(
         ],
         'docs': [
             'nbsphinx',  # Jupyter notebooks in docs
-            'notebook < 6.0',  # Jupyter w/asyncio causes problems for examples
-            'tornado < 5.0',  # For same reason as above
             'jupyter',  # For running doc examples
             'sphinx-autobuild',
             "docutils==0.14",

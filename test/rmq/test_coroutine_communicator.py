@@ -2,6 +2,7 @@ import asyncio
 import pytest
 
 import kiwipy
+import kiwipy.rmq
 
 from . import utils
 
@@ -32,7 +33,7 @@ async def test_rpc_send_receive(communicator: kiwipy.rmq.RmqCommunicator):
 
 
 @pytest.mark.asyncio
-async def test_add_remove_rpc_subscriber(communicator):
+async def test_add_remove_rpc_subscriber(communicator: kiwipy.rmq.RmqCommunicator):
     """ Test adding, sending to, and then removing an RPC subscriber """
 
     def rpc_subscriber(_comm, _msg):
