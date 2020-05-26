@@ -36,6 +36,7 @@ setup(
             'pre-commit',
             'pytest>=4',
             'pytest-asyncio<=0.10.0',
+            'pytest-notebook',
             'twine',
             'yapf',
             'prospector',

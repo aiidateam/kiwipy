@@ -1,4 +1,6 @@
+# pylint: disable=invalid-name, redefined-outer-name
 import concurrent.futures
+import sys
 import unittest
 
 import shortuuid
@@ -10,7 +12,6 @@ from kiwipy import rmq
 from ..utils import CommunicatorTester
 from . import utils
 
-# pylint: disable=invalid-name, redefined-outer-name
 
 WAIT_TIMEOUT = 5.
 
@@ -226,3 +227,17 @@ def test_task_processing_exception(thread_task_queue: rmq.RmqThreadTaskQueue):
     with pytest.raises(kiwipy.QueueEmpty):
         with thread_task_queue.next_task(timeout=1.):
             pass
+
+
+@pytest.mark.skipif(sys.version_info < (3, 6), reason='`pytest-notebook` plugin requires Python >= 3.6')
+def test_jupyter_notebook():
+    """Test that the `RmqThreadCommunicator` can be used in a Jupyter notebook."""
+    import os
+    from pytest_notebook.nb_regression import NBRegressionFixture
+
+    fixture = NBRegressionFixture(exec_timeout=50)
+    fixture.diff_color_words = False
+    fixture.diff_ignore = ('/metadata/language_info/version',)
+
+    with open(os.path.abspath('test/rmq/notebooks/communicator.ipynb')) as handle:
+        fixture.check(handle)
