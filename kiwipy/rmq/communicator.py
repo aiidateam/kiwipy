@@ -49,13 +49,8 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
             body=self._encode(message_dict),
             delivery_mode=aio_pika.DeliveryMode.NOT_PERSISTENT,
         )
-        try:
-            result = await self.publish(message, routing_key=defaults.BROADCAST_TOPIC)
-        except aio_pika.exceptions.DeliveryError as exception:
-            _LOGGER.debug('Broadcast message sent but was unroutable, probably no queues: %s', str(exception))
-            # Doesn't matter because broadcasts are meant to be fire-and-forget anyway
-            result = True
-        return result
+        # Send as mandatory=False because we don't expect the message to be routable to anyone
+        return await self.publish(message, routing_key=defaults.BROADCAST_TOPIC, mandatory=False)
 
 
 class RmqSubscriber:
@@ -108,8 +103,6 @@ class RmqSubscriber:
         self._broadcast_subscribers = {}
         self._broadcast_queue = None  # type: typing.Optional[aio_pika.Queue]
         self._broadcast_consumer_tag = None
-
-        self._active = False
 
     async def add_rpc_subscriber(self, subscriber, identifier=None):
         # Create an RPC queue
@@ -276,10 +269,7 @@ class RmqCommunicator:
 
     def __init__(
             self,
-            # Connection parameters
-            connection_params: Union[str, dict] = None,
-            connection_factory=aio_pika.connect_robust,
-            loop=None,
+            connection: aio_pika.Connection,
             # Messages
             message_exchange: str = defaults.MESSAGE_EXCHANGE,
             queue_expires: int = defaults.QUEUE_EXPIRES,
@@ -293,10 +283,12 @@ class RmqCommunicator:
             testing_mode=False):
         # pylint: disable=too-many-arguments
         """
-        :param connection_params: the connection parameters that will be passed to the connection
-            factory to create the connection
-        :param connection_factory: the factory method to open the aio_pika connection with
-        :param loop: the event loop to use, defaults to asyncio.get_event_loop()
+        Create a new asynchronous communicator.
+
+        Note: this communicator takes ownership of the connection and, therefore, it should not be
+        shared as when this communicator disconnects it will also hang up the connection.
+
+        :param connection: An aio_pika connection, doesn't need to be connected
         :param message_exchange: The name of the RMQ message exchange to use
         :param queue_expires: the expiry time for standard queues in milliseconds.  This is the time
             after which, if there are no subscribers, a queue will automatically be deleted by
@@ -311,16 +303,9 @@ class RmqCommunicator:
         :param testing_mode: Run in testing mode: all queues and exchanges will be temporary
         """
         super().__init__()
-        loop = loop or asyncio.get_event_loop()
 
-        if isinstance(connection_params, str):
-            # Convert to aio_pika connect kwargs format
-            connection_params = {'url': connection_params}
-        connection_params['loop'] = loop
-
-        self._connection_params = connection_params
-        self._connection_factory = connection_factory
-        self._loop = loop
+        self._connection = connection
+        self._loop = connection.loop
 
         # Save some of these settings for later
         self._message_exchange = message_exchange
@@ -349,48 +334,60 @@ class RmqCommunicator:
 
     @property
     def loop(self):
+        """Get the event loop instance driving this communicator connection"""
         return self._connection.loop
 
-    def get_default_task_queue(self) -> Optional[tasks.RmqTaskQueue]:
-        if not self.connected():
-            return None
+    async def get_default_task_queue(self) -> tasks.RmqTaskQueue:
+        """Get a default task queue.  If one doesn't exist it will be created as part of this call
+        """
+        self._ensure_connected()
 
         if self._default_task_queue is None:
-            self._default_task_queue = tasks.RmqTaskQueue(self._connection,
-                                                          exchange_name=self._task_exchange,
-                                                          queue_name=self._task_queue,
-                                                          decoder=self._decoder,
-                                                          encoder=self._encoder,
-                                                          prefetch_size=self._task_prefetch_size,
-                                                          prefetch_count=self._task_prefetch_count,
-                                                          testing_mode=self._testing_mode)
+            task_queue = tasks.RmqTaskQueue(self._connection,
+                                            exchange_name=self._task_exchange,
+                                            queue_name=self._task_queue,
+                                            decoder=self._decoder,
+                                            encoder=self._encoder,
+                                            prefetch_size=self._task_prefetch_size,
+                                            prefetch_count=self._task_prefetch_count,
+                                            testing_mode=self._testing_mode)
+
+            await task_queue.connect()
+            self._default_task_queue = task_queue
 
         return self._default_task_queue
 
-    def get_message_subscriber(self) -> Optional[RmqSubscriber]:
-        if not self.connected():
-            return None
+    async def get_message_subscriber(self) -> RmqSubscriber:
+        """Get the message subscriber.  If one doesn't exist it will be created as part of this call
+        """
+        self._ensure_connected()
 
         if self._message_subscriber is None:
-            self._message_subscriber = RmqSubscriber(self._connection,
-                                                     message_exchange=self._message_exchange,
-                                                     queue_expires=self._queue_expires,
-                                                     encoder=self._encoder,
-                                                     decoder=self._decoder,
-                                                     testing_mode=self._testing_mode)
+            subscriber = RmqSubscriber(self._connection,
+                                       message_exchange=self._message_exchange,
+                                       queue_expires=self._queue_expires,
+                                       encoder=self._encoder,
+                                       decoder=self._decoder,
+                                       testing_mode=self._testing_mode)
+            await subscriber.connect()
+            self._message_subscriber = subscriber
 
         return self._message_subscriber
 
-    def get_message_publisher(self) -> Optional[RmqPublisher]:
-        if not self.connected():
-            return None
+    async def get_message_publisher(self) -> RmqPublisher:
+        """Get a message publisher.  If one doesn't exist it will be created as part of this call
+        """
+        self._ensure_connected()
 
         if self._message_publisher is None:
-            self._message_publisher = RmqPublisher(self._connection,
-                                                   exchange_name=self._message_exchange,
-                                                   encoder=self._encoder,
-                                                   decoder=self._decoder,
-                                                   testing_mode=self._testing_mode)
+            publisher = RmqPublisher(self._connection,
+                                     exchange_name=self._message_exchange,
+                                     encoder=self._encoder,
+                                     decoder=self._decoder,
+                                     testing_mode=self._testing_mode)
+
+            await publisher.connect()
+            self._message_publisher = publisher
 
         return self._message_publisher
 
@@ -398,49 +395,54 @@ class RmqCommunicator:
         return self._connection is not None and not self._connection.is_closed
 
     async def connect(self):
-        if self._connection is None:
-            self._connection = await self._connection_factory(**self._connection_params)
-
-        if self._connection.is_closed:
+        """Establish a connection if not already connected"""
+        if not self.connected():
             await self._connection.connect()
 
-        await self.get_message_subscriber().connect()
-        await self.get_message_publisher().connect()
-        await self.get_default_task_queue().connect()
-
     async def disconnect(self):
+        """Disconnect from the connection if connected"""
+        if not self.connected():
+            return
+
         if self._message_publisher is not None:
             await self._message_publisher.disconnect()
+            self._message_publisher = None
 
         if self._message_subscriber is not None:
             await self._message_subscriber.disconnect()
+            self._message_subscriber = None
 
         if self._default_task_queue is not None:
             await self._default_task_queue.disconnect()
+            self._default_task_queue = None
 
         await self._connection.close()
 
     async def add_rpc_subscriber(self, subscriber, identifier=None):
-        identifier = await self._message_subscriber.add_rpc_subscriber(subscriber, identifier)
+        msg_subscriber = await self.get_message_subscriber()
+        identifier = await msg_subscriber.add_rpc_subscriber(subscriber, identifier)
         return identifier
 
     async def remove_rpc_subscriber(self, identifier):
-        await self._message_subscriber.remove_rpc_subscriber(identifier)
+        msg_subscriber = await self.get_message_subscriber()
+        await msg_subscriber.remove_rpc_subscriber(identifier)
 
     async def add_task_subscriber(self, subscriber, identifier=None):
-        default_task_queue = self.get_default_task_queue()
+        default_task_queue = await self.get_default_task_queue()
         return await default_task_queue.add_task_subscriber(subscriber, identifier)
 
     async def remove_task_subscriber(self, identifier):
-        default_task_queue = self.get_default_task_queue()
+        default_task_queue = await self.get_default_task_queue()
         await default_task_queue.remove_task_subscriber(identifier)
 
     async def add_broadcast_subscriber(self, subscriber, identifier=None):
-        identifier = await self._message_subscriber.add_broadcast_subscriber(subscriber, identifier)
+        msg_subscriber = await self.get_message_subscriber()
+        identifier = await msg_subscriber.add_broadcast_subscriber(subscriber, identifier)
         return identifier
 
     async def remove_broadcast_subscriber(self, identifier):
-        await self._message_subscriber.remove_broadcast_subscriber(identifier)
+        msg_subscriber = await self.get_message_subscriber()
+        await msg_subscriber.remove_broadcast_subscriber(identifier)
 
     async def rpc_send(self, recipient_id, msg):
         """
@@ -451,18 +453,21 @@ class RmqCommunicator:
         :return: A future corresponding to the outcome of the call
         """
         try:
-            response_future = await self._message_publisher.rpc_send(recipient_id, msg)
+            publisher = await self.get_message_publisher()
+            response_future = await publisher.rpc_send(recipient_id, msg)
             return response_future
         except aio_pika.exceptions.DeliveryError as exception:
             raise kiwipy.UnroutableError(str(exception))
 
     async def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
-        result = await self._message_publisher.broadcast_send(body, sender, subject, correlation_id)
+        publisher = await self.get_message_publisher()
+        result = await publisher.broadcast_send(body, sender, subject, correlation_id)
         return result
 
     async def task_send(self, task, no_reply=False):
         try:
-            result = await self.get_default_task_queue().task_send(task, no_reply)
+            task_queue = await self.get_default_task_queue()
+            result = await task_queue.task_send(task, no_reply)
             return result
         except aio_pika.exceptions.DeliveryError as exception:
             raise kiwipy.UnroutableError(str(exception))
@@ -487,12 +492,16 @@ class RmqCommunicator:
         self._task_queues.append(queue)
         return queue
 
+    def _ensure_connected(self):
+        if not self.connected():
+            raise RuntimeError(
+                "The communicator is not connected, call connect() or use in a context to establish a connection.")
+
 
 async def async_connect(
         # Connection parameters
         connection_params: Union[str, dict] = None,
         connection_factory=aio_pika.connect_robust,
-        loop=None,
         # Messages
         message_exchange: str = defaults.MESSAGE_EXCHANGE,
         queue_expires: int = defaults.QUEUE_EXPIRES,
@@ -511,7 +520,6 @@ async def async_connect(
     :param connection_params: the connection parameters that will be passed to the connection
         factory to create the connection
     :param connection_factory: the factory method to open the aio_pika connection with
-    :param loop: the event loop to use, defaults to asyncio.get_event_loop()
     :param message_exchange: The name of the RMQ message exchange to use
     :param queue_expires: the expiry time for standard queues in milliseconds.  This is the time
         after which, if there are no subscribers, a queue will automatically be deleted by
@@ -525,10 +533,14 @@ async def async_connect(
     :param decoder: The decoder to call for decoding a message
     :param testing_mode: Run in testing mode: all queues and exchanges will be temporary
     """
+    connection_params = connection_params or {}
+    if isinstance(connection_params, dict):
+        connection = await connection_factory(**connection_params)
+    else:
+        connection = await connection_factory(connection_params)
+
     communicator = RmqCommunicator(
-        connection_params=connection_params,
-        connection_factory=connection_factory,
-        loop=loop,
+        connection=connection,
 
         # Messages
         message_exchange=message_exchange,

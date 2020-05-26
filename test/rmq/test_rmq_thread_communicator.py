@@ -57,7 +57,7 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
                                                  testing_mode=True)
 
     def destroy_communicator(self, communicator):
-        communicator.stop()
+        communicator.close()
 
     def test_context_manager(self):
         MESSAGE = 'get this yo'

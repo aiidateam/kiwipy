@@ -427,6 +427,6 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
     def test_broadcast_noone_listening(self):
         """ Check that it's not an error to send a broadcast if no one is listening"""
         result = self.communicator.broadcast_send('into the ether')
-        self.assertIs(True, result)
+        assert result is True
 
     # endregion

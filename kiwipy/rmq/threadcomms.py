@@ -56,7 +56,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                    async_task_timeout=async_task_timeout)
 
         # Start the communicator
-        comm.start()
         return comm
 
     def __init__(self,
@@ -94,34 +93,34 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._loop = asyncio.new_event_loop()
         self._loop.set_debug(testing_mode)
         self._loop_scheduler = aiothreads.LoopScheduler(self._loop, 'RMQ communicator', async_task_timeout)
-
-        self._communicator = communicator.RmqCommunicator(
-            connection_params=connection_params,
-            connection_factory=connection_factory,
-            loop=self._loop,
-
-            # Messages
-            message_exchange=message_exchange,
-            queue_expires=queue_expires,
-
-            # Tasks
-            task_exchange=task_exchange,
-            task_queue=task_queue,
-            task_prefetch_size=task_prefetch_size,
-            task_prefetch_count=task_prefetch_count,
-            encoder=encoder,
-            decoder=decoder,
-            testing_mode=testing_mode)
-
         self._stop_signal = None
         self._closed = False
 
+        self._loop_scheduler.start()  # Star the loop scheduler (i.e. the event loop thread)
+
+        # Establish the connection and get a communicator running on our thread
+        self._communicator = self._loop_scheduler.await_(
+            communicator.async_connect(
+                connection_params=connection_params,
+                connection_factory=connection_factory,
+
+                # Messages
+                message_exchange=message_exchange,
+                queue_expires=queue_expires,
+
+                # Tasks
+                task_exchange=task_exchange,
+                task_queue=task_queue,
+                task_prefetch_size=task_prefetch_size,
+                task_prefetch_count=task_prefetch_count,
+                encoder=encoder,
+                decoder=decoder,
+                testing_mode=testing_mode))
+
     def __enter__(self):
-        self._ensure_running()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop()
         self.close()
 
     def loop(self):
@@ -131,27 +130,19 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         return self._closed
 
     def close(self):
+        """The destructor.  This will clean up all resources and close this communicator.  After
+        this call it cannot be used again."""
         if self.is_closed():
-            return
-        self.stop()
-        # Clean up
-        self._loop_scheduler = None
-        self._closed = True
-
-    def start(self):
-        self._ensure_open()
-        self._loop_scheduler.start()
-        self._loop_scheduler.await_(self._communicator.connect())
-
-    def stop(self):
-        if self.is_closed():
-            return
-
-        if not self._loop_scheduler.is_running():
             return
 
         self._loop_scheduler.await_(self._communicator.disconnect())
-        self._loop_scheduler.stop()
+        self._loop_scheduler.close()
+
+        # Clean up
+        del self._communicator
+        del self._loop_scheduler
+        del self._loop
+        self._closed = True
 
     def add_rpc_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
@@ -181,7 +172,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     def task_send(self, task, no_reply=False):
         self._ensure_open()
-        self._ensure_running()
         return self._loop_scheduler.await_(self._communicator.task_send(task, no_reply))
 
     def task_queue(self,
@@ -189,18 +179,15 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                    prefetch_size=defaults.TASK_PREFETCH_SIZE,
                    prefetch_count=defaults.TASK_PREFETCH_COUNT):
         self._ensure_open()
-        self._ensure_running()
         aioqueue = self._loop_scheduler.await_(self._communicator.task_queue(queue_name, prefetch_size, prefetch_count))
         return RmqThreadTaskQueue(aioqueue, self._loop_scheduler, self._wrap_subscriber)
 
     def rpc_send(self, recipient_id, msg):
         self._ensure_open()
-        self._ensure_running()
         return self._loop_scheduler.await_(self._communicator.rpc_send(recipient_id, msg))
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         self._ensure_open()
-        self._ensure_running()
         result = self._loop_scheduler.await_(
             self._communicator.broadcast_send(body=body, sender=sender, subject=subject, correlation_id=correlation_id))
         return isinstance(result, pamqp.specification.Basic.Ack)
@@ -238,11 +225,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
         kiwi_future.add_done_callback(done)
         return aio_future
-
-    def _ensure_running(self):
-        if self._loop_scheduler.is_running():
-            return
-        self.start()
 
     def _ensure_open(self):
         if self.is_closed():

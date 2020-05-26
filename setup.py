@@ -47,8 +47,6 @@ setup(
         ],
         'docs': [
             'nbsphinx',  # Jupyter notebooks in docs
-            'notebook < 6.0',  # Jupyter w/asyncio causes problems for examples
-            'tornado < 5.0',  # For same reason as above
             'jupyter',  # For running doc examples
             'sphinx-autobuild',
             "docutils==0.14",
