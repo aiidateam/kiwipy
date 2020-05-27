@@ -25,6 +25,7 @@ setup(
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
     keywords='communication messaging rpc broadcast',
     install_requires=['shortuuid', 'async_generator', 'pytray>=0.2.2, <0.3.0'],
