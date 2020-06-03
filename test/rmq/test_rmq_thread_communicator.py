@@ -1,5 +1,6 @@
 # pylint: disable=invalid-name, redefined-outer-name
 import concurrent.futures
+import pathlib
 import sys
 import unittest
 
@@ -11,7 +12,6 @@ from kiwipy import rmq
 
 from ..utils import CommunicatorTester
 from . import utils
-
 
 WAIT_TIMEOUT = 5.
 
@@ -232,12 +232,14 @@ def test_task_processing_exception(thread_task_queue: rmq.RmqThreadTaskQueue):
 @pytest.mark.skipif(sys.version_info < (3, 6), reason='`pytest-notebook` plugin requires Python >= 3.6')
 def test_jupyter_notebook():
     """Test that the `RmqThreadCommunicator` can be used in a Jupyter notebook."""
-    import os
     from pytest_notebook.nb_regression import NBRegressionFixture
 
     fixture = NBRegressionFixture(exec_timeout=50)
     fixture.diff_color_words = False
     fixture.diff_ignore = ('/metadata/language_info/version',)
 
-    with open(os.path.abspath('test/rmq/notebooks/communicator.ipynb')) as handle:
+    # Express the path in a way that will work no matter where the tests are being ran and convert
+    # to str as py35 doesn't support Paths being passed to open()
+    my_dir = pathlib.Path(__file__).parent
+    with open(str(my_dir / pathlib.Path('notebooks/communicator.ipynb'))) as handle:
         fixture.check(handle)

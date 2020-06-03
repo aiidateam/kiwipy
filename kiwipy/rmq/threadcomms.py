@@ -7,10 +7,12 @@ import logging
 from typing import Union
 
 import aio_pika
+import deprecation
 import pamqp
 from pytray import aiothreads
 
 import kiwipy
+from kiwipy.version import __version__
 from . import defaults
 from . import communicator
 from . import tasks
@@ -116,6 +118,18 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                 encoder=encoder,
                 decoder=decoder,
                 testing_mode=testing_mode))
+
+    def start(self):  # pylint: disable=no-self-use
+        raise DeprecationWarning("This method was deprecated in v0.6.0 and will be removed in 0.7.0.  There is no "
+                                 "replacement and the class should be reinstantiated if it's been closed.")
+
+    @deprecation.deprecated(deprecated_in="0.6.0",
+                            removed_in="0.7.0",
+                            current_version=__version__,
+                            details="Use close() instead.  Unlike stop(), close() is permanent and "
+                            "the class should not be used again after this.")
+    def stop(self):
+        self.close()
 
     def __enter__(self):
         return self
