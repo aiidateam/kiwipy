@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 import traceback
 
@@ -9,13 +10,13 @@ _LOGGER = logging.getLogger(__name__)
 class EventHelper:
 
     def __init__(self, listener_type):
-        assert listener_type is not None, "Must provide valid listener type"
+        assert listener_type is not None, 'Must provide valid listener type'
 
         self._listener_type = listener_type
         self._listeners = set()
 
     def add_listener(self, listener):
-        assert isinstance(listener, self._listener_type), "Listener is not of right type"
+        assert isinstance(listener, self._listener_type), 'Listener is not of right type'
         self._listeners.add(listener)
 
     def remove_listener(self, listener):
@@ -30,10 +31,10 @@ class EventHelper:
 
     def fire_event(self, event_function, *args, **kwargs):
         if event_function is None:
-            raise ValueError("Must provide valid event method")
+            raise ValueError('Must provide valid event method')
 
         for listener in self.listeners:
             try:
                 getattr(listener, event_function.__name__)(*args, **kwargs)
             except Exception:  # pylint: disable=broad-except
-                _LOGGER.error("Listener %s produced an exception:\n%s", listener, traceback.format_exc())
+                _LOGGER.error('Listener %s produced an exception:\n%s', listener, traceback.format_exc())

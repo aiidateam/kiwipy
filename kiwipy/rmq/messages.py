@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 from collections import deque
 import copy
@@ -98,14 +99,16 @@ class BasePublisherWithReplyQueue:
 
     DEFAULT_EXCHANGE_PARAMS = {'type': aio_pika.ExchangeType.TOPIC}
 
-    def __init__(self,
-                 connection,
-                 exchange_name=defaults.MESSAGE_EXCHANGE,
-                 exchange_params=None,
-                 encoder=defaults.ENCODER,
-                 decoder=defaults.DECODER,
-                 confirm_deliveries=True,
-                 testing_mode=False):
+    def __init__(
+        self,
+        connection,
+        exchange_name=defaults.MESSAGE_EXCHANGE,
+        exchange_params=None,
+        encoder=defaults.ENCODER,
+        decoder=defaults.DECODER,
+        confirm_deliveries=True,
+        testing_mode=False
+    ):
         # pylint: disable=too-many-arguments
         """
         :param connection: The aio_pika RMQ connection
@@ -155,18 +158,21 @@ class BasePublisherWithReplyQueue:
         if self.is_connected:
             return
 
-        self._channel = await self._connection.channel(publisher_confirms=self._confirm_deliveries,
-                                                       on_return_raises=True)
+        self._channel = await self._connection.channel(
+            publisher_confirms=self._confirm_deliveries, on_return_raises=True
+        )
         self._channel.add_close_callback(self._on_channel_close)
 
         self._exchange = await self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
 
         # Declare the reply queue
-        reply_queue_name = "{}-reply-{}".format(self._exchange_name, str(uuid.uuid4()))
-        self._reply_queue = await self._channel.declare_queue(name=reply_queue_name,
-                                                              exclusive=True,
-                                                              auto_delete=self._testing_mode,
-                                                              arguments={"x-expires": defaults.REPLY_QUEUE_EXPIRES})
+        reply_queue_name = '{}-reply-{}'.format(self._exchange_name, str(uuid.uuid4()))
+        self._reply_queue = await self._channel.declare_queue(
+            name=reply_queue_name,
+            exclusive=True,
+            auto_delete=self._testing_mode,
+            arguments={'x-expires': defaults.REPLY_QUEUE_EXPIRES}
+        )
 
         await self._reply_queue.bind(self._exchange, routing_key=reply_queue_name)
         await self._reply_queue.consume(self._on_response, no_ack=True)
@@ -238,7 +244,7 @@ class BasePublisherWithReplyQueue:
             try:
                 response = self._response_decode(message.body)
             except Exception:
-                _LOGGER.error("Failed to decode message body:\n%s%s", message.body, traceback.format_exc())
+                _LOGGER.error('Failed to decode message body:\n%s%s', message.body, traceback.format_exc())
                 raise
             else:
                 utils.response_to_future(response, response_future)

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 import collections.abc
 import functools
@@ -26,7 +27,7 @@ def get_host_info():
 
 def add_host_info(msg):
     if HOST_KEY in msg:
-        raise ValueError("Host information key already exists in message")
+        raise ValueError('Host information key already exists in message')
 
     msg[HOST_KEY] = get_host_info()
 
@@ -44,7 +45,7 @@ def exception_response(exception: Exception, trace=None) -> dict:
     """
     msg = str(exception)
     if trace is not None:
-        msg += "\n{}".format("".join(traceback.format_tb(trace)[0]))
+        msg += '\n{}'.format(''.join(traceback.format_tb(trace)[0]))
     return {EXCEPTION_KEY: msg}
 
 
@@ -70,7 +71,7 @@ def response_to_future(response, future=None):
     :return:
     """
     if not isinstance(response, collections.abc.Mapping):
-        raise TypeError("Response must be a mapping")
+        raise TypeError('Response must be a mapping')
 
     if future is None:
         future = asyncio.Future()

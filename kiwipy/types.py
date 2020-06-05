@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from typing import Callable, Any
 
 import kiwipy  # pylint: disable=unused-import

@@ -24,7 +24,7 @@ relbranch="release-${version}"
 
 echo Releasing version $version
 
-git checkout -b $relbranch 
+git checkout -b $relbranch
 git add ${VERSION_FILE}
 git commit --no-verify -m "Release ${version}"
 
@@ -52,7 +52,3 @@ python setup.py sdist
 python setup.py bdist_wheel --universal
 
 twine upload dist/*
-
-
-
-

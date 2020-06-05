@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from . import communications
 
 __all__ = ('LocalCommunicator',)

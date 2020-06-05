@@ -32,13 +32,42 @@ jobs:
 
         -   name: Install python dependencies
             run:
-                pip install -e .[rmq,dev,docs]
+                pip install -e .[rmq,docs]
 
         -   name: Build documentation
             env:
                 READTHEDOCS: 'True'
             run:
                 SPHINXOPTS='-nW' make -C docs html
+
+    pre-commit:
+
+        runs-on: ubuntu-latest
+
+        steps:
+        -   uses: actions/checkout@v1
+
+        -   name: Cache python dependencies
+            id: cache-pip
+            uses: actions/cache@v1
+            with:
+                path: ~/.cache/pip
+                key: pip-pre-commit-${{ hashFiles('**/setup.json') }}
+                restore-keys:
+                    pip-pre-commit-
+
+        -   name: Set up Python
+            uses: actions/setup-python@v1
+            with:
+                python-version: 3.8
+
+        -   name: Install python dependencies
+            run:
+                pip install -e .[pre-commit,rmq,tests]
+
+        -   name: Run pre-commit
+            run:
+                pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
 
     tests:
 
@@ -73,7 +102,7 @@ jobs:
 
         -   name: Install python dependencies
             run:
-                pip install -e .[dev,rmq]
+                pip install -e .[rmq,tests]
 
         -   name: Run pytest
             run:

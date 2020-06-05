@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
 import sys
 
 import kiwipy
 
 # pylint: disable=invalid-name
 
-body = ' '.join(sys.argv[1:]) or "___"
+body = ' '.join(sys.argv[1:]) or '___'
 
 with kiwipy.connect('amqp://127.0.0.1') as comm:
     # send message with different sender and subject

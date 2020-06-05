@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 __all__ = ('connect',)
 
 DEFAULT_COMM_URI = 'amqp://guest:guest@127.0.0.1/'

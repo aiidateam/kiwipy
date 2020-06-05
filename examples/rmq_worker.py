@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import time
 import threading
 
@@ -7,9 +8,9 @@ print(' [*] Waiting for messages. To exit press CTRL+C')
 
 
 def callback(_comm, task):
-    print((" [x] Received %r" % task))
+    print((' [x] Received %r' % task))
     time.sleep(task.count('.'))
-    print(" [x] Done")
+    print(' [x] Done')
     return task
 
 

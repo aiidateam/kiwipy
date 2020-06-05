@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import threading
 
 import kiwipy
@@ -18,7 +19,7 @@ def fac(_comm, num):
     return result
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     try:
         with kiwipy.connect('amqp://127.0.0.1') as comm:
             # Register an RPC subscriber with the name 'fib'

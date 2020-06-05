@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 from setuptools import setup
 
-__author__ = "Martin Uhrin"
-__license__ = "GPLv3 and MIT"
-__contributors__ = "Sebastiaan P. Huber"
+__author__ = 'Martin Uhrin'
+__license__ = 'GPLv3 and MIT'
+__contributors__ = 'Sebastiaan P. Huber'
 
-about = {}
+ABOUT = {}
 with open('kiwipy/version.py') as f:
-    exec(f.read(), about)
+    exec(f.read(), ABOUT)  # pylint: disable=exec-used
 
 setup(
-    name="kiwipy",
-    version=about['__version__'],
+    name='kiwipy',
+    version=ABOUT['__version__'],
     description='Robust, high-volume, message based communication made easy',
     long_description=open('README.rst').read(),
     url='https://github.com/aiidateam/kiwipy.git',
@@ -29,30 +29,20 @@ setup(
     ],
     keywords='communication messaging rpc broadcast',
     install_requires=['shortuuid', 'async_generator', 'pytray>=0.2.2, <0.3.0', 'deprecation'],
-    python_requires=">=3.5",
+    python_requires='>=3.5',
     extras_require={
-        'rmq': ['aio-pika', 'pyyaml~=5.1'],
-        'dev': [
-            'coverage',
-            'pip',
-            'pre-commit',
-            'pytest>=4',
-            'pytest-asyncio<=0.10.0',
-            'pytest-notebook',
-            'twine',
-            'yapf',
-            'prospector',
-            'pylint',
-            'pytest-cov',
-            'sphinx',
-        ],
         'docs': [
-            'nbsphinx',  # Jupyter notebooks in docs
+            'docutils==0.14',
             'jupyter',  # For running doc examples
+            'nbsphinx',  # Jupyter notebooks in docs
+            'pandoc',
+            'sphinx',
             'sphinx-autobuild',
-            "docutils==0.14",
-            'pandoc'
-        ]
+        ],
+        'pre-commit': ['pre-commit~=2.2', 'pylint==2.5.2'],
+        'rmq': ['aio-pika', 'pyyaml~=5.1'],
+        'tests': ['coverage', 'pytest-cov', 'pytest~=5.4', 'pytest-asyncio<=0.10.0', 'pytest-notebook']
     },
     packages=['kiwipy', 'kiwipy.rmq'],
-    test_suite='test')
+    test_suite='test'
+)
