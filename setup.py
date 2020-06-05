@@ -33,6 +33,7 @@ setup(
     extras_require={
         'rmq': ['aio-pika', 'pyyaml~=5.1'],
         'dev': [
+            'coverage',
             'pip',
             'pre-commit',
             'pytest>=4',
