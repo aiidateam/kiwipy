@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 from contextlib import contextmanager
 import concurrent.futures
@@ -32,47 +33,53 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     TASK_TIMEOUT = 5.
 
     @classmethod
-    def connect(cls,
-                connection_params: Union[str, dict] = None,
-                connection_factory=aio_pika.connect_robust,
-                message_exchange=defaults.MESSAGE_EXCHANGE,
-                task_exchange=defaults.TASK_EXCHANGE,
-                task_queue=defaults.TASK_QUEUE,
-                task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
-                task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
-                encoder=defaults.ENCODER,
-                decoder=defaults.DECODER,
-                testing_mode=False,
-                async_task_timeout=TASK_TIMEOUT):
+    def connect(
+        cls,
+        connection_params: Union[str, dict] = None,
+        connection_factory=aio_pika.connect_robust,
+        message_exchange=defaults.MESSAGE_EXCHANGE,
+        task_exchange=defaults.TASK_EXCHANGE,
+        task_queue=defaults.TASK_QUEUE,
+        task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+        task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+        encoder=defaults.ENCODER,
+        decoder=defaults.DECODER,
+        testing_mode=False,
+        async_task_timeout=TASK_TIMEOUT
+    ):
         # pylint: disable=too-many-arguments
-        comm = cls(connection_params,
-                   connection_factory,
-                   message_exchange=message_exchange,
-                   task_exchange=task_exchange,
-                   task_queue=task_queue,
-                   task_prefetch_size=task_prefetch_size,
-                   task_prefetch_count=task_prefetch_count,
-                   encoder=encoder,
-                   decoder=decoder,
-                   testing_mode=testing_mode,
-                   async_task_timeout=async_task_timeout)
+        comm = cls(
+            connection_params,
+            connection_factory,
+            message_exchange=message_exchange,
+            task_exchange=task_exchange,
+            task_queue=task_queue,
+            task_prefetch_size=task_prefetch_size,
+            task_prefetch_count=task_prefetch_count,
+            encoder=encoder,
+            decoder=decoder,
+            testing_mode=testing_mode,
+            async_task_timeout=async_task_timeout
+        )
 
         # Start the communicator
         return comm
 
-    def __init__(self,
-                 connection_params: Union[str, dict] = None,
-                 connection_factory=aio_pika.connect_robust,
-                 message_exchange: str = defaults.MESSAGE_EXCHANGE,
-                 queue_expires: int = defaults.QUEUE_EXPIRES,
-                 task_exchange=defaults.TASK_EXCHANGE,
-                 task_queue: str = defaults.TASK_QUEUE,
-                 task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
-                 task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
-                 encoder=defaults.ENCODER,
-                 decoder=defaults.DECODER,
-                 testing_mode=False,
-                 async_task_timeout=TASK_TIMEOUT):
+    def __init__(
+        self,
+        connection_params: Union[str, dict] = None,
+        connection_factory=aio_pika.connect_robust,
+        message_exchange: str = defaults.MESSAGE_EXCHANGE,
+        queue_expires: int = defaults.QUEUE_EXPIRES,
+        task_exchange=defaults.TASK_EXCHANGE,
+        task_queue: str = defaults.TASK_QUEUE,
+        task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+        task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+        encoder=defaults.ENCODER,
+        decoder=defaults.DECODER,
+        testing_mode=False,
+        async_task_timeout=TASK_TIMEOUT
+    ):
         # pylint: disable=too-many-arguments
         """
         :param connection_params: parameters that will be passed to the connection factory to create the connection
@@ -114,22 +121,31 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                 task_prefetch_count=task_prefetch_count,
                 encoder=encoder,
                 decoder=decoder,
-                testing_mode=testing_mode))
+                testing_mode=testing_mode
+            )
+        )
 
-    @deprecation.deprecated(deprecated_in="0.6.0",
-                            removed_in="0.7.0",
-                            current_version=__version__,
-                            details="This method was deprecated in v0.6.0 and will be removed in 0.7.0.  There is no "
-                            "replacement and the class should be reinstantiated if it's been closed.")
-    def start(self):  # pylint: disable=no-self-use
-        raise DeprecationWarning("This method was deprecated in v0.6.0 and will be removed in 0.7.0.  There is no "
-                                 "replacement and the class should be reinstantiated if it's been closed.")
+    @deprecation.deprecated(
+        deprecated_in='0.6.0',
+        removed_in='0.7.0',
+        current_version=__version__,
+        details='This method was deprecated in v0.6.0 and will be removed in 0.7.0.  There is no '
+        "replacement and the class should be reinstantiated if it's been closed."
+    )
+    def start(self):
+        # pylint: disable=no-self-use
+        raise DeprecationWarning(
+            'This method was deprecated in v0.6.0 and will be removed in 0.7.0.  There is no '
+            "replacement and the class should be reinstantiated if it's been closed."
+        )
 
-    @deprecation.deprecated(deprecated_in="0.6.0",
-                            removed_in="0.7.0",
-                            current_version=__version__,
-                            details="Use close() instead.  Unlike stop(), close() is permanent and "
-                            "the class should not be used again after this.")
+    @deprecation.deprecated(
+        deprecated_in='0.6.0',
+        removed_in='0.7.0',
+        current_version=__version__,
+        details='Use close() instead.  Unlike stop(), close() is permanent and '
+        'the class should not be used again after this.'
+    )
     def stop(self):
         self.close()
 
@@ -165,7 +181,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     def add_rpc_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
         return self._loop_scheduler.await_(
-            self._communicator.add_rpc_subscriber(self._wrap_subscriber(subscriber), identifier))
+            self._communicator.add_rpc_subscriber(self._wrap_subscriber(subscriber), identifier)
+        )
 
     def remove_rpc_subscriber(self, identifier):
         self._ensure_open()
@@ -174,7 +191,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     def add_task_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
         return self._loop_scheduler.await_(
-            self._communicator.add_task_subscriber(self._wrap_subscriber(subscriber), identifier))
+            self._communicator.add_task_subscriber(self._wrap_subscriber(subscriber), identifier)
+        )
 
     def remove_task_subscriber(self, identifier):
         self._ensure_open()
@@ -192,10 +210,9 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._ensure_open()
         return self._loop_scheduler.await_(self._communicator.task_send(task, no_reply))
 
-    def task_queue(self,
-                   queue_name: str,
-                   prefetch_size=defaults.TASK_PREFETCH_SIZE,
-                   prefetch_count=defaults.TASK_PREFETCH_COUNT):
+    def task_queue(
+        self, queue_name: str, prefetch_size=defaults.TASK_PREFETCH_SIZE, prefetch_count=defaults.TASK_PREFETCH_COUNT
+    ):
         self._ensure_open()
         aioqueue = self._loop_scheduler.await_(self._communicator.task_queue(queue_name, prefetch_size, prefetch_count))
         return RmqThreadTaskQueue(aioqueue, self._loop_scheduler, self._wrap_subscriber)
@@ -207,7 +224,8 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         self._ensure_open()
         result = self._loop_scheduler.await_(
-            self._communicator.broadcast_send(body=body, sender=sender, subject=subject, correlation_id=correlation_id))
+            self._communicator.broadcast_send(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
+        )
         return isinstance(result, pamqp.specification.Basic.Ack)
 
     def _wrap_subscriber(self, subscriber):
@@ -310,27 +328,31 @@ class RmqThreadIncomingTask:
             yield outcome
 
 
-def connect(connection_params: Union[str, dict] = None,
-            connection_factory=aio_pika.connect_robust,
-            message_exchange=defaults.MESSAGE_EXCHANGE,
-            task_exchange=defaults.TASK_EXCHANGE,
-            task_queue=defaults.TASK_QUEUE,
-            task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
-            task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
-            encoder=defaults.ENCODER,
-            decoder=defaults.DECODER,
-            testing_mode=False) -> RmqThreadCommunicator:
+def connect(
+    connection_params: Union[str, dict] = None,
+    connection_factory=aio_pika.connect_robust,
+    message_exchange=defaults.MESSAGE_EXCHANGE,
+    task_exchange=defaults.TASK_EXCHANGE,
+    task_queue=defaults.TASK_QUEUE,
+    task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+    task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+    encoder=defaults.ENCODER,
+    decoder=defaults.DECODER,
+    testing_mode=False
+) -> RmqThreadCommunicator:
     """
     Establish a RabbitMQ communicator connection
     """
     # pylint: disable=too-many-arguments
-    return RmqThreadCommunicator.connect(connection_params=connection_params,
-                                         connection_factory=connection_factory,
-                                         message_exchange=message_exchange,
-                                         task_exchange=task_exchange,
-                                         task_queue=task_queue,
-                                         task_prefetch_size=task_prefetch_size,
-                                         task_prefetch_count=task_prefetch_count,
-                                         encoder=encoder,
-                                         decoder=decoder,
-                                         testing_mode=testing_mode)
+    return RmqThreadCommunicator.connect(
+        connection_params=connection_params,
+        connection_factory=connection_factory,
+        message_exchange=message_exchange,
+        task_exchange=task_exchange,
+        task_queue=task_queue,
+        task_prefetch_size=task_prefetch_size,
+        task_prefetch_count=task_prefetch_count,
+        encoder=encoder,
+        decoder=decoder,
+        testing_mode=testing_mode
+    )

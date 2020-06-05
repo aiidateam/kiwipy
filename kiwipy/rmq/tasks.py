@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 import collections
 import contextlib
@@ -26,18 +27,20 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     """
     Listens for tasks coming in on the RMQ task queue
     """
-    TASK_QUEUE_ARGUMENTS = {"x-message-ttl": defaults.TASK_MESSAGE_TTL}
+    TASK_QUEUE_ARGUMENTS = {'x-message-ttl': defaults.TASK_MESSAGE_TTL}
 
-    def __init__(self,
-                 connection: aio_pika.Connection,
-                 exchange_name: str = defaults.MESSAGE_EXCHANGE,
-                 queue_name: str = defaults.TASK_QUEUE,
-                 testing_mode=False,
-                 decoder=defaults.DECODER,
-                 encoder=defaults.ENCODER,
-                 exchange_params=None,
-                 prefetch_size=defaults.TASK_PREFETCH_SIZE,
-                 prefetch_count=defaults.TASK_PREFETCH_COUNT):
+    def __init__(
+        self,
+        connection: aio_pika.Connection,
+        exchange_name: str = defaults.MESSAGE_EXCHANGE,
+        queue_name: str = defaults.TASK_QUEUE,
+        testing_mode=False,
+        decoder=defaults.DECODER,
+        encoder=defaults.ENCODER,
+        exchange_params=None,
+        prefetch_size=defaults.TASK_PREFETCH_SIZE,
+        prefetch_count=defaults.TASK_PREFETCH_COUNT
+    ):
         # pylint: disable=too-many-arguments
         """
         :param connection: An RMQ connection
@@ -46,10 +49,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         :param decoder: A message decoder
         :param encoder: A response encoder
         """
-        super().__init__(connection,
-                         exchange_name=exchange_name,
-                         exchange_params=exchange_params,
-                         testing_mode=testing_mode)
+        super().__init__(
+            connection, exchange_name=exchange_name, exchange_params=exchange_params, testing_mode=testing_mode
+        )
 
         self._task_queue_name = queue_name
         self._testing_mode = testing_mode
@@ -138,9 +140,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         # x-expires means how long does the queue stay alive after no clients
         # x-message-ttl means what is the default ttl for a message arriving in the queue
-        self._task_queue = await self._channel.declare_queue(name=self._task_queue_name,
-                                                             durable=not self._testing_mode,
-                                                             arguments=arguments)
+        self._task_queue = await self._channel.declare_queue(
+            name=self._task_queue_name, durable=not self._testing_mode, arguments=arguments
+        )
         await self._task_queue.bind(self._exchange, routing_key=self._task_queue.name)
 
     async def _on_task(self, message: aio_pika.IncomingMessage):
@@ -171,7 +173,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 except Exception as exc:  # pylint: disable=broad-except
                     # There was an exception during the processing of this task
                     outcome.set_exception(exc)
-                    _LOGGER.exception("Exception occurred while processing task.")
+                    _LOGGER.exception('Exception occurred while processing task.')
                 else:
                     # All good
                     outcome.set_result(result)
@@ -228,7 +230,7 @@ class RmqIncomingTask:
 
     def process(self) -> asyncio.Future:
         if self._state != TASK_PENDING:
-            raise asyncio.InvalidStateError("The task is {}".format(self._state))
+            raise asyncio.InvalidStateError('The task is {}'.format(self._state))
 
         self._state = TASK_PROCESSING
         outcome = self._create_future()
@@ -241,7 +243,7 @@ class RmqIncomingTask:
 
     def requeue(self):
         if self._state not in [TASK_PENDING, TASK_PROCESSING]:
-            raise asyncio.InvalidStateError("The task is {}".format(self._state))
+            raise asyncio.InvalidStateError('The task is {}'.format(self._state))
 
         self._state = TASK_REQUEUED
         self._message.nack(requeue=True)
@@ -252,7 +254,7 @@ class RmqIncomingTask:
         """Processing context.  The task should be done at the end otherwise it's assumed the
         caller doesn't want to process it and it's sent back to the queue"""
         if self._state != TASK_PENDING:
-            raise asyncio.InvalidStateError("The task is {}".format(self._state))
+            raise asyncio.InvalidStateError('The task is {}'.format(self._state))
 
         self._state = TASK_PROCESSING
         outcome = self._subscriber.loop().create_future()
@@ -315,23 +317,27 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
     Publishes messages to the RMQ task queue and gets the response
     """
 
-    def __init__(self,
-                 connection,
-                 queue_name=defaults.TASK_QUEUE,
-                 exchange_name=defaults.MESSAGE_EXCHANGE,
-                 exchange_params=None,
-                 encoder=defaults.ENCODER,
-                 decoder=defaults.DECODER,
-                 confirm_deliveries=True,
-                 testing_mode=False):
+    def __init__(
+        self,
+        connection,
+        queue_name=defaults.TASK_QUEUE,
+        exchange_name=defaults.MESSAGE_EXCHANGE,
+        exchange_params=None,
+        encoder=defaults.ENCODER,
+        decoder=defaults.DECODER,
+        confirm_deliveries=True,
+        testing_mode=False
+    ):
         # pylint: disable=too-many-arguments
-        super().__init__(connection,
-                         exchange_name=exchange_name,
-                         exchange_params=exchange_params,
-                         encoder=encoder,
-                         decoder=decoder,
-                         confirm_deliveries=confirm_deliveries,
-                         testing_mode=testing_mode)
+        super().__init__(
+            connection,
+            exchange_name=exchange_name,
+            exchange_params=exchange_params,
+            encoder=encoder,
+            decoder=decoder,
+            confirm_deliveries=confirm_deliveries,
+            testing_mode=testing_mode
+        )
         self._task_queue_name = queue_name
 
     async def task_send(self, task, no_reply: bool = False) -> asyncio.Future:
@@ -357,44 +363,50 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
         if no_reply:
             published = await self.publish(task_msg, routing_key=self._task_queue_name, mandatory=True)
         else:
-            published, result_future = await self.publish_expect_response(task_msg,
-                                                                          routing_key=self._task_queue_name,
-                                                                          mandatory=True)
+            published, result_future = await self.publish_expect_response(
+                task_msg, routing_key=self._task_queue_name, mandatory=True
+            )
 
-        assert published, "The task was not published to the exchange"
+        assert published, 'The task was not published to the exchange'
         return result_future
 
 
 class RmqTaskQueue:
     """Combines a task publisher and subscriber to create a work queue where you can do both"""
 
-    def __init__(self,
-                 connection,
-                 exchange_name=defaults.MESSAGE_EXCHANGE,
-                 queue_name=defaults.TASK_QUEUE,
-                 decoder=defaults.DECODER,
-                 encoder=defaults.ENCODER,
-                 exchange_params=None,
-                 prefetch_size=defaults.TASK_PREFETCH_SIZE,
-                 prefetch_count=defaults.TASK_PREFETCH_COUNT,
-                 testing_mode=False):
+    def __init__(
+        self,
+        connection,
+        exchange_name=defaults.MESSAGE_EXCHANGE,
+        queue_name=defaults.TASK_QUEUE,
+        decoder=defaults.DECODER,
+        encoder=defaults.ENCODER,
+        exchange_params=None,
+        prefetch_size=defaults.TASK_PREFETCH_SIZE,
+        prefetch_count=defaults.TASK_PREFETCH_COUNT,
+        testing_mode=False
+    ):
         # pylint: disable=too-many-arguments
-        self._publisher = RmqTaskPublisher(connection,
-                                           exchange_name=exchange_name,
-                                           exchange_params=exchange_params,
-                                           queue_name=queue_name,
-                                           decoder=decoder,
-                                           encoder=encoder,
-                                           testing_mode=testing_mode)
-        self._subscriber = RmqTaskSubscriber(connection,
-                                             exchange_name=exchange_name,
-                                             exchange_params=exchange_params,
-                                             queue_name=queue_name,
-                                             decoder=decoder,
-                                             encoder=encoder,
-                                             prefetch_size=prefetch_size,
-                                             prefetch_count=prefetch_count,
-                                             testing_mode=testing_mode)
+        self._publisher = RmqTaskPublisher(
+            connection,
+            exchange_name=exchange_name,
+            exchange_params=exchange_params,
+            queue_name=queue_name,
+            decoder=decoder,
+            encoder=encoder,
+            testing_mode=testing_mode
+        )
+        self._subscriber = RmqTaskSubscriber(
+            connection,
+            exchange_name=exchange_name,
+            exchange_params=exchange_params,
+            queue_name=queue_name,
+            decoder=decoder,
+            encoder=encoder,
+            prefetch_size=prefetch_size,
+            prefetch_count=prefetch_count,
+            testing_mode=testing_mode
+        )
 
     @async_generator
     async def __aiter__(self):

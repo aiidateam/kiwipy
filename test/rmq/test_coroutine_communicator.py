@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 import pytest
 
@@ -16,7 +17,7 @@ WAIT_TIMEOUT = 5.  # Wait timeout in seconds for async operations
 @pytest.mark.asyncio
 async def test_rpc_send_receive(communicator: kiwipy.rmq.RmqCommunicator):
     MESSAGE = "sup yo'"
-    RESPONSE = "nuthin bra"
+    RESPONSE = 'nuthin bra'
 
     messages = []
 
@@ -96,7 +97,7 @@ async def test_broadcast_filter_subject(communicator: kiwipy.rmq.RmqCommunicator
         if len(subjects) == len(EXPECTED_SUBJECTS):
             done.set_result(True)
 
-    await communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
+    await communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, subject='purchase.*'))
 
     for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
         await communicator.broadcast_send(None, subject=subj)
@@ -119,7 +120,7 @@ async def test_broadcast_filter_sender(communicator: kiwipy.rmq.RmqCommunicator)
         if len(senders) == len(EXPECTED_SENDERS):
             done.set_result(True)
 
-    await communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
+    await communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender='*.jones'))
 
     for subj in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
         await communicator.broadcast_send(None, sender=subj)
@@ -148,8 +149,8 @@ async def test_broadcast_filter_sender_and_subject(communicator: kiwipy.rmq.RmqC
             done.set_result(True)
 
     filtered = kiwipy.BroadcastFilter(on_broadcast_1)
-    filtered.add_sender_filter("*.jones")
-    filtered.add_subject_filter("purchase.*")
+    filtered.add_sender_filter('*.jones')
+    filtered.add_subject_filter('purchase.*')
     await communicator.add_broadcast_subscriber(filtered)
 
     for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:

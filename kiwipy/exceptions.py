@@ -1,7 +1,10 @@
+# -*- coding: utf-8 -*-
 import concurrent.futures
 
-__all__ = ('RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError', 'TimeoutError',
-           'DuplicateSubscriberIdentifier', 'CommunicatorClosed', 'InvalidStateError', 'QueueEmpty')
+__all__ = (
+    'RemoteException', 'DeliveryFailed', 'TaskRejected', 'UnroutableError', 'TimeoutError',
+    'DuplicateSubscriberIdentifier', 'CommunicatorClosed', 'InvalidStateError', 'QueueEmpty'
+)
 
 
 class RemoteException(Exception):

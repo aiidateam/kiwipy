@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # pylint: disable=invalid-name, redefined-outer-name
 import concurrent.futures
 import pathlib
@@ -18,15 +19,17 @@ WAIT_TIMEOUT = 5.
 
 @pytest.fixture
 def thread_communicator():
-    message_exchange = "{}.{}".format(__file__, shortuuid.uuid())
-    task_exchange = "{}.{}".format(__file__, shortuuid.uuid())
-    task_queue = "{}.{}".format(__file__, shortuuid.uuid())
+    message_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
+    task_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
+    task_queue = '{}.{}'.format(__file__, shortuuid.uuid())
 
-    communicator = rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-                                                     message_exchange=message_exchange,
-                                                     task_exchange=task_exchange,
-                                                     task_queue=task_queue,
-                                                     testing_mode=True)
+    communicator = rmq.RmqThreadCommunicator.connect(
+        connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
+        message_exchange=message_exchange,
+        task_exchange=task_exchange,
+        task_queue=task_queue,
+        testing_mode=True
+    )
 
     yield communicator
 
@@ -35,7 +38,7 @@ def thread_communicator():
 
 @pytest.fixture
 def thread_task_queue(thread_communicator: rmq.RmqThreadCommunicator):
-    task_queue_name = "{}.{}".format(__file__, shortuuid.uuid())
+    task_queue_name = '{}.{}'.format(__file__, shortuuid.uuid())
 
     task_queue = thread_communicator.task_queue(task_queue_name)
 
@@ -46,15 +49,17 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
     """Use the standard tests cases to check the RMQ thread communicator"""
 
     def create_communicator(self):
-        message_exchange = "{}.message_exchange.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_exchange = "{}.task_exchange.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_queue = "{}.task_queue.{}".format(self.__class__.__name__, shortuuid.uuid())
+        message_exchange = '{}.message_exchange.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        task_exchange = '{}.task_exchange.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        task_queue = '{}.task_queue.{}'.format(self.__class__.__name__, shortuuid.uuid())
 
-        return rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-                                                 message_exchange=message_exchange,
-                                                 task_exchange=task_exchange,
-                                                 task_queue=task_queue,
-                                                 testing_mode=True)
+        return rmq.RmqThreadCommunicator.connect(
+            connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
+            message_exchange=message_exchange,
+            task_exchange=task_exchange,
+            task_queue=task_queue,
+            testing_mode=True
+        )
 
     def destroy_communicator(self, communicator):
         communicator.close()
@@ -119,7 +124,7 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
 
 def test_queue_get_next(thread_task_queue: rmq.RmqThreadTaskQueue):
     """Test getting the next task from the queue"""
-    result = thread_task_queue.task_send("Hello!")
+    result = thread_task_queue.task_send('Hello!')
     with thread_task_queue.next_task(timeout=1.) as task:
         with task.processing() as outcome:
             assert task.body == 'Hello!'

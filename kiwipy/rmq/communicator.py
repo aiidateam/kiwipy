@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 from functools import partial
 import copy
@@ -31,11 +32,10 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
 
     async def rpc_send(self, recipient_id, msg):
         message = aio_pika.Message(body=self._encode(msg), reply_to=self._reply_queue.name)
-        published, response_future = await self.publish_expect_response(message,
-                                                                        routing_key="{}.{}".format(
-                                                                            defaults.RPC_TOPIC, recipient_id),
-                                                                        mandatory=True)
-        assert published, "The message was not published to the exchanges"
+        published, response_future = await self.publish_expect_response(
+            message, routing_key='{}.{}'.format(defaults.RPC_TOPIC, recipient_id), mandatory=True
+        )
+        assert published, 'The message was not published to the exchanges'
         return response_future
 
     async def broadcast_send(self, msg, sender=None, subject=None, correlation_id=None):
@@ -60,13 +60,15 @@ class RmqSubscriber:
 
     # pylint: disable=too-many-instance-attributes
 
-    def __init__(self,
-                 connection,
-                 message_exchange=defaults.MESSAGE_EXCHANGE,
-                 queue_expires=defaults.QUEUE_EXPIRES,
-                 decoder=defaults.DECODER,
-                 encoder=defaults.ENCODER,
-                 testing_mode=False):
+    def __init__(
+        self,
+        connection,
+        message_exchange=defaults.MESSAGE_EXCHANGE,
+        queue_expires=defaults.QUEUE_EXPIRES,
+        decoder=defaults.DECODER,
+        encoder=defaults.ENCODER,
+        testing_mode=False
+    ):
         # pylint: disable=too-many-arguments
         """
         Subscribes and listens for process control messages and acts on them
@@ -171,10 +173,10 @@ class RmqSubscriber:
         One is used for all broadcasts on this exchange
         """
         # Create a new such that we can see this is the broadcast queue
-        name = "broadcast-{}".format(shortuuid.uuid())
-        self._broadcast_queue = await self._channel.declare_queue(name=name,
-                                                                  exclusive=True,
-                                                                  arguments=self._broadcast_queue_arguments)
+        name = 'broadcast-{}'.format(shortuuid.uuid())
+        self._broadcast_queue = await self._channel.declare_queue(
+            name=name, exclusive=True, arguments=self._broadcast_queue_arguments
+        )
         await self._broadcast_queue.bind(self._exchange, routing_key=defaults.BROADCAST_TOPIC)
 
     async def disconnect(self):
@@ -212,9 +214,10 @@ class RmqSubscriber:
             for receiver in self._broadcast_subscribers.values():
                 try:
                     receiver = utils.ensure_coroutine(receiver)
-                    await receiver(self, msg[messages.BroadcastMessage.BODY], msg[messages.BroadcastMessage.SENDER],
-                                   msg[messages.BroadcastMessage.SUBJECT],
-                                   msg[messages.BroadcastMessage.CORRELATION_ID])
+                    await receiver(
+                        self, msg[messages.BroadcastMessage.BODY], msg[messages.BroadcastMessage.SENDER],
+                        msg[messages.BroadcastMessage.SUBJECT], msg[messages.BroadcastMessage.CORRELATION_ID]
+                    )
                 except Exception:  # pylint: disable=broad-except
                     _LOGGER.exception('Exception in broadcast receiver')
 
@@ -246,7 +249,7 @@ class RmqSubscriber:
             await self._send_response(reply_to, correlation_id, utils.result_response(future))
 
     async def _send_response(self, reply_to, correlation_id, response):
-        assert reply_to, "Must provide an identifier for the recipient"
+        assert reply_to, 'Must provide an identifier for the recipient'
 
         message = aio_pika.Message(body=self._response_encode(response), correlation_id=correlation_id)
         result = await self._exchange.publish(message, routing_key=reply_to)
@@ -267,19 +270,20 @@ class RmqCommunicator:
     _default_task_queue = None  # type: Optional[tasks.RmqTaskQueue]
 
     def __init__(
-            self,
-            connection: aio_pika.Connection,
-            # Messages
-            message_exchange: str = defaults.MESSAGE_EXCHANGE,
-            queue_expires: int = defaults.QUEUE_EXPIRES,
-            # Tasks
-            task_exchange: str = defaults.TASK_EXCHANGE,
-            task_queue: str = defaults.TASK_QUEUE,
-            task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
-            task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
-            encoder=defaults.ENCODER,
-            decoder=defaults.DECODER,
-            testing_mode=False):
+        self,
+        connection: aio_pika.Connection,
+        # Messages
+        message_exchange: str = defaults.MESSAGE_EXCHANGE,
+        queue_expires: int = defaults.QUEUE_EXPIRES,
+        # Tasks
+        task_exchange: str = defaults.TASK_EXCHANGE,
+        task_queue: str = defaults.TASK_QUEUE,
+        task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+        task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+        encoder=defaults.ENCODER,
+        decoder=defaults.DECODER,
+        testing_mode=False
+    ):
         # pylint: disable=too-many-arguments
         """Create a new asynchronous communicator.
 
@@ -326,7 +330,7 @@ class RmqCommunicator:
         await self.disconnect()
 
     def __str__(self):
-        return "RMQCommunicator({})".format(self._connection)
+        return 'RMQCommunicator({})'.format(self._connection)
 
     @property
     def loop(self):
@@ -341,14 +345,16 @@ class RmqCommunicator:
         self._ensure_connected()
 
         if self._default_task_queue is None:
-            task_queue = tasks.RmqTaskQueue(self._connection,
-                                            exchange_name=self._task_exchange,
-                                            queue_name=self._task_queue,
-                                            decoder=self._decoder,
-                                            encoder=self._encoder,
-                                            prefetch_size=self._task_prefetch_size,
-                                            prefetch_count=self._task_prefetch_count,
-                                            testing_mode=self._testing_mode)
+            task_queue = tasks.RmqTaskQueue(
+                self._connection,
+                exchange_name=self._task_exchange,
+                queue_name=self._task_queue,
+                decoder=self._decoder,
+                encoder=self._encoder,
+                prefetch_size=self._task_prefetch_size,
+                prefetch_count=self._task_prefetch_count,
+                testing_mode=self._testing_mode
+            )
 
             await task_queue.connect()
             self._default_task_queue = task_queue
@@ -363,12 +369,14 @@ class RmqCommunicator:
         self._ensure_connected()
 
         if self._message_subscriber is None:
-            subscriber = RmqSubscriber(self._connection,
-                                       message_exchange=self._message_exchange,
-                                       queue_expires=self._queue_expires,
-                                       encoder=self._encoder,
-                                       decoder=self._decoder,
-                                       testing_mode=self._testing_mode)
+            subscriber = RmqSubscriber(
+                self._connection,
+                message_exchange=self._message_exchange,
+                queue_expires=self._queue_expires,
+                encoder=self._encoder,
+                decoder=self._decoder,
+                testing_mode=self._testing_mode
+            )
             await subscriber.connect()
             self._message_subscriber = subscriber
 
@@ -382,11 +390,13 @@ class RmqCommunicator:
         self._ensure_connected()
 
         if self._message_publisher is None:
-            publisher = RmqPublisher(self._connection,
-                                     exchange_name=self._message_exchange,
-                                     encoder=self._encoder,
-                                     decoder=self._decoder,
-                                     testing_mode=self._testing_mode)
+            publisher = RmqPublisher(
+                self._connection,
+                exchange_name=self._message_exchange,
+                encoder=self._encoder,
+                decoder=self._decoder,
+                testing_mode=self._testing_mode
+            )
 
             await publisher.connect()
             self._message_publisher = publisher
@@ -476,19 +486,23 @@ class RmqCommunicator:
             # Find out what the exception is when a nack is generated!
             raise kiwipy.TaskRejected(str(exception))
 
-    async def task_queue(self,
-                         queue_name: str,
-                         prefetch_size=defaults.TASK_PREFETCH_SIZE,
-                         prefetch_count=defaults.TASK_PREFETCH_COUNT) -> tasks.RmqTaskQueue:
+    async def task_queue(
+        self,
+        queue_name: str,
+        prefetch_size=defaults.TASK_PREFETCH_SIZE,
+        prefetch_count=defaults.TASK_PREFETCH_COUNT
+    ) -> tasks.RmqTaskQueue:
         """Create a new task queue."""
-        queue = tasks.RmqTaskQueue(self._connection,
-                                   exchange_name=self._task_exchange,
-                                   queue_name=queue_name,
-                                   decoder=self._decoder,
-                                   encoder=self._encoder,
-                                   prefetch_size=prefetch_size,
-                                   prefetch_count=prefetch_count,
-                                   testing_mode=self._testing_mode)
+        queue = tasks.RmqTaskQueue(
+            self._connection,
+            exchange_name=self._task_exchange,
+            queue_name=queue_name,
+            decoder=self._decoder,
+            encoder=self._encoder,
+            prefetch_size=prefetch_size,
+            prefetch_count=prefetch_count,
+            testing_mode=self._testing_mode
+        )
         await queue.connect()
         self._task_queues.append(queue)
         return queue
@@ -496,24 +510,26 @@ class RmqCommunicator:
     def _ensure_connected(self):
         if not self.connected():
             raise RuntimeError(
-                "The communicator is not connected, call connect() or use in a context to establish a connection.")
+                'The communicator is not connected, call connect() or use in a context to establish a connection.'
+            )
 
 
 async def async_connect(
-        # Connection parameters
-        connection_params: Union[str, dict] = None,
-        connection_factory=aio_pika.connect_robust,
-        # Messages
-        message_exchange: str = defaults.MESSAGE_EXCHANGE,
-        queue_expires: int = defaults.QUEUE_EXPIRES,
-        # Tasks
-        task_exchange: str = defaults.TASK_EXCHANGE,
-        task_queue: str = defaults.TASK_QUEUE,
-        task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
-        task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
-        encoder=defaults.ENCODER,
-        decoder=defaults.DECODER,
-        testing_mode=False) -> RmqCommunicator:
+    # Connection parameters
+    connection_params: Union[str, dict] = None,
+    connection_factory=aio_pika.connect_robust,
+    # Messages
+    message_exchange: str = defaults.MESSAGE_EXCHANGE,
+    queue_expires: int = defaults.QUEUE_EXPIRES,
+    # Tasks
+    task_exchange: str = defaults.TASK_EXCHANGE,
+    task_queue: str = defaults.TASK_QUEUE,
+    task_prefetch_size=defaults.TASK_PREFETCH_SIZE,
+    task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
+    encoder=defaults.ENCODER,
+    decoder=defaults.DECODER,
+    testing_mode=False
+) -> RmqCommunicator:
     # pylint: disable=too-many-arguments
     """Convenience method that returns a connected communicator.
 
@@ -550,7 +566,8 @@ async def async_connect(
         task_prefetch_count=task_prefetch_count,
         encoder=encoder,
         decoder=decoder,
-        testing_mode=testing_mode)
+        testing_mode=testing_mode
+    )
 
     await communicator.connect()
     return communicator

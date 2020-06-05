@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 import tempfile
 import os
@@ -8,5 +9,5 @@ try:
     os.remove(TEST_LOG)
 except OSError:
     pass
-FORMAT = "[%(levelname)s][%(filename)s:%(lineno)s - %(funcName)s()] %(message)s"
+FORMAT = '[%(levelname)s][%(filename)s:%(lineno)s - %(funcName)s()] %(message)s'
 logging.basicConfig(filename=TEST_LOG, level=logging.DEBUG, format=FORMAT)

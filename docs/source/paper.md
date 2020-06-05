@@ -26,7 +26,7 @@ bibliography: paper.bib
 
 # Summary
 
-The computational sciences have seen a huge increase in the use of high-throughput, automated, workflows over the course of the last two decades or so.  Focusing on just our domain of computational materials science, there have been several large scale initiatives to provide high-quality results from standardised calculations [@Landis2012; @Curtarolo2012; @Jain2013; @Saal2013; @Draxl2019a; @Talirz2020].  Almost all of these repositories are populated using results from high-throughput quantum mechanical calculations that rely on workflow frameworks [@Jain2015a; @Mortensen2020], including our own [AiiDA](http://www.aiida.net/) [@Pizzi2016; @Huber2020] which powers the [Materials Cloud](https://www.materialscloud.org/).  One of the many challenges for such frameworks is maximising fault-tolerance whilst simultaneously maintaining high-throughput, often across several systems (typically the client launching the tasks, the supercomputer carrying out the computations and the server hosting the database).  
+The computational sciences have seen a huge increase in the use of high-throughput, automated, workflows over the course of the last two decades or so.  Focusing on just our domain of computational materials science, there have been several large scale initiatives to provide high-quality results from standardised calculations [@Landis2012; @Curtarolo2012; @Jain2013; @Saal2013; @Draxl2019a; @Talirz2020].  Almost all of these repositories are populated using results from high-throughput quantum mechanical calculations that rely on workflow frameworks [@Jain2015a; @Mortensen2020], including our own [AiiDA](http://www.aiida.net/) [@Pizzi2016; @Huber2020] which powers the [Materials Cloud](https://www.materialscloud.org/).  One of the many challenges for such frameworks is maximising fault-tolerance whilst simultaneously maintaining high-throughput, often across several systems (typically the client launching the tasks, the supercomputer carrying out the computations and the server hosting the database).
 
 On the software level these problems are perhaps best addressed by using messaging brokers that take responsibility for guaranteeing the durability and atomicity of messages and often enable event based communication.  Indeed, solutions such as [RabbitMQ](https://www.rabbitmq.com/) see widespread adoption in industry, however, adoption in academia has been more limited, with home-made queue data structures, race condition susceptible locks and polling based solutions being commonplace. This is likely due to message brokers typically having complex APIs (which reflect the non-trivial nature of the underlying protocol) as well as the lack of familiarity with event-based programming in general within the community.  [KiwiPy](https://kiwipy.readthedocs.io/en/latest/) was designed specifically to address both these issues, by providing a tool that allows building robust event based systems with an interface that is as simple as possible.
 
@@ -42,7 +42,7 @@ As is common for high-throughput workflow engines, AiiDA maintains a task queue 
 Remote Procedure Calls
 ----------------------
 
-These are used to control live processes.  Each process has a unique identifier and can be sent a `pause`, `play` or `kill` message, the response to which is optionally sent back to the initiator to indicate success or otherwise.     
+These are used to control live processes.  Each process has a unique identifier and can be sent a `pause`, `play` or `kill` message, the response to which is optionally sent back to the initiator to indicate success or otherwise.
 
 Broadcasts
 ----------
@@ -52,7 +52,7 @@ These currently serve two purposes: sending `pause`, `play` or `kill` messages t
 
 Together these three message types allow AiiDA to implement a highly-decoupled, distributed, yet, reactive system that has proven to be scalable from individual laptops to workstations, driving simulations on high-performance supercomputers with workflows consisting of varying durations, ranging from milliseconds up to multiple days or weeks.
 
-It is our hope that by lowering the barriers to adoption, kiwiPy will bring the benefits of industry grade message brokers to academia and beyond, ultimately making robust scientific software easier to write and maintain.  
+It is our hope that by lowering the barriers to adoption, kiwiPy will bring the benefits of industry grade message brokers to academia and beyond, ultimately making robust scientific software easier to write and maintain.
 
 
 # Acknowledgements

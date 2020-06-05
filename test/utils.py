@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 A generic test for any communicator that conforms to the `kiwipy.Communicator` interface.
 
@@ -68,7 +69,7 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
 
     def test_rpc_send_receive(self):
         MESSAGE = "sup yo'"  # pylint: disable=invalid-name
-        RESPONSE = "nuthin bra"  # pylint: disable=invalid-name
+        RESPONSE = 'nuthin bra'  # pylint: disable=invalid-name
 
         messages = []
 
@@ -126,7 +127,7 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
 
     def test_rpc_exception(self):
         MESSAGE = 'The meaning?'  # pylint: disable=invalid-name
-        EXCEPTION = RuntimeError("I cannae do it Captain!")  # pylint: disable=invalid-name
+        EXCEPTION = RuntimeError('I cannae do it Captain!')  # pylint: disable=invalid-name
 
         messages = []
 
@@ -191,7 +192,7 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
 
     def test_task_exception(self):
         TASK = 'The meaning?'  # pylint: disable=invalid-name
-        EXCEPTION = RuntimeError("I cannea do it Captain!")  # pylint: disable=invalid-name
+        EXCEPTION = RuntimeError('I cannea do it Captain!')  # pylint: disable=invalid-name
 
         tasks = []
 
@@ -286,7 +287,7 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
             if len(subjects) == len(EXPECTED_SUBJECTS):
                 done.set_result(True)
 
-        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, subject="purchase.*"))
+        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, subject='purchase.*'))
 
         for subj in ['purchase.car', 'purchase.piano', 'sell.guitar', 'sell.house']:
             self.communicator.broadcast_send(None, subject=subj)
@@ -307,7 +308,7 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
             if len(senders) == len(EXPECTED_SENDERS):
                 done.set_result(True)
 
-        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender="*.jones"))
+        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender='*.jones'))
 
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
             self.communicator.broadcast_send(None, sender=sender)
@@ -335,8 +336,8 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
                 done.set_result(True)
 
         filtered = kiwipy.BroadcastFilter(on_broadcast_1)
-        filtered.add_sender_filter("*.jones")
-        filtered.add_subject_filter("purchase.*")
+        filtered.add_sender_filter('*.jones')
+        filtered.add_subject_filter('purchase.*')
         self.communicator.add_broadcast_subscriber(filtered)
 
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
@@ -367,8 +368,8 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
                 done.set_result(True)
 
         filtered = kiwipy.BroadcastFilter(on_broadcast_1)
-        filtered.add_sender_filter(re.compile(".*.jones"))
-        filtered.add_subject_filter(re.compile("purchase.*"))
+        filtered.add_sender_filter(re.compile('.*.jones'))
+        filtered.add_subject_filter(re.compile('purchase.*'))
         self.communicator.add_broadcast_subscriber(filtered)
 
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
@@ -391,7 +392,7 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
             if len(senders) == len(EXPECTED_SENDERS):
                 done.set_result(True)
 
-        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender="alice.jones"))
+        self.communicator.add_broadcast_subscriber(kiwipy.BroadcastFilter(on_broadcast_1, sender='alice.jones'))
 
         for sender in ['bob.jones', 'bob.smith', 'martin.uhrin', 'alice.jones']:
             self.communicator.broadcast_send(None, sender=sender)

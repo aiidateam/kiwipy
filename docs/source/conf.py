@@ -165,8 +165,10 @@ man_pages = [(master_doc, 'kiwipy', 'kiwipy Documentation', [author], 1)]
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'kiwipy', 'kiwipy Documentation', author, 'kiwipy', 'One line description of project.',
-     'Miscellaneous'),
+    (
+        master_doc, 'kiwipy', 'kiwipy Documentation', author, 'kiwipy', 'One line description of project.',
+        'Miscellaneous'
+    ),
 ]
 
 # -- Options for Epub output -------------------------------------------------
@@ -193,7 +195,7 @@ epub_exclude_files = ['search.html']
 nitpick_ignore = [('py:class', 'Warning'), ('py:class', 'exceptions.Warning')]
 
 for line in open('nitpick-exceptions'):
-    if line.strip() == "" or line.startswith("#"):
+    if line.strip() == '' or line.startswith('#'):
         continue
     dtype, target = line.split(None, 1)
     target = target.strip()

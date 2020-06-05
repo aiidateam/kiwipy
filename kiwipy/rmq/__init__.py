@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from .communicator import *
 from .tasks import *
 from .threadcomms import *

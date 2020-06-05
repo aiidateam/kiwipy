@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import unittest
 import uuid
 
@@ -19,13 +20,12 @@ try:
     @pytest.fixture
     @async_generator
     async def task_publisher(connection: aio_pika.Connection):
-        exchange_name = "{}.{}".format(__file__, uuid.uuid4())
-        task_queue_name = "{}.{}".format(__file__, uuid.uuid4())
+        exchange_name = '{}.{}'.format(__file__, uuid.uuid4())
+        task_queue_name = '{}.{}'.format(__file__, uuid.uuid4())
 
-        task_pub = rmq.RmqTaskPublisher(connection,
-                                        queue_name=task_queue_name,
-                                        exchange_name=exchange_name,
-                                        testing_mode=True)
+        task_pub = rmq.RmqTaskPublisher(
+            connection, queue_name=task_queue_name, exchange_name=exchange_name, testing_mode=True
+        )
         await task_pub.connect()
         await yield_(task_pub)
         await task_pub.disconnect()
@@ -33,13 +33,12 @@ try:
     @pytest.fixture
     @async_generator
     async def task_queue(connection: aio_pika.Connection):
-        exchange_name = "{}.{}".format(__file__, uuid.uuid4())
-        task_queue_name = "{}.{}".format(__file__, uuid.uuid4())
+        exchange_name = '{}.{}'.format(__file__, uuid.uuid4())
+        task_queue_name = '{}.{}'.format(__file__, uuid.uuid4())
 
-        task_pub = rmq.RmqTaskQueue(connection,
-                                    queue_name=task_queue_name,
-                                    exchange_name=exchange_name,
-                                    testing_mode=True)
+        task_pub = rmq.RmqTaskQueue(
+            connection, queue_name=task_queue_name, exchange_name=exchange_name, testing_mode=True
+        )
         await task_pub.connect()
         await yield_(task_pub)
         await task_pub.disconnect()
@@ -48,7 +47,7 @@ except ImportError:
     aio_pika = None
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_task_send(communicator: kiwipy.rmq.RmqCommunicator):
     TASK = 'The meaning?'
@@ -68,7 +67,7 @@ async def test_task_send(communicator: kiwipy.rmq.RmqCommunicator):
     assert RESULT == result
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_future_task(communicator: kiwipy.rmq.RmqCommunicator):
     """
@@ -100,7 +99,7 @@ async def test_future_task(communicator: kiwipy.rmq.RmqCommunicator):
     assert RESULT == result
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_task_exception(communicator: kiwipy.rmq.RmqCommunicator):
     TASK = 'The meaning?'
@@ -109,7 +108,7 @@ async def test_task_exception(communicator: kiwipy.rmq.RmqCommunicator):
 
     def on_task(_comm, task):
         tasks.append(task)
-        raise RuntimeError("I cannea do it Captain!")
+        raise RuntimeError('I cannea do it Captain!')
 
     await communicator.add_task_subscriber(on_task)
     with pytest.raises(kiwipy.RemoteException):
@@ -119,7 +118,7 @@ async def test_task_exception(communicator: kiwipy.rmq.RmqCommunicator):
     assert tasks[0] == TASK
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_task_no_reply(communicator: kiwipy.rmq.RmqCommunicator):
     """Test that we don't get a reply if we don't ask for one, i.e. fire-and-forget"""
@@ -146,7 +145,7 @@ async def test_task_no_reply(communicator: kiwipy.rmq.RmqCommunicator):
     assert result is None
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_custom_tasks_queue(communicator: kiwipy.rmq.RmqCommunicator):
     """Test that we don't get a reply if we don't ask for one, i.e. fire-and-forget"""
@@ -175,7 +174,7 @@ async def test_custom_tasks_queue(communicator: kiwipy.rmq.RmqCommunicator):
     assert result is None
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_send_no_subscribers(task_publisher: aio_pika.Connection):
     """ Test what happens when there are no task queues bound to the exchange """
@@ -184,11 +183,11 @@ async def test_send_no_subscribers(task_publisher: aio_pika.Connection):
         await task_publisher.task_send(TASK)
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_queue_get_next(task_queue: rmq.RmqTaskQueue):
     """Test getting the next task from the queue"""
-    result = await task_queue.task_send("Hello!")
+    result = await task_queue.task_send('Hello!')
     async with task_queue.next_task(timeout=1.) as task:
         with task.processing() as outcome:
             assert task.body == 'Hello!'
@@ -197,7 +196,7 @@ async def test_queue_get_next(task_queue: rmq.RmqTaskQueue):
     assert result.result() == 'Goodbye'
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_queue_iter(task_queue: rmq.RmqTaskQueue):
     """Test iterating through a task queue"""
@@ -219,7 +218,7 @@ async def test_queue_iter(task_queue: rmq.RmqTaskQueue):
         assert False, "Shouldn't get here"
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_queue_iter_not_process(task_queue: rmq.RmqTaskQueue):
     """Check what happens when we iterate a queue but don't process all tasks"""
@@ -247,7 +246,7 @@ async def test_queue_iter_not_process(task_queue: rmq.RmqTaskQueue):
         assert outcome.result() == i * 10
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
     """
@@ -279,7 +278,7 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
     assert outcomes[0].result() == 10
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_empty_queue(task_queue: rmq.RmqTaskQueue):
     with pytest.raises(kiwipy.exceptions.QueueEmpty):
@@ -287,7 +286,7 @@ async def test_empty_queue(task_queue: rmq.RmqTaskQueue):
             pass
 
 
-@unittest.skipIf(not aio_pika, "Requires aio_pika library and RabbitMQ")
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_task_processing_exception(task_queue: rmq.RmqTaskQueue):
     """Check that if there is an exception processing a task that it is removed from the queue"""
