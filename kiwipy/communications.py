@@ -133,6 +133,7 @@ class CommunicatorHelper(Communicator):
         if identifier in self._rpc_subscribers:
             raise DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
         self._rpc_subscribers[identifier] = subscriber
+        return identifier
 
     def remove_rpc_subscriber(self, identifier):
         try:
