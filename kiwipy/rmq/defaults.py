@@ -13,7 +13,10 @@ MESSAGE_TTL = 60 * 1000  # One minute
 TEST_QUEUE_EXPIRES = 10 * 1000
 QUEUE_EXPIRES = 60 * 1000
 REPLY_QUEUE_EXPIRES = 60 * 1000
-TASK_MESSAGE_TTL = 60000 * 60 * 24 * 7 * 120  # 120 days
+
+# Warning: changing the message TTL will make it impossible to connect to an existing queue with the old value.
+# If it is persistent it will have to be manually deleted before one can create a new one and connect to it again.
+TASK_MESSAGE_TTL = 60000 * 60 * 24 * 7  # One week
 TASK_PREFETCH_SIZE = 0
 TASK_PREFETCH_COUNT = 0
 
