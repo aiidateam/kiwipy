@@ -7,7 +7,7 @@ import os
 import socket
 import traceback
 
-import kiwipy
+from kiwipy import exceptions
 
 __all__ = ()
 
@@ -79,7 +79,7 @@ def response_to_future(response, future=None):
     if CANCELLED_KEY in response:
         future.cancel()
     elif EXCEPTION_KEY in response:
-        future.set_exception(kiwipy.RemoteException(response[EXCEPTION_KEY]))
+        future.set_exception(exceptions.RemoteException(response[EXCEPTION_KEY]))
     elif RESULT_KEY in response:
         future.set_result(response[RESULT_KEY])
     elif PENDING_KEY in response:
