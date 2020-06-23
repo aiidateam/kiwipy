@@ -139,6 +139,11 @@ Versioning
 
 This software follows `Semantic Versioning`_
 
+Contributing
+============
 
+Want a new feature? Found a bug? Want to contribute more documentation or a translation perhaps?
+
+Help is always welcome, get started with the `contributing guide <https://github.com/aiidateam/kiwipy/wiki/Contributing>`__.
 
 .. _Semantic Versioning: http://semver.org/

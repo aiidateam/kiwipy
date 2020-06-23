@@ -60,6 +60,13 @@ Getting Started
 * The design concepts behind kiwiPy can be found in `concepts`_ section
 * Finally check out the complete `API documentation`_
 
+.. admonition:: Development Contributions
+   :class: note
+
+   Want a new feature? Found a bug? Want to contribute more documentation or a translation perhaps?
+   Help is always welcome, get started with the `contributing guide <https://github.com/aiidateam/kiwipy/wiki/Contributing>`__.
+
+
 
 Table Of Contents
 +++++++++++++++++
