@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import kiwipy
 
 with kiwipy.connect('amqp://localhost') as comm:

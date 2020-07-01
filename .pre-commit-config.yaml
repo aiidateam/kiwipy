@@ -5,6 +5,10 @@ repos:
     -   id: double-quote-string-fixer
     -   id: end-of-file-fixer
     -   id: fix-encoding-pragma
+        exclude: &exclude_files >
+            (?x)^(
+                docs/.*|
+            )$
     -   id: mixed-line-ending
     -   id: trailing-whitespace
 
@@ -24,10 +28,7 @@ repos:
             '--disable=too-many-arguments',
             '--disable=too-many-instance-attributes',
         ]
-        exclude: &exclude_files >
-            (?x)^(
-                docs/.*|
-            )$
+        exclude: *exclude_files
 
 -   repo: https://github.com/pre-commit/mirrors-yapf
     rev: v0.30.0
