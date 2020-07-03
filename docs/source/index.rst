@@ -60,7 +60,7 @@ Getting Started
 * To install kiwiPy follow the instructions in the `installation`_ section
 * After you have successfully installed kiwipy, give in to some of the `examples`_ to see what kiwiPy can do.
 * The design concepts behind kiwiPy can be found in `concepts`_ section
-* If you're already familiar with `Pika`_ you might from our `coming from pika`_ section useful
+* If you're already familiar with `Pika`_ you might find the `coming from pika`_ section useful
 * Finally check out the complete `API documentation`_
 
 .. admonition:: Development Contributions

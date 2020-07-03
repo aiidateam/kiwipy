@@ -1,18 +1,21 @@
-import threading
-import kiwipy
+import pika
 import time
 
+connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+channel = connection.channel()
 
-def callback(_comm, body):
+channel.queue_declare(queue='task_queue', durable=True)
+print(' [*] Waiting for messages. To exit press CTRL+C')
+
+
+def callback(ch, method, properties, body):
     print(' [x] Received %r' % body)
-    time.sleep(body.count('.'))
+    time.sleep(body.count(b'.'))
     print(' [x] Done')
-    return True
+    ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
-with kiwipy.connect('amqp://localhost') as comm:
-    queue = comm.task_queue('task_queue', prefetch_count=1)
-    queue.add_task_subscriber(callback)
+channel.basic_qos(prefetch_count=1)
+channel.basic_consume(queue='task_queue', on_message_callback=callback)
 
-    print(' [*] Waiting for messages. To exit press CTRL+C')
-    threading.Event().wait()  # Wait for incoming messages
+channel.start_consuming()

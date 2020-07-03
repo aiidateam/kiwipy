@@ -1,9 +1,19 @@
-import kiwipy
+import pika
 import sys
 
-message = ' '.join(sys.argv[1:]) or 'Hello World!'
+connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+channel = connection.channel()
 
-with kiwipy.connect('amqp://localhost') as comm:
-    queue = comm.task_queue('task_queue')  # Durable by default
-    queue.task_send(message)
-    print(' [x] Sent %r' % message)
+channel.queue_declare(queue='task_queue', durable=True)
+
+message = ' '.join(sys.argv[1:]) or 'Hello World!'
+channel.basic_publish(
+    exchange='',
+    routing_key='task_queue',
+    body=message,
+    properties=pika.BasicProperties(
+        delivery_mode=2,  # make message persistent
+    )
+)
+print(' [x] Sent %r' % message)
+connection.close()
