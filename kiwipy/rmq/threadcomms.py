@@ -251,9 +251,9 @@ class RmqThreadCommunicator(kiwipy.Communicator):
             try:
                 result = kiwi_future.result()
             except concurrent.futures.CancelledError:
-                aio_future.cancel()
+                self._loop.call_soon_threadsafe(aio_future.cancel)
             except Exception as exc:  # pylint: disable=broad-except
-                aio_future.set_exception(exc)
+                self._loop.call_soon_threadsafe(aio_future.set_exception, exc)
             else:
                 if isinstance(result, kiwipy.Future):
                     result = self._wrap_future(result)
