@@ -5,8 +5,10 @@
 
 .. _kiwiPy: https://github.com/aiidateam/kiwipy
 .. _AiiDA: https://www.aiida.net
+.. _Pika: https://pika.readthedocs.io/en/stable/
 .. _examples: examples.rst
 .. _concepts: concepts.rst
+.. _coming from pika: pika-comparison.rst
 .. _installation: installation.rst
 .. _API documentation: apidoc.rst
 
@@ -58,6 +60,7 @@ Getting Started
 * To install kiwiPy follow the instructions in the `installation`_ section
 * After you have successfully installed kiwipy, give in to some of the `examples`_ to see what kiwiPy can do.
 * The design concepts behind kiwiPy can be found in `concepts`_ section
+* If you're already familiar with `Pika`_ you might find the `coming from pika`_ section useful
 * Finally check out the complete `API documentation`_
 
 .. admonition:: Development Contributions
@@ -77,6 +80,7 @@ Table Of Contents
    installation
    concepts
    examples
+   pika-comparison
    apidoc
 
 
