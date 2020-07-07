@@ -47,7 +47,7 @@ Features
 ++++++++
 
 * Support for 1000s of messages per second
-* Highly robust (no loss of messages on connection interruptions, etc)
+* Highly robust - no loss of messages on connection interruptions, etc., as messages are automatically persisted to disk
 * Generic communicator interface with native support for RabbitMQ
 * Supports task queues, broadcasts and RPC
 * Support for both thread and coroutine based communication
