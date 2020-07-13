@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import abc
 import sys
-from typing import Any
+from typing import Any, Callable
 
 import shortuuid
 
@@ -9,9 +9,15 @@ from . import exceptions
 # For backwards compatibility import exceptions too
 from .exceptions import *  # pylint: disable=wildcard-import, redefined-builtin, unused-wildcard-import
 from . import futures
-from . import types
 
 __all__ = 'Communicator', 'CommunicatorHelper'
+
+# RPC subscriber params: communicator, msg
+RpcSubscriber = Callable[['Communicator', Any], Any]
+# Task subscriber params: communicator, task
+TaskSubscriber = Callable[['Communicator', Any], Any]
+# Broadcast subscribers params: communicator, body, sender, subject, correlation id
+BroadcastSubscriber = Callable[['Communicator', Any, Any, Any, Any], Any]
 
 
 class Communicator:
@@ -34,7 +40,7 @@ class Communicator:
         """Close a communicator, free up all resources and do not allow any further operations"""
 
     @abc.abstractmethod
-    def add_rpc_subscriber(self, subscriber: types.RpcSubscriber, identifier=None) -> Any:
+    def add_rpc_subscriber(self, subscriber: RpcSubscriber, identifier=None) -> Any:
         """Add an RPC subscriber to the communicator with an optional identifier.  If an identifier
         is not provided the communicator will generate a unique one.  In all cases the identifier
         will be returned."""
@@ -49,7 +55,7 @@ class Communicator:
         """
 
     @abc.abstractmethod
-    def add_task_subscriber(self, subscriber: types.TaskSubscriber, identifier=None) -> Any:
+    def add_task_subscriber(self, subscriber: TaskSubscriber, identifier=None) -> Any:
         """Add a task subscriber to the communicator's default queue.  Returns the identifier.
 
         :param subscriber: The task callback function
@@ -65,7 +71,7 @@ class Communicator:
         """
 
     @abc.abstractmethod
-    def add_broadcast_subscriber(self, subscriber: types.BroadcastSubscriber, identifier=None) -> Any:
+    def add_broadcast_subscriber(self, subscriber: BroadcastSubscriber, identifier=None) -> Any:
         """
         Add a broadcast subscriber that will receive all broadcast messages
 
@@ -176,7 +182,7 @@ class CommunicatorHelper(Communicator):
         except KeyError:
             raise ValueError("Unknown subscriber: '{}'".format(identifier))
 
-    def add_broadcast_subscriber(self, subscriber: types.BroadcastSubscriber, identifier=None) -> Any:
+    def add_broadcast_subscriber(self, subscriber: BroadcastSubscriber, identifier=None) -> Any:
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
         if identifier in self._broadcast_subscribers:
