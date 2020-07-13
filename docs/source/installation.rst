@@ -40,6 +40,12 @@ Then, create and activate a virtualenv:
 
 .. code-block:: shell
 
-   virtualenv venv
-   . venv/bin/activate
-   pip install -e "kiwipy[rmq,dev]"
+    virtualenv venv
+    . venv/bin/activate
+    pip install -e "kiwipy[rmq,pre-commit,tests]"
+
+To run the tests, simply type:
+
+.. code-block:: shell
+
+    pytest test
