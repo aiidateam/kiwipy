@@ -41,7 +41,16 @@ setup(
         ],
         'pre-commit': ['pre-commit~=2.2', 'pylint==2.5.2'],
         'rmq': ['aio-pika', 'pyyaml~=5.1'],
-        'tests': ['coverage', 'pytest-cov', 'pytest~=5.4', 'pytest-asyncio<=0.10.0', 'pytest-notebook']
+        'tests': [
+            'coverage',
+            'pytest-cov',
+            'pytest~=5.4',
+            'pytest-asyncio<=0.10.0',
+            'pytest-notebook',
+            'pytest-benchmark',
+            'pika',
+            'msgpack',
+        ]
     },
     packages=['kiwipy', 'kiwipy.rmq'],
     test_suite='test'
