@@ -10,6 +10,7 @@
 .. _concepts: concepts.rst
 .. _coming from pika: pika-comparison.rst
 .. _installation: installation.rst
+.. _performance: performance.rst
 .. _API documentation: apidoc.rst
 
 
@@ -46,7 +47,7 @@ be used anywhere where high-throughput and robust messaging are needed.
 Features
 ++++++++
 
-* Support for 1000s of messages per second
+* Support for `1000s of messages per second <performance_>`__
 * Highly robust - no loss of messages on connection interruptions, etc., as messages are automatically persisted to disk
 * Generic communicator interface with native support for RabbitMQ
 * Supports task queues, broadcasts and RPC
@@ -81,6 +82,7 @@ Table Of Contents
    concepts
    examples
    pika-comparison
+   performance
    apidoc
 
 
