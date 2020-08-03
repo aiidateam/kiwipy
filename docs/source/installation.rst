@@ -5,11 +5,17 @@
 Installation
 ============
 
+Python
+------
+
+KiwiPy supports Python versions 3.5 and above, however, the minimum required patch versions are 3.5.4 and 3.6.2 for Python 3.5 and 3.6, respectively.
+All newer versions are supported.
 
 RabbitMQ
--------------
+--------
 
-kiwipy depends on RabbitMQ as the message broker.  On ubuntu this is as simple as:
+KiwiPy depends on RabbitMQ as the message broker.
+On Ubuntu this is as simple as:
 
 .. code-block:: shell
 
@@ -44,7 +50,7 @@ Then, create and activate a virtualenv:
     . venv/bin/activate
     pip install -e "kiwipy[rmq,pre-commit,tests]"
 
-To run the tests, simply type:
+To run the tests, make sure the RabbitMQ server is up and running (see the RabbitMQ documentation on how to accomplish and/or verify this) and type:
 
 .. code-block:: shell
 

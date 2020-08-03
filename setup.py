@@ -29,7 +29,7 @@ setup(
     ],
     keywords='communication messaging rpc broadcast',
     install_requires=['shortuuid', 'async_generator', 'pytray>=0.2.2, <0.3.0', 'deprecation'],
-    python_requires='>=3.5',
+    python_requires='>=3.5.4',
     extras_require={
         'docs': [
             'docutils==0.14',
