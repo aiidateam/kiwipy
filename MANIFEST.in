@@ -8,3 +8,6 @@ include README.md
 
 # Force test subdirectories
 recursive-include test *.py
+
+# Images
+docs/source/_static/logo.svg
