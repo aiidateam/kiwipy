@@ -11,27 +11,27 @@ kiwiPy
    :width: 64px
    :alt: kiwiPy
 
-.. image:: https://travis-ci.org/aiidateam/kiwipy.svg
-    :target: https://travis-ci.org/aiidateam/kiwipy
-    :alt: Travis CI
+.. image:: https://codecov.io/gh/aiidateam/kiwipy/branch/develop/graph/badge.svg
+    :target: https://codecov.io/gh/aiidateam/kiwipy
+    :alt: Coveralls
 
-.. image:: https://readthedocs.org/projects/kiwipy/badge
-    :target: http://kiwipy.readthedocs.io/
-    :alt: Docs status
-
+.. image:: https://github.com/aiidateam/kiwipy/workflows/continuous-integration/badge.svg
+    :target: https://github.com/aiidateam/kiwipy/actions?query=workflow%3Acontinuous-integration
+    :alt: Github Actions
 
 .. image:: https://img.shields.io/pypi/v/kiwipy.svg
     :target: https://pypi.python.org/pypi/kiwipy/
     :alt: Latest Version
-
-.. image:: https://img.shields.io/pypi/wheel/kiwipy.svg
-    :target: https://pypi.python.org/pypi/kiwipy/
 
 .. image:: https://img.shields.io/pypi/pyversions/kiwipy.svg
     :target: https://pypi.python.org/pypi/kiwipy/
 
 .. image:: https://img.shields.io/pypi/l/kiwipy.svg
     :target: https://pypi.python.org/pypi/kiwipy/
+
+.. image:: https://joss.theoj.org/papers/10.21105/joss.02351/status.svg
+   :target: https://doi.org/10.21105/joss.02351
+
 
 
 `kiwiPy`_ is a library that makes remote messaging using RabbitMQ (and possibly other message brokers) EASY.  It was
@@ -133,6 +133,14 @@ And the worker:
 
 `(rmq_worker.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/develop/examples/rmq_worker.py>`_
 
+Citing
+======
+
+If you use kiwiPy directly or indirectly (e.g. by using `AiiDA`_) then please cite:
+
+Uhrin, M., & Huber, S. P. (2020). kiwiPy : Robust , high-volume , messaging for big-data and computational science workflows, 5, 4–6. http://doi.org/10.21105/joss.02351
+
+This helps us to keep making community software.
 
 Versioning
 ==========
