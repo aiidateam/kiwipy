@@ -45,7 +45,7 @@ setup(
             'coverage',
             'pytest-cov',
             'pytest~=5.4',
-            'pytest-asyncio<=0.10.0',
+            'pytest-asyncio~=0.12',
             'pytest-notebook',
             'pytest-benchmark',
             'pika',
