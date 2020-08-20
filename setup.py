@@ -3,7 +3,7 @@ from setuptools import setup
 
 __author__ = 'Martin Uhrin'
 __license__ = 'GPLv3 and MIT'
-__contributors__ = 'Sebastiaan P. Huber'
+__contributors__ = ['Sebastiaan P. Huber', 'Jason Yu', 'Sonia Collaud']
 
 ABOUT = {}
 with open('kiwipy/version.py') as f:
