@@ -280,15 +280,20 @@ class RmqIncomingTask:
             # Whoever took the task decided not to process it
             self._state = TASK_PENDING
         else:
+            # Task is done or excepted
             # Permanently store the outcome
             self._state = TASK_FINISHED
             self._message.ack()
+
+            # We have to get the result from the future here (even if not replying), otherwise
+            # python complains that it was never retrieved in case of exception
+            try:
+                reply_body = utils.result_response(outcome.result())
+            except Exception as exc:  # pylint: disable=broad-except
+                reply_body = utils.exception_response(exc)
+
             if not self.no_reply:
                 # Schedule a task to send the appropriate response
-                if outcome.exception():
-                    reply_body = utils.exception_response(outcome.exception())
-                else:
-                    reply_body = utils.result_response(outcome.result())
                 # pylint: disable=protected-access
                 self._subscriber.loop().create_task(self._subscriber._send_response(reply_body, self._message))
 
