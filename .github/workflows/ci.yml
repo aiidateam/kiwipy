@@ -26,7 +26,7 @@ jobs:
                 sudo apt install pandoc
 
         -   name: Set up Python
-            uses: actions/setup-python@v1
+            uses: actions/setup-python@v2
             with:
                 python-version: 3.8
 
@@ -57,7 +57,7 @@ jobs:
                     pip-pre-commit-
 
         -   name: Set up Python
-            uses: actions/setup-python@v1
+            uses: actions/setup-python@v2
             with:
                 python-version: 3.8
 
@@ -75,7 +75,7 @@ jobs:
 
         strategy:
             matrix:
-                python-version: [3.5, 3.6, 3.7, 3.8]
+                python-version: [3.5, 3.6, 3.7, 3.8, 3.9]
 
         services:
             rabbitmq:
@@ -96,7 +96,7 @@ jobs:
                     pip-${{ matrix.python-version }}-tests
 
         -   name: Set up Python ${{ matrix.python-version }}
-            uses: actions/setup-python@v1
+            uses: actions/setup-python@v2
             with:
                 python-version: ${{ matrix.python-version }}
 
