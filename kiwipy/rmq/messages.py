@@ -256,7 +256,7 @@ class BasePublisherWithReplyQueue:
                 except Exception:  # pylint: disable=broad-except
                     pass
 
-    def _on_channel_close(self, _closing_future):
+    def _on_channel_close(self, _closing_future, *_, **__):
         """ Reset all channel specific members """
         if self._confirm_deliveries:
             self._num_published = 0
