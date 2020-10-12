@@ -8,7 +8,7 @@ Installation
 Python
 ------
 
-KiwiPy supports Python versions 3.5 and above, however, the minimum required patch versions are 3.5.4 and 3.6.2 for Python 3.5 and 3.6, respectively.
+KiwiPy supports Python versions 3.6 and above, however, the minimum required patch version is 3.6.2.
 All newer versions are supported.
 
 RabbitMQ

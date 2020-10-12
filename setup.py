@@ -22,7 +22,6 @@ setup(
         'Development Status :: 4 - Beta',
         'License :: OSI Approved :: MIT License',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
@@ -30,7 +29,7 @@ setup(
     ],
     keywords='communication messaging rpc broadcast',
     install_requires=['shortuuid', 'async_generator', 'pytray>=0.2.2, <0.4.0', 'deprecation'],
-    python_requires='>=3.5.4',
+    python_requires='>=3.6.2',
     extras_require={
         'docs': [
             'docutils==0.14',
