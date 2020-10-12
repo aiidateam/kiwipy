@@ -11,7 +11,7 @@ queue_name = result.method.queue
 
 binding_keys = sys.argv[1:]
 if not binding_keys:
-    sys.stderr.write('Usage: %s [binding_key]...\n' % sys.argv[0])
+    sys.stderr.write(f'Usage: {sys.argv[0]} [binding_key]...\n')
     sys.exit(1)
 
 for binding_key in binding_keys:
@@ -21,7 +21,7 @@ print(' [*] Waiting for logs. To exit press CTRL+C')
 
 
 def callback(ch, method, properties, body):
-    print(' [x] %r:%r' % (method.routing_key, body))
+    print(f' [x] {method.routing_key!r}:{body!r}')
 
 
 channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)

@@ -6,12 +6,12 @@ import kiwipy
 
 def on_broadcast_send(_comm, body, sender, subject, __):
     print(' [x] listening on_broadcast_send:')
-    print(' body: {}, sender {}, subject {}\n'.format(body, sender, subject))
+    print(f' body: {body}, sender {sender}, subject {subject}\n')
 
 
 def on_broadcast_filter(_comm, body, sender=None, subject=None, __=None):
     print(' [x] listening on_broadcast_filter:')
-    print(' body: {}, sender {}, subject {}\n'.format(body, sender, subject))
+    print(f' body: {body}, sender {sender}, subject {subject}\n')
 
 
 if __name__ == '__main__':

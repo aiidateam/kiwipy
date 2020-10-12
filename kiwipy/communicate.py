@@ -10,4 +10,4 @@ def connect(uri: str = DEFAULT_COMM_URI, **kwargs):
         from . import rmq  # Avoid circular ref: pylint: disable=import-outside-toplevel
         return rmq.connect(connection_params=uri, **kwargs)
 
-    raise ValueError("Uknown communicator uri '{}'".format(uri))
+    raise ValueError(f"Uknown communicator uri '{uri}'")

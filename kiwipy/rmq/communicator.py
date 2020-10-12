@@ -33,7 +33,7 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
     async def rpc_send(self, recipient_id, msg):
         message = aio_pika.Message(body=self._encode(msg), reply_to=self._reply_queue.name)
         published, response_future = await self.publish_expect_response(
-            message, routing_key='{}.{}'.format(defaults.RPC_TOPIC, recipient_id), mandatory=True
+            message, routing_key=f'{defaults.RPC_TOPIC}.{recipient_id}', mandatory=True
         )
         assert published, 'The message was not published to the exchanges'
         return response_future
@@ -111,9 +111,9 @@ class RmqSubscriber:
         try:
             identifier = await rpc_queue.consume(partial(self._on_rpc, subscriber), consumer_tag=identifier)
         except aio_pika.exceptions.DuplicateConsumerTag:
-            raise kiwipy.DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
+            raise kiwipy.DuplicateSubscriberIdentifier(f"RPC identifier '{identifier}'")
         else:
-            await rpc_queue.bind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
+            await rpc_queue.bind(self._exchange, routing_key=f'{defaults.RPC_TOPIC}.{identifier}')
             # Save the queue so we can cancel and unbind later
             self._rpc_subscribers[identifier] = rpc_queue
             return identifier
@@ -122,15 +122,15 @@ class RmqSubscriber:
         try:
             rpc_queue = self._rpc_subscribers.pop(identifier)
         except KeyError:
-            raise ValueError("Unknown subscriber '{}'".format(identifier))
+            raise ValueError(f"Unknown subscriber '{identifier}'")
         else:
             await rpc_queue.cancel(identifier)
-            await rpc_queue.unbind(self._exchange, routing_key='{}.{}'.format(defaults.RPC_TOPIC, identifier))
+            await rpc_queue.unbind(self._exchange, routing_key=f'{defaults.RPC_TOPIC}.{identifier}')
 
     async def add_broadcast_subscriber(self, subscriber, identifier=None):
         identifier = identifier or shortuuid.uuid()
         if identifier in self._broadcast_subscribers:
-            raise kiwipy.DuplicateSubscriberIdentifier("Broadcast identifier '{}'".format(identifier))
+            raise kiwipy.DuplicateSubscriberIdentifier(f"Broadcast identifier '{identifier}'")
 
         self._broadcast_subscribers[identifier] = subscriber
         if self._broadcast_consumer_tag is None:
@@ -142,7 +142,7 @@ class RmqSubscriber:
         try:
             del self._broadcast_subscribers[identifier]
         except KeyError:
-            raise ValueError("Broadcast subscriber '{}' unknown".format(identifier))
+            raise ValueError(f"Broadcast subscriber '{identifier}' unknown")
         if not self._broadcast_subscribers:
             await self._broadcast_queue.cancel(self._broadcast_consumer_tag)
             self._broadcast_consumer_tag = None
@@ -173,7 +173,7 @@ class RmqSubscriber:
         One is used for all broadcasts on this exchange
         """
         # Create a new such that we can see this is the broadcast queue
-        name = 'broadcast-{}'.format(shortuuid.uuid())
+        name = f'broadcast-{shortuuid.uuid()}'
         self._broadcast_queue = await self._channel.declare_queue(
             name=name, exclusive=True, arguments=self._broadcast_queue_arguments
         )
@@ -330,7 +330,7 @@ class RmqCommunicator:
         await self.disconnect()
 
     def __str__(self):
-        return 'RMQCommunicator({})'.format(self._connection)
+        return f'RMQCommunicator({self._connection})'
 
     @property
     def loop(self):

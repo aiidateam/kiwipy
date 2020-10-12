@@ -4,7 +4,7 @@ import time
 
 
 def callback(_comm, body):
-    print(' [x] Received %r' % body)
+    print(f' [x] Received {body!r}')
     time.sleep(body.count('.'))
     print(' [x] Done')
     return True

@@ -15,5 +15,5 @@ channel.basic_publish(
         delivery_mode=2,  # make message persistent
     )
 )
-print(' [x] Sent %r' % message)
+print(f' [x] Sent {message!r}')
 connection.close()

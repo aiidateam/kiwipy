@@ -4,13 +4,13 @@ import threading
 
 
 def callback(_comm, body, _sender, subject, _msg_id):
-    print(' [x] %r:%r' % (subject, body))
+    print(f' [x] {subject!r}:{body!r}')
 
 
 with kiwipy.connect('amqp://localhost') as comm:
     binding_keys = sys.argv[1:]
     if not binding_keys:
-        sys.stderr.write('Usage: %s [binding_key]...\n' % sys.argv[0])
+        sys.stderr.write(f'Usage: {sys.argv[0]} [binding_key]...\n')
         sys.exit(1)
 
     for binding_key in binding_keys:

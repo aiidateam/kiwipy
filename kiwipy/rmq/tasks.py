@@ -68,7 +68,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     async def add_task_subscriber(self, subscriber, identifier=None):
         identifier = identifier or shortuuid.uuid()
         if identifier in self._subscribers:
-            raise kiwipy.DuplicateSubscriberIdentifier("Task identifier '{}'".format(identifier))
+            raise kiwipy.DuplicateSubscriberIdentifier(f"Task identifier '{identifier}'")
 
         self._subscribers[identifier] = subscriber
         if self._consumer_tag is None:
@@ -80,7 +80,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         try:
             self._subscribers.pop(identifier)
         except KeyError:
-            raise ValueError("Unknown task subscriber '{}'".format(identifier))
+            raise ValueError(f"Unknown task subscriber '{identifier}'")
         if not self._subscribers:
             await self._task_queue.cancel(self._consumer_tag)
             self._consumer_tag = None
@@ -230,7 +230,7 @@ class RmqIncomingTask:
 
     def process(self) -> asyncio.Future:
         if self._state != TASK_PENDING:
-            raise asyncio.InvalidStateError('The task is {}'.format(self._state))
+            raise asyncio.InvalidStateError(f'The task is {self._state}')
 
         self._state = TASK_PROCESSING
         outcome = self._create_future()
@@ -243,7 +243,7 @@ class RmqIncomingTask:
 
     def requeue(self):
         if self._state not in [TASK_PENDING, TASK_PROCESSING]:
-            raise asyncio.InvalidStateError('The task is {}'.format(self._state))
+            raise asyncio.InvalidStateError(f'The task is {self._state}')
 
         self._state = TASK_REQUEUED
         self._message.nack(requeue=True)
@@ -254,7 +254,7 @@ class RmqIncomingTask:
         """Processing context.  The task should be done at the end otherwise it's assumed the
         caller doesn't want to process it and it's sent back to the queue"""
         if self._state != TASK_PENDING:
-            raise asyncio.InvalidStateError('The task is {}'.format(self._state))
+            raise asyncio.InvalidStateError(f'The task is {self._state}')
 
         self._state = TASK_PROCESSING
         outcome = self._subscriber.loop().create_future()
