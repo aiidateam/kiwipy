@@ -14,7 +14,7 @@ def fib(n):
 def on_request(_comm, body):
     n = int(body)
 
-    print(' [.] fib(%s)' % n)
+    print(f' [.] fib({n})')
     return fib(n)
 
 

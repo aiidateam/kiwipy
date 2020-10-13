@@ -19,9 +19,9 @@ WAIT_TIMEOUT = 5.
 
 @pytest.fixture
 def thread_communicator():
-    message_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
-    task_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
-    task_queue = '{}.{}'.format(__file__, shortuuid.uuid())
+    message_exchange = f'{__file__}.{shortuuid.uuid()}'
+    task_exchange = f'{__file__}.{shortuuid.uuid()}'
+    task_queue = f'{__file__}.{shortuuid.uuid()}'
 
     communicator = rmq.RmqThreadCommunicator.connect(
         connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
@@ -38,7 +38,7 @@ def thread_communicator():
 
 @pytest.fixture
 def thread_task_queue(thread_communicator: rmq.RmqThreadCommunicator):
-    task_queue_name = '{}.{}'.format(__file__, shortuuid.uuid())
+    task_queue_name = f'{__file__}.{shortuuid.uuid()}'
 
     task_queue = thread_communicator.task_queue(task_queue_name)
 
@@ -49,9 +49,9 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
     """Use the standard tests cases to check the RMQ thread communicator"""
 
     def create_communicator(self):
-        message_exchange = '{}.message_exchange.{}'.format(self.__class__.__name__, shortuuid.uuid())
-        task_exchange = '{}.task_exchange.{}'.format(self.__class__.__name__, shortuuid.uuid())
-        task_queue = '{}.task_queue.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        message_exchange = f'{self.__class__.__name__}.message_exchange.{shortuuid.uuid()}'
+        task_exchange = f'{self.__class__.__name__}.task_exchange.{shortuuid.uuid()}'
+        task_queue = f'{self.__class__.__name__}.task_queue.{shortuuid.uuid()}'
 
         return rmq.RmqThreadCommunicator.connect(
             connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
@@ -92,7 +92,7 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
             tasks.append(task)
             return result_future
 
-        task_queue = self.communicator.task_queue('test-queue-{}'.format(utils.rand_string(5)))
+        task_queue = self.communicator.task_queue(f'test-queue-{utils.rand_string(5)}')
 
         task_queue.add_task_subscriber(on_task)
         task_future = task_queue.task_send(TASK).result(timeout=self.WAIT_TIMEOUT)
@@ -110,7 +110,7 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
         RESULT = 42
 
         # Create a new queue and sent the task
-        task_queue = self.communicator.task_queue('test-queue-{}'.format(utils.rand_string(5)))
+        task_queue = self.communicator.task_queue(f'test-queue-{utils.rand_string(5)}')
         task_future = task_queue.task_send(TASK)
 
         # Get the task and carry it out

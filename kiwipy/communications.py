@@ -144,7 +144,7 @@ class CommunicatorHelper(Communicator):
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
         if identifier in self._rpc_subscribers:
-            raise exceptions.DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
+            raise exceptions.DuplicateSubscriberIdentifier(f"RPC identifier '{identifier}'")
         self._rpc_subscribers[identifier] = subscriber
         return identifier
 
@@ -153,7 +153,7 @@ class CommunicatorHelper(Communicator):
         try:
             self._rpc_subscribers.pop(identifier)
         except KeyError:
-            raise ValueError("Unknown subscriber '{}'".format(identifier))
+            raise ValueError(f"Unknown subscriber '{identifier}'")
 
     def add_task_subscriber(self, subscriber, identifier=None):
         """
@@ -165,7 +165,7 @@ class CommunicatorHelper(Communicator):
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
         if identifier in self._rpc_subscribers:
-            raise exceptions.DuplicateSubscriberIdentifier("RPC identifier '{}'".format(identifier))
+            raise exceptions.DuplicateSubscriberIdentifier(f"RPC identifier '{identifier}'")
         self._task_subscribers[identifier] = subscriber
         return identifier
 
@@ -180,13 +180,13 @@ class CommunicatorHelper(Communicator):
         try:
             self._task_subscribers.pop(identifier)
         except KeyError:
-            raise ValueError("Unknown subscriber: '{}'".format(identifier))
+            raise ValueError(f"Unknown subscriber: '{identifier}'")
 
     def add_broadcast_subscriber(self, subscriber: BroadcastSubscriber, identifier=None) -> Any:
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
         if identifier in self._broadcast_subscribers:
-            raise exceptions.DuplicateSubscriberIdentifier("Broadcast identifier '{}'".format(identifier))
+            raise exceptions.DuplicateSubscriberIdentifier(f"Broadcast identifier '{identifier}'")
 
         self._broadcast_subscribers[identifier] = subscriber
         return identifier
@@ -196,7 +196,7 @@ class CommunicatorHelper(Communicator):
         try:
             del self._broadcast_subscribers[identifier]
         except KeyError:
-            raise ValueError("Broadcast subscriber '{}' unknown".format(identifier))
+            raise ValueError(f"Broadcast subscriber '{identifier}' unknown")
 
     def fire_task(self, msg, no_reply=False):
         self._ensure_open()
@@ -223,7 +223,7 @@ class CommunicatorHelper(Communicator):
         try:
             subscriber = self._rpc_subscribers[recipient_id]
         except KeyError:
-            raise exceptions.UnroutableError("Unknown rpc recipient '{}'".format(recipient_id))
+            raise exceptions.UnroutableError(f"Unknown rpc recipient '{recipient_id}'")
         else:
             future = futures.Future()
             try:

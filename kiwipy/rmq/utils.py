@@ -45,7 +45,7 @@ def exception_response(exception: Exception, trace=None) -> dict:
     """
     msg = str(exception)
     if trace is not None:
-        msg += '\n{}'.format(''.join(traceback.format_tb(trace)[0]))
+        msg += f"\n{''.join(traceback.format_tb(trace)[0])}"
     return {EXCEPTION_KEY: msg}
 
 
@@ -85,7 +85,7 @@ def response_to_future(response, future=None):
     elif PENDING_KEY in response:
         future.set_result(asyncio.Future())
     else:
-        raise ValueError("Unknown response type '{}'".format(response))
+        raise ValueError(f"Unknown response type '{response}'")
 
     return future
 

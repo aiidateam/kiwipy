@@ -166,7 +166,7 @@ class BasePublisherWithReplyQueue:
         self._exchange = await self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
 
         # Declare the reply queue
-        reply_queue_name = '{}-reply-{}'.format(self._exchange_name, str(uuid.uuid4()))
+        reply_queue_name = f'{self._exchange_name}-reply-{str(uuid.uuid4())}'
         self._reply_queue = await self._channel.declare_queue(
             name=reply_queue_name,
             exclusive=True,

@@ -8,7 +8,7 @@ print(' [*] Waiting for messages. To exit press CTRL+C')
 
 
 def callback(_comm, task):
-    print((' [x] Received %r' % task))
+    print(f' [x] Received {task!r}')
     time.sleep(task.count('.'))
     print(' [x] Done')
     return task
