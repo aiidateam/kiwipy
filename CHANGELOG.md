@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.1
+
+The default task message TTL setting was changed in `v0.5.4` but this breaks existing queues since RabbitMQ does not allow changing these parameters on existing queues.
+Therefore the change was reverted which was released in `v0.5.5`.
+However, since that was a patch release, it had not been merged back to `v0.6.0` as well, which therefore from the problem described.
+The same revert is applied in this release to restore original functionality.
+
+### Changes
+- Revert "Increase the default TTL for task messages" [[#93]](https://github.com/aiidateam/kiwipy/pull/93)
+
+
 ## v0.7.0
 
 ### Changes
