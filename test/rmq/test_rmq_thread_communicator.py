@@ -5,8 +5,8 @@ import pathlib
 import sys
 import unittest
 
-import shortuuid
 import pytest
+import shortuuid
 
 import kiwipy
 from kiwipy import rmq

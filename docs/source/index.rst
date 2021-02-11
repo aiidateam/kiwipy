@@ -84,7 +84,7 @@ Table Of Contents
    examples
    pika-comparison
    performance
-   apidoc
+   API Reference <apidoc/kiwipy>
 
 
 Citing

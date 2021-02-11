@@ -69,3 +69,5 @@ target/
 /venv*/
 
 *.swp # Vim files
+
+.vscode/

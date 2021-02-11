@@ -18,9 +18,9 @@ def copy_future(source, target):
     which case return
 
     :param source: The source future
-    :type source: :class:`Future`
+    :type source: :class:`kiwipy.Future`
     :param target: The target future
-    :type target: :class:`Future`
+    :type target: :class:`kiwipy.Future`
     """
     if target.done():
         return

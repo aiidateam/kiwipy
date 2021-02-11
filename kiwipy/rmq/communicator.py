@@ -188,7 +188,7 @@ class RmqSubscriber:
         """
         :param subscriber: the subscriber function or coroutine that will get the RPC message
         :param message: the RMQ message
-        :type message: :class:`aio_pika.message.IncomingMessage`
+        :type message: :class:`aio_pika.IncomingMessage`
         """
         async with message.process(ignore_processed=True):
             # Tell the sender that we've dealt with it
