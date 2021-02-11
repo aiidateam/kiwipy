@@ -105,7 +105,6 @@ html_theme_options = {
     'github_repo': 'kiwipy',
     'github_type': 'star',
     'github_user': 'aiidateam',
-    'travis_button': True,
     'logo': 'logo.svg',
     'logo_name': True,
 }
