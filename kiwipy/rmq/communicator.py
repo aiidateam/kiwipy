@@ -190,7 +190,7 @@ class RmqSubscriber:
         :param message: the RMQ message
         :type message: :class:`aio_pika.IncomingMessage`
         """
-        with message.process(ignore_processed=True):
+        async with message.process(ignore_processed=True):
             # Tell the sender that we've dealt with it
             message.ack()
             msg = self._decode(message.body)
@@ -209,7 +209,7 @@ class RmqSubscriber:
                     await self._send_response(message.reply_to, message.correlation_id, utils.result_response(result))
 
     async def _on_broadcast(self, message):
-        with message.process():
+        async with message.process():
             msg = self._decode(message.body)
             for receiver in self._broadcast_subscribers.values():
                 try:
