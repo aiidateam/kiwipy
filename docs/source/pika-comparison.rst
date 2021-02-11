@@ -44,7 +44,7 @@ And now, in kiwiPy.  The code for sending the same task:
 Here, compared to the Pika snippet, we see that we don't have to decide or know about an ``exchange``, ``routing_key``, ``properties``, ``channel`` or durability of the message.
 Task queues in kiwiPy are always durable and the corresponding messages persistent.
 The ``routing_key`` is simply the name of the queue that the user declared and an ``exchange`` is selected automatically for the user (set to ``kiwipy.tasks`` by default).
-The ``exchange`` and some other defaults can be changed when constructing a :py:class:`~kiwipy.rmq.RmqThreadCommunicator`.
+The ``exchange`` and some other defaults can be changed when constructing a :py:class:`~kiwipy.rmq.threadcomms.RmqThreadCommunicator`.
 
 Here we have explicitly created a task queue called ``task_queue``, however, even this has a default version if the user doesn't need multiple queues.  In which case the code would simply be::
 

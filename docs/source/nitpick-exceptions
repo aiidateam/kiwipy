@@ -1,12 +1,9 @@
-py:class  object
-py:class  bool
-py:class  str
-py:class  int
-py:class  dict
-py:class  Exception
-py:class  basestring
+py:class  asyncio.base_events.BaseEventLoop
+py:class  asyncio.futures.Future
+py:class  _asyncio.Future
 
-py:class  Future
+py:class  concurrent.futures._base.Error
+py:class  concurrent.futures._base.Future
 
 # These all come from concurrent.futures
 py:func   kiwipy.wait
@@ -15,6 +12,10 @@ py:meth:  kiwipy.Future.exception
 py:meth   kiwipy.Future.result
 py:class  kiwipy.futures.Future
 
-py:class  concurrent.futures._base.Error
+# cyclic
+py:class kiwipy.rmq.communicator.RmqPublisher
+py:class kiwipy.rmq.communicator.RmqSubscriber
 
-py:class  str
+# third-party
+py:class aio_pika.message.IncomingMessage
+py:class pytray.aiothreads.LoopScheduler
