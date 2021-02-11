@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.2 2021-02-11
+
+Fix an aio-pika deprecation, to use async context managers.
+
 ## v0.7.1
 
 The default task message TTL setting was changed in `v0.5.4` but this breaks existing queues since RabbitMQ does not allow changing these parameters on existing queues.
