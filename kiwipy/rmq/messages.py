@@ -233,7 +233,7 @@ class BasePublisherWithReplyQueue:
         Called when we get a message on our response queue
 
         :param message: The response message
-        :type message: :class:`aio_pika.message.IncomingMessage`
+        :type message: :class:`aio_pika.IncomingMessage`
         """
         correlation_id = message.correlation_id
         try:

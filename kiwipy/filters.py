@@ -51,7 +51,7 @@ class BroadcastFilter:
     def _make_regex(cls, filter_str):
         """
         :param filter_str: The filter string
-        :type filter_str: basestring
+        :type filter_str: str
         :return: The regular expression object
         """
         return re.compile(filter_str.replace('.', '[.]'))

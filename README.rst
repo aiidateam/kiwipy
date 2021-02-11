@@ -155,3 +155,47 @@ Want a new feature? Found a bug? Want to contribute more documentation or a tran
 Help is always welcome, get started with the `contributing guide <https://github.com/aiidateam/kiwipy/wiki/Contributing>`__.
 
 .. _Semantic Versioning: http://semver.org/
+
+Development
+===========
+
+This package utilises `tox <https://tox.readthedocs.io>`__ for unit test automation, and `pre-commit <https://pre-commit.com>`__ for code style formatting and test automation.
+
+To install these development dependencies:
+
+.. code-block:: bash
+
+    pip install tox pre-commit
+
+To run the unit tests:
+
+.. code-block:: bash
+
+    tox
+
+For the ``rmq`` tests you will require a running instance of RabbitMQ.
+One way to achieve this is using Docker and launching ``test/rmq/docker-compose.yml``.
+
+To run the pre-commit tests:
+
+.. code-block:: bash
+
+    pre-commit run --all
+
+To build the documentation:
+
+.. code-block:: bash
+
+    tox -e docs-clean
+
+Changes should be submitted as Pull Requests (PRs) to the ``develop`` branch.
+
+Publishing Releases
+===================
+
+1. Create a release PR/commit to the ``develop`` branch, updating ``kiwipy/version.py`` and ``CHANGELOG.md``.
+2. Fast-forward merge `develop` into the `master` branch
+3. Create a release on GitHub (https://github.com/aiidateam/kiwipy/releases/new), pointing to the release commit on `master`, named ``v.X.Y.Z`` (identical to version in ``kiwipy/version.py``)
+4. This will trigger the ``continuous-deployment`` GitHub workflow which, if all tests pass, will publish the package to PyPi. Check this has successfully completed in the GitHub Actions tab (https://github.com/aiidateam/kiwipy/actions).
+
+(if the release fails, delete the release and tag)

@@ -16,8 +16,12 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+import filecmp
 import os
+from pathlib import Path
+import shutil
 import sys
+import tempfile
 
 import kiwipy
 
@@ -44,9 +48,15 @@ release = kiwipy.__version__
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.doctest',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
     'nbsphinx',
 ]
+
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3.8', None),
+    'aio_pika': ('https://aio-pika.readthedocs.io/en/latest/', None)
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -192,11 +202,58 @@ epub_exclude_files = ['search.html']
 
 # Warnings to ignore when using the -n (nitpicky) option
 # We should ignore any python built-in exception, for instance
-nitpick_ignore = [('py:class', 'Warning'), ('py:class', 'exceptions.Warning')]
-
+nitpick_ignore = []
 for line in open('nitpick-exceptions'):
     if line.strip() == '' or line.startswith('#'):
         continue
     dtype, target = line.split(None, 1)
     target = target.strip()
     nitpick_ignore.append((dtype, target))
+
+# API Documentation
+
+
+def run_apidoc(app):
+    """Runs sphinx-apidoc when building the documentation.
+
+    Needs to be done in conf.py in order to include the APIdoc in the
+    build on readthedocs.
+
+    See also https://github.com/rtfd/readthedocs.org/issues/1139
+    """
+    from sphinx.ext.apidoc import main
+    from sphinx.util import logging
+
+    logger = logging.getLogger('apidoc')
+
+    source_dir = Path(os.path.abspath(__file__)).parent
+    apidoc_dir = source_dir / 'apidoc'
+    apidoc_dir.mkdir(exist_ok=True)
+    package_dir = source_dir.parent.parent / 'kiwipy'
+
+    # we write to a temporary folder first then only move across files that have changed
+    # this ensures that document rebuilds are not triggered every time (due to change in file mtime)
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        options = [
+            '-o', tmpdirname,
+            str(package_dir), '--private', '--force', '--module-first', '--separate', '--no-toc', '--maxdepth', '4',
+            '-q'
+        ]
+
+        os.environ['SPHINX_APIDOC_OPTIONS'] = 'members,special-members,private-members,undoc-members,show-inheritance'
+        main(options)
+
+        for path in Path(tmpdirname).glob('*'):
+            if not (apidoc_dir / path.name).exists() or not filecmp.cmp(path, apidoc_dir / path.name):
+                logger.info(f'Writing: {apidoc_dir / path.name}')
+                shutil.move(path, apidoc_dir / path.name)
+
+
+autodoc_default_options = {
+    # these all derive from concurrent.futures, whose docstrings are in the wrong format
+    'exclude-members': 'CancelledError,wait,as_completed,Future'
+}
+
+
+def setup(app):
+    app.connect('builder-inited', run_apidoc)

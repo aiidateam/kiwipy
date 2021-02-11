@@ -3,107 +3,56 @@ name: continuous-integration
 on: [push, pull_request]
 
 jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
 
-    docs:
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - uses: pre-commit/action@v2.0.0
 
-        runs-on: ubuntu-latest
+  tests:
+    runs-on: ubuntu-latest
 
-        steps:
-        -   uses: actions/checkout@v1
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]
+        rabbitmq: [latest]
+        include:
+        - python-version: 3.8
+          rabbitmq: 3.5
+        - python-version: 3.8
+          rabbitmq: 3.8
 
-        -   name: Cache python dependencies
-            id: cache-pip
-            uses: actions/cache@v1
-            with:
-                path: ~/.cache/pip
-                key: pip-docs-${{ hashFiles('**/setup.json') }}
-                restore-keys:
-                    pip-docs-
+    services:
+      rabbitmq:
+        image: rabbitmq:${{ matrix.rabbitmq }}
+        ports:
+          - 5672:5672
 
-        -   name: Install system dependencies
-            run: |
-                sudo apt update
-                sudo apt install pandoc
+    steps:
+      - uses: actions/checkout@v2
 
-        -   name: Set up Python
-            uses: actions/setup-python@v2
-            with:
-                python-version: 3.8
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
 
-        -   name: Install python dependencies
-            run:
-                pip install -e .[rmq,docs]
+      - name: Install python dependencies
+        run: pip install -e .[rmq,tests]
 
-        -   name: Build documentation
-            env:
-                READTHEDOCS: 'True'
-            run:
-                SPHINXOPTS='-nW' make -C docs html
+      - name: Run pytest
+        run: pytest --cov=kiwipy -sv -p no:nb_regression test
 
-    pre-commit:
+      - name: Create xml coverage
+        run: coverage xml
 
-        runs-on: ubuntu-latest
-
-        steps:
-        -   uses: actions/checkout@v1
-
-        -   name: Cache python dependencies
-            id: cache-pip
-            uses: actions/cache@v1
-            with:
-                path: ~/.cache/pip
-                key: pip-pre-commit-${{ hashFiles('**/setup.json') }}
-                restore-keys:
-                    pip-pre-commit-
-
-        -   name: Set up Python
-            uses: actions/setup-python@v2
-            with:
-                python-version: 3.8
-
-        -   name: Install python dependencies
-            run:
-                pip install -e .[pre-commit,rmq,tests]
-
-        -   name: Run pre-commit
-            run:
-                pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
-
-    tests:
-
-        runs-on: ubuntu-latest
-
-        strategy:
-            matrix:
-                python-version: [3.6, 3.7, 3.8, 3.9]
-
-        services:
-            rabbitmq:
-                image: rabbitmq:latest
-                ports:
-                -   5672:5672
-
-        steps:
-        -   uses: actions/checkout@v2
-
-        -   name: Cache python dependencies
-            id: cache-pip
-            uses: actions/cache@v1
-            with:
-                path: ~/.cache/pip
-                key: pip-${{ matrix.python-version }}-tests-${{ hashFiles('**/setup.json') }}
-                restore-keys:
-                    pip-${{ matrix.python-version }}-tests
-
-        -   name: Set up Python ${{ matrix.python-version }}
-            uses: actions/setup-python@v2
-            with:
-                python-version: ${{ matrix.python-version }}
-
-        -   name: Install python dependencies
-            run:
-                pip install -e .[rmq,tests]
-
-        -   name: Run pytest
-            run:
-                pytest --cov=kiwipy -sv -p no:nb_regression test
+      - name: Upload coverage to Codecov
+        if: github.repository == 'aiidateam/kiwipy'
+        uses: codecov/codecov-action@v1
+        with:
+            file: ./coverage.xml
+            name: kiwipy
