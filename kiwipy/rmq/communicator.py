@@ -53,8 +53,9 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
             correlation_id=correlation_id,
         )
         _LOGGER.debug(
-            'Sending broadcast with routing key %r to RMQ: %r',
+            'Sending broadcast with routing key %r to RMQ via exchange %r: %r',
             defaults.BROADCAST_TOPIC,
+            self._exchange_name,
             message_dict,
         )
         message = aio_pika.Message(
