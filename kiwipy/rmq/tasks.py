@@ -354,6 +354,13 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
         :param no_reply: Don't send a reply containing the result of the task
         :return: A future representing the result of the task
         """
+        _LOGGER.debug(
+            'Sending task with routing key %r to RMQ queue %r (reply=%r): %r',
+            self._task_queue_name,
+            self._reply_queue.name,
+            not no_reply,
+            task,
+        )
         # Build the full message body and encode as a tuple
         body = self._encode((task, no_reply))
         # Now build up the full aio_pika message
