@@ -31,9 +31,16 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
     DEFAULT_EXCHANGE_PARAMS = EXCHANGE_PROPERTIES
 
     async def rpc_send(self, recipient_id, msg):
+        routing_key = f'{defaults.RPC_TOPIC}.{recipient_id}'
+        _LOGGER.debug(
+            'Sending RPC with routing key %r to RMQ queue %r: %r',
+            routing_key,
+            self._reply_queue.name,
+            msg,
+        )
         message = aio_pika.Message(body=self._encode(msg), reply_to=self._reply_queue.name)
         published, response_future = await self.publish_expect_response(
-            message, routing_key=f'{defaults.RPC_TOPIC}.{recipient_id}', mandatory=True
+            message, routing_key=routing_key, mandatory=True
         )
         assert published, 'The message was not published to the exchanges'
         return response_future
@@ -44,6 +51,12 @@ class RmqPublisher(messages.BasePublisherWithReplyQueue):
             sender=sender,
             subject=subject,
             correlation_id=correlation_id,
+        )
+        _LOGGER.debug(
+            'Sending broadcast with routing key %r to RMQ via exchange %r: %r',
+            defaults.BROADCAST_TOPIC,
+            self._exchange_name,
+            message_dict,
         )
         message = aio_pika.Message(
             body=self._encode(message_dict),
