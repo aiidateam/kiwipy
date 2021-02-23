@@ -171,6 +171,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
         self._loop_scheduler.await_(self._communicator.disconnect())
         self._loop_scheduler.close()
+        self._loop.close()
 
         # Clean up
         del self._communicator
