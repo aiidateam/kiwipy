@@ -1,8 +1,13 @@
 # Changelog
 
+## v0.7.3 2021-02-24
+
+- 👌 IMPROVE: Add debug logging for sending task/rpc/broadcast to RMQ.
+- 👌 IMPROVE: Close created asyncio loop on RmqThreadCommunicator.close
+
 ## v0.7.2 2021-02-11
 
-Fix an aio-pika deprecation, to use async context managers.
+🐛 FIX: an aio-pika deprecation, to use async context managers when processing messages.
 
 ## v0.7.1
 
