@@ -22,15 +22,20 @@ class BroadcastFilter:
         return 'BroadcastFilter'
 
     def __call__(self, communicator, body, sender=None, subject=None, correlation_id=None):
+        if self.is_filtered(sender, subject):
+            return None
+        return self._subscriber(communicator, body, sender, subject, correlation_id)
+
+    def is_filtered(self, sender, subject) -> bool:
         if subject is not None and self._subject_filters and \
                 not any([check(subject) for check in self._subject_filters]):
-            return
+            return True
 
         if sender is not None and self._sender_filters and \
                 not any([check(sender) for check in self._sender_filters]):
-            return
+            return True
 
-        self._subscriber(communicator, body, sender, subject, correlation_id)
+        return False
 
     def add_subject_filter(self, subject_filter):
         self._subject_filters.append(self._ensure_filter(subject_filter))
