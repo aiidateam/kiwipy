@@ -28,11 +28,11 @@ class BroadcastFilter:
 
     def is_filtered(self, sender, subject) -> bool:
         if subject is not None and self._subject_filters and \
-                not any([check(subject) for check in self._subject_filters]):
+                not any(check(subject) for check in self._subject_filters):
             return True
 
         if sender is not None and self._sender_filters and \
-                not any([check(sender) for check in self._sender_filters]):
+                not any(check(sender) for check in self._sender_filters):
             return True
 
         return False
