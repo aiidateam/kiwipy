@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.4 2021-03-02
+
+- ♻️ REFACTOR: BroadcastFilter to extract filter conditions into a separate `is_filtered` method.
+
 ## v0.7.3 2021-02-24
 
 - 👌 IMPROVE: Add debug logging for sending task/rpc/broadcast to RMQ.
