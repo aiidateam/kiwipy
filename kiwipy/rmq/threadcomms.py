@@ -5,7 +5,7 @@ import concurrent.futures
 from concurrent.futures import Future as ThreadFuture
 import functools
 import logging
-from typing import Optional, Union
+from typing import Union
 
 import aio_pika
 import deprecation
@@ -46,13 +46,11 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         decoder=defaults.DECODER,
         testing_mode=False,
         async_task_timeout=TASK_TIMEOUT,
-        connection_close_callback: Optional[aio_pika.types.CloseCallbackType] = None,
     ):
         # pylint: disable=too-many-arguments
         comm = cls(
             connection_params,
             connection_factory,
-            connection_close_callback=connection_close_callback,
             message_exchange=message_exchange,
             task_exchange=task_exchange,
             task_queue=task_queue,
@@ -81,13 +79,11 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         decoder=defaults.DECODER,
         testing_mode=False,
         async_task_timeout=TASK_TIMEOUT,
-        connection_close_callback: Optional[aio_pika.types.CloseCallbackType] = None,
     ):
         # pylint: disable=too-many-arguments
         """
         :param connection_params: parameters that will be passed to the connection factory to create the connection
         :param connection_factory: the factory method to open the aio_pika connection with
-        :param connection_close_callback: This will be called after the connection is closed
         :param message_exchange: The name of the RMQ message exchange to use
         :param queue_expires: the expiry time for standard queues in milliseconds. This is the time after which, if
             there are no subscribers, a queue will automatically be deleted by RabbitMQ.
@@ -109,11 +105,10 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._loop_scheduler.start()  # Star the loop scheduler (i.e. the event loop thread)
 
         # Establish the connection and get a communicator running on our thread
-        self._communicator = self._loop_scheduler.await_(
+        self._communicator: communicator.RmqCommunicator = self._loop_scheduler.await_(
             communicator.async_connect(
                 connection_params=connection_params,
                 connection_factory=connection_factory,
-                connection_close_callback=connection_close_callback,
                 # Messages
                 message_exchange=message_exchange,
                 queue_expires=queue_expires,
@@ -182,6 +177,14 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         del self._loop_scheduler
         del self._loop
         self._closed = True
+
+    def add_connection_close_callback(self, callback: aio_pika.types.CloseCallbackType, weak: bool = False) -> None:
+        """Add a callable to be called each time (after) the connection is closed.
+
+        :param weak: If True, the callback will be added to a `WeakSet`
+        """
+        self._ensure_open()
+        self._communicator.add_close_callback(callback, weak)
 
     def add_rpc_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
@@ -344,16 +347,14 @@ def connect(
     encoder=defaults.ENCODER,
     decoder=defaults.DECODER,
     testing_mode=False,
-    connection_close_callback: Optional[aio_pika.types.CloseCallbackType] = None,
 ) -> RmqThreadCommunicator:
     """
     Establish a RabbitMQ communicator connection
     """
     # pylint: disable=too-many-arguments
-    return RmqThreadCommunicator.connect(
+    _communicator = RmqThreadCommunicator.connect(
         connection_params=connection_params,
         connection_factory=connection_factory,
-        connection_close_callback=connection_close_callback,
         message_exchange=message_exchange,
         task_exchange=task_exchange,
         task_queue=task_queue,
@@ -363,3 +364,4 @@ def connect(
         decoder=decoder,
         testing_mode=testing_mode
     )
+    return _communicator
