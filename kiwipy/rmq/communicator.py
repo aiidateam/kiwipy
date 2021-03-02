@@ -541,13 +541,15 @@ async def async_connect(
     task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
     encoder=defaults.ENCODER,
     decoder=defaults.DECODER,
-    testing_mode=False
+    testing_mode=False,
+    connection_close_callback: Optional[aio_pika.types.CloseCallbackType] = None,
 ) -> RmqCommunicator:
     # pylint: disable=too-many-arguments
     """Convenience method that returns a connected communicator.
 
     :param connection_params: parameters that will be passed to the connection factory to create the connection
     :param connection_factory: the factory method to open the aio_pika connection with
+    :param connection_close_callback: This will be called after the connection is closed
     :param message_exchange: The name of the RMQ message exchange to use
     :param queue_expires: the expiry time for standard queues in milliseconds. This is the time after which, if there
         are no subscribers, a queue will automatically be deleted by RabbitMQ.
@@ -564,6 +566,9 @@ async def async_connect(
         connection = await connection_factory(**connection_params)
     else:
         connection = await connection_factory(connection_params)
+
+    if connection_close_callback is not None:
+        connection.add_close_callback(connection_close_callback)
 
     communicator = RmqCommunicator(
         connection=connection,
