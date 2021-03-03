@@ -235,7 +235,7 @@ def test_task_processing_exception(thread_task_queue: rmq.RmqThreadTaskQueue):
 
 
 def test_connection_close_callback():
-    """Test that a callback set with `add_connection_close_callback` is correctly called."""
+    """Test that a callback set with `add_close_callback` is correctly called."""
     result = []
 
     def close_callback(sender, exc):  # pylint: disable=unused-argument
@@ -248,7 +248,7 @@ def test_connection_close_callback():
         task_queue=f'{__file__}.{shortuuid.uuid()}',
         testing_mode=True
     )
-    communicator.add_connection_close_callback(close_callback)
+    communicator.add_close_callback(close_callback)
     communicator.close()
     assert result == ['called']
 

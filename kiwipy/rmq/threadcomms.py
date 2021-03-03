@@ -178,7 +178,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         del self._loop
         self._closed = True
 
-    def add_connection_close_callback(self, callback: aio_pika.types.CloseCallbackType, weak: bool = False) -> None:
+    def add_close_callback(self, callback: aio_pika.types.CloseCallbackType, weak: bool = False) -> None:
         """Add a callable to be called each time (after) the connection is closed.
 
         :param weak: If True, the callback will be added to a `WeakSet`
