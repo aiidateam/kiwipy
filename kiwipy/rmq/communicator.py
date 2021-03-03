@@ -350,6 +350,13 @@ class RmqCommunicator:
         """Get the event loop instance driving this communicator connection."""
         return self._connection.loop
 
+    def add_close_callback(self, callback: aio_pika.types.CloseCallbackType, weak: bool = False) -> None:
+        """Add a callable to be called each time (after) the connection is closed.
+
+        :param weak: If True, the callback will be added to a `WeakSet`
+        """
+        self._connection.add_close_callback(callback, weak)
+
     async def get_default_task_queue(self) -> tasks.RmqTaskQueue:
         """Get a default task queue.
 
@@ -541,7 +548,7 @@ async def async_connect(
     task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
     encoder=defaults.ENCODER,
     decoder=defaults.DECODER,
-    testing_mode=False
+    testing_mode=False,
 ) -> RmqCommunicator:
     # pylint: disable=too-many-arguments
     """Convenience method that returns a connected communicator.

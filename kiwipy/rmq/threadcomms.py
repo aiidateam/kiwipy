@@ -45,7 +45,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         encoder=defaults.ENCODER,
         decoder=defaults.DECODER,
         testing_mode=False,
-        async_task_timeout=TASK_TIMEOUT
+        async_task_timeout=TASK_TIMEOUT,
     ):
         # pylint: disable=too-many-arguments
         comm = cls(
@@ -78,7 +78,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         encoder=defaults.ENCODER,
         decoder=defaults.DECODER,
         testing_mode=False,
-        async_task_timeout=TASK_TIMEOUT
+        async_task_timeout=TASK_TIMEOUT,
     ):
         # pylint: disable=too-many-arguments
         """
@@ -105,11 +105,10 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._loop_scheduler.start()  # Star the loop scheduler (i.e. the event loop thread)
 
         # Establish the connection and get a communicator running on our thread
-        self._communicator = self._loop_scheduler.await_(
+        self._communicator: communicator.RmqCommunicator = self._loop_scheduler.await_(
             communicator.async_connect(
                 connection_params=connection_params,
                 connection_factory=connection_factory,
-
                 # Messages
                 message_exchange=message_exchange,
                 queue_expires=queue_expires,
@@ -178,6 +177,14 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         del self._loop_scheduler
         del self._loop
         self._closed = True
+
+    def add_close_callback(self, callback: aio_pika.types.CloseCallbackType, weak: bool = False) -> None:
+        """Add a callable to be called each time (after) the connection is closed.
+
+        :param weak: If True, the callback will be added to a `WeakSet`
+        """
+        self._ensure_open()
+        self._communicator.add_close_callback(callback, weak)
 
     def add_rpc_subscriber(self, subscriber, identifier=None):
         self._ensure_open()
@@ -339,13 +346,13 @@ def connect(
     task_prefetch_count=defaults.TASK_PREFETCH_COUNT,
     encoder=defaults.ENCODER,
     decoder=defaults.DECODER,
-    testing_mode=False
+    testing_mode=False,
 ) -> RmqThreadCommunicator:
     """
     Establish a RabbitMQ communicator connection
     """
     # pylint: disable=too-many-arguments
-    return RmqThreadCommunicator.connect(
+    _communicator = RmqThreadCommunicator.connect(
         connection_params=connection_params,
         connection_factory=connection_factory,
         message_exchange=message_exchange,
@@ -357,3 +364,4 @@ def connect(
         decoder=decoder,
         testing_mode=testing_mode
     )
+    return _communicator

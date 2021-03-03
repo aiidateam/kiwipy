@@ -234,6 +234,25 @@ def test_task_processing_exception(thread_task_queue: rmq.RmqThreadTaskQueue):
             pass
 
 
+def test_connection_close_callback():
+    """Test that a callback set with `add_close_callback` is correctly called."""
+    result = []
+
+    def close_callback(sender, exc):  # pylint: disable=unused-argument
+        result.append('called')
+
+    communicator = rmq.connect(
+        connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
+        message_exchange=f'{__file__}.{shortuuid.uuid()}',
+        task_exchange=f'{__file__}.{shortuuid.uuid()}',
+        task_queue=f'{__file__}.{shortuuid.uuid()}',
+        testing_mode=True
+    )
+    communicator.add_close_callback(close_callback)
+    communicator.close()
+    assert result == ['called']
+
+
 @pytest.mark.skipif(sys.version_info < (3, 6), reason='`pytest-notebook` plugin requires Python >= 3.6')
 def test_jupyter_notebook():
     """Test that the `RmqThreadCommunicator` can be used in a Jupyter notebook."""
