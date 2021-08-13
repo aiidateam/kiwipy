@@ -28,7 +28,7 @@ setup(
         'Programming Language :: Python :: 3.9',
     ],
     keywords='communication messaging rpc broadcast',
-    install_requires=['shortuuid', 'async_generator', 'pytray>=0.2.2, <0.4.0', 'deprecation'],
+    install_requires=['shortuuid', 'async_generator', 'pytray>=0.2.2, <0.4.0', 'deprecation', 'aio_pika'],
     python_requires='>=3.6.2',
     extras_require={
         'docs': [
