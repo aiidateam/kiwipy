@@ -120,7 +120,7 @@ class Communicator:
 
 class CommunicatorHelper(Communicator):
     # Have to disable this linter because this class remains abstract and it is
-    # just used by calsses that will themselves be concrete
+    # just used by classes that will themselves be concrete
     # pylint: disable=abstract-method
 
     def __init__(self):
