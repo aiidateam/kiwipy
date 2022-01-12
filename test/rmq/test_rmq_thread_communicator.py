@@ -262,8 +262,15 @@ def test_jupyter_notebook():
     fixture.diff_color_words = False
     fixture.diff_ignore = ('/metadata/language_info/version',)
 
-    # Express the path in a way that will work no matter where the tests are being ran and convert
-    # to str as py35 doesn't support Paths being passed to open()
     my_dir = pathlib.Path(__file__).parent
-    with open(str(my_dir / pathlib.Path('notebooks/communicator.ipynb'))) as handle:
+    with open(my_dir / pathlib.Path('notebooks/communicator.ipynb')) as handle:
         fixture.check(handle)
+
+
+def test_server_properties(thread_communicator: kiwipy.rmq.RmqThreadCommunicator):
+    props = thread_communicator.server_properties
+    assert isinstance(props, dict)
+
+    assert props['product'] == b'RabbitMQ'
+    assert 'version' in props
+    assert props['platform'].startswith(b'Erlang')

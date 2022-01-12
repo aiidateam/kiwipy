@@ -150,6 +150,26 @@ class RmqThreadCommunicator(kiwipy.Communicator):
 
     @property
     def server_properties(self) -> Dict:
+        """
+        A dictionary containing server properties as returned by the RMQ server at connection time.
+
+        The details are defined by the RMQ standard and can be found here:
+
+        https://www.rabbitmq.com/amqp-0-9-1-reference.html#connection.start.server-properties
+
+        The protocol states that this dictionary SHOULD contain at least:
+            'host'          - specifying the server host name or address
+            'product'       - giving the name of the server product
+            'version'       - giving the name of the server version
+            'platform'      - giving the name of the operating system
+            'copyright'     - if appropriate, and,
+            'information'   - giving other general information
+
+        .. note:: In testing it seems like 'host' is not always returned.  Host information may be found in
+            'cluster_name' but clients shouldn't rely on this.
+
+        :return: the server properties dictionary
+        """
         return self._communicator.server_properties
 
     def __enter__(self):
