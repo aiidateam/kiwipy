@@ -4,7 +4,7 @@ from functools import partial
 import copy
 import logging
 import typing
-from typing import Union, Optional
+from typing import Union, Optional, Dict
 
 import shortuuid
 import aio_pika
@@ -344,6 +344,13 @@ class RmqCommunicator:
 
     def __str__(self):
         return f'RMQCommunicator({self._connection})'
+
+    @property
+    def server_properties(self) -> Dict:
+        if self._connection is None:
+            return {}
+
+        return self._connection.connection.server_properties
 
     @property
     def loop(self):

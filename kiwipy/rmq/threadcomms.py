@@ -5,7 +5,7 @@ import concurrent.futures
 from concurrent.futures import Future as ThreadFuture
 import functools
 import logging
-from typing import Union
+from typing import Union, Dict
 
 import aio_pika
 import deprecation
@@ -147,6 +147,10 @@ class RmqThreadCommunicator(kiwipy.Communicator):
     )
     def stop(self):
         self.close()
+
+    @property
+    def server_properties(self) -> Dict:
+        return self._communicator.server_properties
 
     def __enter__(self):
         return self
