@@ -265,5 +265,5 @@ def test_jupyter_notebook():
     # Express the path in a way that will work no matter where the tests are being ran and convert
     # to str as py35 doesn't support Paths being passed to open()
     my_dir = pathlib.Path(__file__).parent
-    with open(str(my_dir / pathlib.Path('notebooks/communicator.ipynb'))) as handle:
+    with open(my_dir / pathlib.Path('notebooks/communicator.ipynb')) as handle:
         fixture.check(handle)
