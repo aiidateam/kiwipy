@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.5 2022-01-17
+
+- Drop support for Python 3.6 [[#108]](https://github.com/aiidateam/kiwipy/pull/108)
+- `RmqCommunicator`: add the `server_properties` property [[#107]](https://github.com/aiidateam/kiwipy/pull/107)
+- Expose `aio_pika.Connection.add_close_callback` [[#104]](https://github.com/aiidateam/kiwipy/pull/104)
+
 ## v0.7.4 2021-03-02
 
 - ♻️ REFACTOR: BroadcastFilter to extract filter conditions into a separate `is_filtered` method.
@@ -11,7 +17,7 @@
 
 ## v0.7.2 2021-02-11
 
-🐛 FIX: an aio-pika deprecation, to use async context managers when processing messages.
+- 🐛 FIX: an aio-pika deprecation, to use async context managers when processing messages.
 
 ## v0.7.1
 
