@@ -11,14 +11,12 @@ WAIT_TIMEOUT = 5.
 try:
     import asyncio
 
-    from async_generator import yield_, async_generator
     import aio_pika
     import aio_pika.exceptions
     from kiwipy import rmq
     import kiwipy.rmq
 
     @pytest.fixture
-    @async_generator
     async def task_publisher(connection: aio_pika.Connection):
         exchange_name = f'{__file__}.{uuid.uuid4()}'
         task_queue_name = f'{__file__}.{uuid.uuid4()}'
@@ -27,11 +25,10 @@ try:
             connection, queue_name=task_queue_name, exchange_name=exchange_name, testing_mode=True
         )
         await task_pub.connect()
-        await yield_(task_pub)
+        yield task_pub
         await task_pub.disconnect()
 
     @pytest.fixture
-    @async_generator
     async def task_queue(connection: aio_pika.Connection):
         exchange_name = f'{__file__}.{uuid.uuid4()}'
         task_queue_name = f'{__file__}.{uuid.uuid4()}'
@@ -40,7 +37,7 @@ try:
             connection, queue_name=task_queue_name, exchange_name=exchange_name, testing_mode=True
         )
         await task_pub.connect()
-        await yield_(task_pub)
+        yield task_pub
         await task_pub.disconnect()
 
 except ImportError:
