@@ -53,7 +53,7 @@ Features
 * Generic communicator interface with native support for RabbitMQ
 * Supports task queues, broadcasts and RPC
 * Support for both thread and coroutine based communication
-* Python 3.6+ compatible.
+* Python 3.7+ compatible.
 
 
 Getting Started

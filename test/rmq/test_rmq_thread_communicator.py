@@ -253,7 +253,6 @@ def test_connection_close_callback():
     assert result == ['called']
 
 
-@pytest.mark.skipif(sys.version_info < (3, 6), reason='`pytest-notebook` plugin requires Python >= 3.6')
 def test_jupyter_notebook():
     """Test that the `RmqThreadCommunicator` can be used in a Jupyter notebook."""
     from pytest_notebook.nb_regression import NBRegressionFixture
