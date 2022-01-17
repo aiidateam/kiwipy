@@ -197,3 +197,13 @@ async def test_add_remove_broadcast_subscriber(connection_params):
 
 
 # endregion
+
+
+@pytest.mark.asyncio
+async def test_server_properties(communicator: kiwipy.rmq.RmqCommunicator):
+    props = communicator.server_properties
+    assert isinstance(props, dict)
+
+    assert props['product'] == b'RabbitMQ'
+    assert 'version' in props
+    assert props['platform'].startswith(b'Erlang')
