@@ -29,7 +29,7 @@ setup(
     ],
     keywords='communication messaging rpc broadcast',
     install_requires=['shortuuid', 'async_generator', 'pytray>=0.2.2, <0.4.0', 'deprecation'],
-    python_requires='>=3.6.2',
+    python_requires='>=3.7',
     extras_require={
         'docs': [
             'docutils==0.14',
@@ -43,9 +43,10 @@ setup(
         'rmq': ['aio-pika', 'pyyaml~=5.1'],
         'tests': [
             'coverage',
+            'ipykernel',
             'pytest-cov',
             'pytest~=5.4',
-            'pytest-asyncio~=0.12',
+            'pytest-asyncio~=0.12,<0.17',
             'pytest-notebook>=0.7',
             'pytest-benchmark',
             'pika',
