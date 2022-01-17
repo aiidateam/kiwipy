@@ -250,7 +250,7 @@ def run_apidoc(app):
 
 autodoc_default_options = {
     # these all derive from concurrent.futures, whose docstrings are in the wrong format
-    'exclude-members': 'CancelledError,wait,as_completed,Future'
+    'exclude-members': 'CancelledError,wait,as_completed,Future,TimeoutError'
 }
 
 
