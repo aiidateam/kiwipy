@@ -46,7 +46,7 @@ setup(
             'pytest-cov',
             'pytest~=5.4',
             'pytest-asyncio~=0.12',
-            'pytest-notebook',
+            'pytest-notebook>=0.7',
             'pytest-benchmark',
             'pika',
             'msgpack',
