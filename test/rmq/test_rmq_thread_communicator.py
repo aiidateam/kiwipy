@@ -18,9 +18,9 @@ WAIT_TIMEOUT = 5.
 
 @pytest.fixture
 def thread_communicator():
-    message_exchange = f'{__file__}.{shortuuid.uuid()}'
-    task_exchange = f'{__file__}.{shortuuid.uuid()}'
-    task_queue = f'{__file__}.{shortuuid.uuid()}'
+    message_exchange = f'{shortuuid.uuid()}'
+    task_exchange = f'{shortuuid.uuid()}'
+    task_queue = f'{shortuuid.uuid()}'
 
     communicator = rmq.RmqThreadCommunicator.connect(
         connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
@@ -37,7 +37,7 @@ def thread_communicator():
 
 @pytest.fixture
 def thread_task_queue(thread_communicator: rmq.RmqThreadCommunicator):
-    task_queue_name = f'{__file__}.{shortuuid.uuid()}'
+    task_queue_name = f'{shortuuid.uuid()}'
 
     task_queue = thread_communicator.task_queue(task_queue_name)
 
@@ -242,9 +242,9 @@ def test_connection_close_callback():
 
     communicator = rmq.connect(
         connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-        message_exchange=f'{__file__}.{shortuuid.uuid()}',
-        task_exchange=f'{__file__}.{shortuuid.uuid()}',
-        task_queue=f'{__file__}.{shortuuid.uuid()}',
+        message_exchange=f'{shortuuid.uuid()}',
+        task_exchange=f'{shortuuid.uuid()}',
+        task_queue=f'{shortuuid.uuid()}',
         testing_mode=True
     )
     communicator.add_close_callback(close_callback)
@@ -269,6 +269,6 @@ def test_server_properties(thread_communicator: kiwipy.rmq.RmqThreadCommunicator
     props = thread_communicator.server_properties
     assert isinstance(props, dict)
 
-    assert props['product'] == b'RabbitMQ'
+    assert props['product'] == 'RabbitMQ'
     assert 'version' in props
-    assert props['platform'].startswith(b'Erlang')
+    assert props['platform'].startswith('Erlang')

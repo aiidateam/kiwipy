@@ -18,8 +18,8 @@ try:
 
     @pytest.fixture
     async def task_publisher(connection: aio_pika.Connection):
-        exchange_name = f'{__file__}.{uuid.uuid4()}'
-        task_queue_name = f'{__file__}.{uuid.uuid4()}'
+        exchange_name = f'{uuid.uuid4()}'
+        task_queue_name = f'{uuid.uuid4()}'
 
         task_pub = rmq.RmqTaskPublisher(
             connection, queue_name=task_queue_name, exchange_name=exchange_name, testing_mode=True
@@ -30,8 +30,8 @@ try:
 
     @pytest.fixture
     async def task_queue(connection: aio_pika.Connection):
-        exchange_name = f'{__file__}.{uuid.uuid4()}'
-        task_queue_name = f'{__file__}.{uuid.uuid4()}'
+        exchange_name = f'{uuid.uuid4()}'
+        task_queue_name = f'{uuid.uuid4()}'
 
         task_pub = rmq.RmqTaskQueue(
             connection, queue_name=task_queue_name, exchange_name=exchange_name, testing_mode=True

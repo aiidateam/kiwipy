@@ -11,9 +11,9 @@ from kiwipy import rmq
 async def new_communicator(connection_params, settings=None) -> kiwipy.rmq.RmqCommunicator:
     settings = settings or {}
 
-    message_exchange = f'{__file__}.{shortuuid.uuid()}'
-    task_exchange = f'{__file__}.{shortuuid.uuid()}'
-    task_queue = f'{__file__}.{shortuuid.uuid()}'
+    message_exchange = f'{shortuuid.uuid()}'
+    task_exchange = f'{shortuuid.uuid()}'
+    task_queue = f'{shortuuid.uuid()}'
 
     return await rmq.async_connect(
         connection_params,

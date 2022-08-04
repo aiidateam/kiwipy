@@ -175,6 +175,7 @@ class RmqSubscriber:
             exchange_params.setdefault('auto_delete', self._testing_mode)
 
         self._channel = await self._connection.channel()
+        # import ipdb; ipdb.set_trace()
         self._exchange = await self._channel.declare_exchange(name=self._exchange_name, **exchange_params)
 
         await self._create_broadcast_queue()
@@ -377,7 +378,7 @@ class RmqCommunicator:
         """Get the event loop instance driving this communicator connection."""
         return self._connection.loop
 
-    def add_close_callback(self, callback: aio_pika.types.CloseCallbackType, weak: bool = False) -> None:
+    def add_close_callback(self, callback, weak: bool = False) -> None:
         """Add a callable to be called each time (after) the connection is closed.
 
         :param weak: If True, the callback will be added to a `WeakSet`
@@ -415,6 +416,7 @@ class RmqCommunicator:
         """
         self._ensure_connected()
 
+        # import ipdb; ipdb.set_trace()
         if self._message_subscriber is None:
             subscriber = RmqSubscriber(
                 self._connection,

@@ -204,6 +204,6 @@ async def test_server_properties(communicator: kiwipy.rmq.RmqCommunicator):
     props = communicator.server_properties
     assert isinstance(props, dict)
 
-    assert props['product'] == b'RabbitMQ'
+    assert props['product'] == 'RabbitMQ'
     assert 'version' in props
-    assert props['platform'].startswith(b'Erlang')
+    assert props['platform'].startswith('Erlang')
