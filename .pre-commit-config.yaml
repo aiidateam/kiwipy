@@ -39,7 +39,7 @@ repos:
             "async_generator",
             "pytray>=0.2.2, <0.4.0",
             "deprecation",
-            "aio-pika~=6.6,<6.8.2",
+            "aio-pika~=6.6",
             "pamqp~=2.0",
             "pyyaml~=5.1",
             "pytest~=5.4",
