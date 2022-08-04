@@ -39,7 +39,7 @@ setup(
             'sphinx-autobuild',
         ],
         'pre-commit': ['pre-commit~=2.2', 'pylint==2.5.2'],
-        'rmq': ['aio-pika<7', 'pyyaml~=5.1'],
+        'rmq': ['aio-pika==6.8.1', 'pyyaml~=5.1'],
         'tests': [
             'coverage',
             'ipykernel',
