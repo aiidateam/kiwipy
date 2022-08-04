@@ -2,7 +2,6 @@
 # pylint: disable=invalid-name, redefined-outer-name
 import concurrent.futures
 import pathlib
-import sys
 import unittest
 
 import pytest
