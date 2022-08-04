@@ -26,6 +26,8 @@ jobs:
         - python-version: 3.8
           rabbitmq: 3.6
         - python-version: 3.8
+          rabbitmq: 3.7
+        - python-version: 3.8
           rabbitmq: 3.8
 
     services:
