@@ -161,7 +161,7 @@ class BasePublisherWithReplyQueue:
         self._channel = await self._connection.channel(
             publisher_confirms=self._confirm_deliveries, on_return_raises=True
         )
-        self._channel.add_close_callback(self._on_channel_close)
+        self._channel.close_callbacks.add(self._on_channel_close)
 
         self._exchange = await self._channel.declare_exchange(name=self.get_exchange_name(), **self._exchange_params)
 

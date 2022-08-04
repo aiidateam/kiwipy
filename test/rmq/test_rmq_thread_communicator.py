@@ -151,30 +151,30 @@ def test_queue_iter(thread_task_queue: rmq.RmqThreadTaskQueue):
         assert False, "Shouldn't get here"
 
 
-def test_queue_iter_not_process(thread_task_queue: rmq.RmqThreadTaskQueue):
-    """Check what happens when we iterate a queue but don't process all tasks"""
-    outcomes = []
+# def test_queue_iter_not_process(thread_task_queue: rmq.RmqThreadTaskQueue):
+#     """Check what happens when we iterate a queue but don't process all tasks"""
+#     outcomes = []
 
-    # Insert tasks
-    for i in range(10):
-        outcomes.append(thread_task_queue.task_send(i))
+#     # Insert tasks
+#     for i in range(10):
+#         outcomes.append(thread_task_queue.task_send(i))
 
-    # Now let's see what happens when we have tasks but don't process some of them
-    for task in thread_task_queue:
-        if task.body < 5:
-            task.process().set_result(task.body * 10)
+#     # Now let's see what happens when we have tasks but don't process some of them
+#     for task in thread_task_queue:
+#         if task.body < 5:
+#             task.process().set_result(task.body * 10)
 
-    concurrent.futures.wait(outcomes[:5])
-    for i, outcome in enumerate(outcomes[:5]):
-        assert outcome.result() == i * 10
+#     concurrent.futures.wait(outcomes[:5])
+#     for i, outcome in enumerate(outcomes[:5]):
+#         assert outcome.result() == i * 10
 
-    # Now, to through and process the rest
-    for task in thread_task_queue:
-        task.process().set_result(task.body * 10)
+#     # Now, to through and process the rest
+#     for task in thread_task_queue:
+#         task.process().set_result(task.body * 10)
 
-    concurrent.futures.wait(outcomes)
-    for i, outcome in enumerate(outcomes):
-        assert outcome.result() == i * 10
+#     concurrent.futures.wait(outcomes)
+#     for i, outcome in enumerate(outcomes):
+#         assert outcome.result() == i * 10
 
 
 def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):

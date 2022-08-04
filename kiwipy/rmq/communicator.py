@@ -383,7 +383,7 @@ class RmqCommunicator:
 
         :param weak: If True, the callback will be added to a `WeakSet`
         """
-        self._connection.add_close_callback(callback, weak)
+        self._connection.close_callbacks.add(callback, weak)
 
     async def get_default_task_queue(self) -> tasks.RmqTaskQueue:
         """Get a default task queue.
