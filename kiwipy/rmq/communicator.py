@@ -371,7 +371,7 @@ class RmqCommunicator:
         if self._connection is None:
             return {}
 
-        return self._connection.connection.server_properties
+        return self._connection.transport.connection.server_properties
 
     @property
     def loop(self):
