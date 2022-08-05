@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.6 2022-08-05
+
+- Dependencies: restrict ranges of `aio-pika<6.8.2` and `pamqp~=2.0` [[#108]](https://github.com/aiidateam/kiwipy/pull/110)
+
 ## v0.7.5 2022-01-17
 
 - Drop support for Python 3.6 [[#108]](https://github.com/aiidateam/kiwipy/pull/108)
