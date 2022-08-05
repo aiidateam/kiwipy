@@ -260,28 +260,24 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
 
     # Get the first task and say that we will process it
     outcome = None
-    tt = None
     async with task_queue.next_task() as task:
-        outcome, tt = task.process()
-        # await task.requeue()  ## !!!! this should happened but NOT.
-        # tt = task
-        # outcome.set_result(10)
+        outcome = task.process()
 
     with pytest.raises(kiwipy.exceptions.QueueEmpty):
         async with task_queue.next_task(timeout=1.):
             pass
 
     # # Now let's 'forget' i.e. lose the outcome
-    # del outcome
-    await tt.requeue()
+    del outcome
+    
+    # XXX ?? Do we need to wait here to assure the requeue is executed by loop?
 
     # outcomes.append(await task_queue.task_send(1))
     # Now the task should be back in the queue
     async with task_queue.next_task() as task:
-        outcome0, tt = task.process()
-        outcome0.set_result(10)
+        outcome = task.process()
+        outcome.set_result(10)
 
-    print(outcomes)
     await asyncio.wait(outcomes)
     assert outcomes[0].result() == 10
 

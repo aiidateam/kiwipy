@@ -239,7 +239,7 @@ class RmqIncomingTask:
         # Or the user let's the future get destroyed
         self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
 
-        return outcome, self
+        return outcome
 
     async def requeue(self):
         if self._state not in [TASK_PENDING, TASK_PROCESSING]:
@@ -272,10 +272,9 @@ class RmqIncomingTask:
             else:
                 self.requeue()
 
-    async def _task_done(self, outcome: asyncio.Future):
+    def _task_done(self, outcome: asyncio.Future):
         assert outcome.done()
         self._outcome_ref = None
-        print("!!!")
 
         if outcome.cancelled():
             # Whoever took the task decided not to process it
@@ -284,7 +283,7 @@ class RmqIncomingTask:
             # Task is done or excepted
             # Permanently store the outcome
             self._state = TASK_FINISHED
-            await self._message.ack()
+            self._message.ack()
 
             # We have to get the result from the future here (even if not replying), otherwise
             # python complains that it was never retrieved in case of exception
@@ -301,13 +300,13 @@ class RmqIncomingTask:
         # Clean up
         self._finalise()
 
-    async def _outcome_destroyed(self, outcome_ref):
+    def _outcome_destroyed(self, outcome_ref):
         # This only happens if someone called self.process() and then let the future
         # get destroyed without setting an outcome
         assert outcome_ref is self._outcome_ref
         # This task will not be processed
         self._outcome_ref = None
-        await self.requeue()
+        self._subscriber.loop().create_task(self.requeue())
 
     def _finalise(self):
         self._outcome_ref = None
