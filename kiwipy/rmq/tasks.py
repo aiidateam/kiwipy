@@ -109,7 +109,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             # Put back any tasks that are still pending (i.e. not processed or to be processed)
             for task in tasks:
                 if task.state == TASK_PENDING:
-                    task.requeue()
+                    await task.requeue()
 
     @asynccontextmanager
     @async_generator
@@ -130,7 +130,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 await yield_(task)
             finally:
                 if task.state == TASK_PENDING:
-                    task.requeue()
+                    await task.requeue()
 
     async def _create_task_queue(self):
         """Create and bind the task queue"""
@@ -239,14 +239,14 @@ class RmqIncomingTask:
         # Or the user let's the future get destroyed
         self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
 
-        return outcome
+        return outcome, self
 
-    def requeue(self):
+    async def requeue(self):
         if self._state not in [TASK_PENDING, TASK_PROCESSING]:
             raise asyncio.InvalidStateError(f'The task is {self._state}')
 
         self._state = TASK_REQUEUED
-        self._message.nack(requeue=True)
+        await self._message.nack(requeue=True)
         self._finalise()
 
     @contextlib.contextmanager
@@ -272,9 +272,10 @@ class RmqIncomingTask:
             else:
                 self.requeue()
 
-    def _task_done(self, outcome: asyncio.Future):
+    async def _task_done(self, outcome: asyncio.Future):
         assert outcome.done()
         self._outcome_ref = None
+        print("!!!")
 
         if outcome.cancelled():
             # Whoever took the task decided not to process it
@@ -283,7 +284,7 @@ class RmqIncomingTask:
             # Task is done or excepted
             # Permanently store the outcome
             self._state = TASK_FINISHED
-            self._message.ack()
+            await self._message.ack()
 
             # We have to get the result from the future here (even if not replying), otherwise
             # python complains that it was never retrieved in case of exception
@@ -300,13 +301,13 @@ class RmqIncomingTask:
         # Clean up
         self._finalise()
 
-    def _outcome_destroyed(self, outcome_ref):
+    async def _outcome_destroyed(self, outcome_ref):
         # This only happens if someone called self.process() and then let the future
         # get destroyed without setting an outcome
         assert outcome_ref is self._outcome_ref
         # This task will not be processed
         self._outcome_ref = None
-        self.requeue()
+        await self.requeue()
 
     def _finalise(self):
         self._outcome_ref = None
