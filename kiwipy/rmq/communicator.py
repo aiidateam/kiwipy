@@ -206,7 +206,7 @@ class RmqSubscriber:
         """
         async with message.process(ignore_processed=True):
             # Tell the sender that we've dealt with it
-            message.ack()
+            await message.ack()
             msg = self._decode(message.body)
 
             try:

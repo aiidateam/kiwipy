@@ -227,23 +227,20 @@ async def test_queue_iter_not_process(task_queue: rmq.RmqTaskQueue):
 
     # Now let's see what happens when we have tasks but don't process some of them
     async for task in task_queue:
-        print(task.body)
         if task.body < 5:
             task.process().set_result(task.body * 10)
 
     await asyncio.wait(outcomes[:5])
-    # for i, outcome in enumerate(outcomes[:5]):
-    #     assert outcome.result() == i * 10
-        
-    # # print(outcomes)
+    for i, outcome in enumerate(outcomes[:5]):
+        assert outcome.result() == i * 10
 
     # Now, to through and process the rest
     async for task in task_queue:
         task.process().set_result(task.body * 10)
 
     await asyncio.wait(outcomes)
-    # for i, outcome in enumerate(outcomes):
-    #     assert outcome.result() == i * 10
+    for i, outcome in enumerate(outcomes):
+        assert outcome.result() == i * 10
 
 
 @unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
@@ -269,8 +266,6 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
 
     # # Now let's 'forget' i.e. lose the outcome
     del outcome
-    
-    # XXX ?? Do we need to wait here to assure the requeue is executed by loop?
 
     # outcomes.append(await task_queue.task_send(1))
     # Now the task should be back in the queue
