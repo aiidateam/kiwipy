@@ -261,14 +261,12 @@ class RmqIncomingTask:
             raise
         finally:
             if outcome.done():
+                self._outcome_ref = None
                 self._subscriber.loop().create_task(self.on_task_done(outcome))
             else:
                 self._subscriber.loop().create_task(self.requeue())
 
     async def on_task_done(self, outcome: asyncio.Future):
-        assert outcome.done()
-        self._outcome_ref = None
-
         if outcome.cancelled():
             # Whoever took the task decided not to process it
             self._state = TASK_PENDING

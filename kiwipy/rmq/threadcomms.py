@@ -373,6 +373,7 @@ class RmqThreadIncomingTask:
         self.requeue()
 
     def on_task_done(self, outcome):
+        self._outcome_ref = None
         self._loop_scheduler.await_(self._task.on_task_done(outcome))
 
 
