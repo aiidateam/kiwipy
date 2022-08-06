@@ -2,7 +2,6 @@
 # pylint: disable=invalid-name, redefined-outer-name
 import concurrent.futures
 import pathlib
-import unittest
 
 import pytest
 import shortuuid
@@ -10,7 +9,6 @@ import shortuuid
 import kiwipy
 from kiwipy import rmq
 
-from ..utils import CommunicatorTester
 from . import utils
 
 WAIT_TIMEOUT = 5.
@@ -44,82 +42,65 @@ def thread_task_queue(thread_communicator: rmq.RmqThreadCommunicator):
     yield task_queue
 
 
-class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
-    """Use the standard tests cases to check the RMQ thread communicator"""
+def test_context_manager(thread_communicator: rmq.RmqThreadCommunicator):
+    MESSAGE = 'get this yo'
 
-    def create_communicator(self):
-        message_exchange = f'{self.__class__.__name__}.message_exchange.{shortuuid.uuid()}'
-        task_exchange = f'{self.__class__.__name__}.task_exchange.{shortuuid.uuid()}'
-        task_queue = f'{self.__class__.__name__}.task_queue.{shortuuid.uuid()}'
+    rpc_future = kiwipy.Future()
 
-        return rmq.RmqThreadCommunicator.connect(
-            connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-            message_exchange=message_exchange,
-            task_exchange=task_exchange,
-            task_queue=task_queue,
-            testing_mode=True
-        )
+    def rpc_get(_comm, msg):
+        rpc_future.set_result(msg)
 
-    def destroy_communicator(self, communicator):
-        communicator.close()
+    thread_communicator.add_rpc_subscriber(rpc_get, 'test_context_manager')
+    # Check the context manager of the communicator works
+    with thread_communicator as comm:
+        comm.rpc_send('test_context_manager', MESSAGE)
 
-    def test_context_manager(self):
-        MESSAGE = 'get this yo'
+    message = rpc_future.result(WAIT_TIMEOUT)
+    assert MESSAGE == message
 
-        rpc_future = kiwipy.Future()
 
-        def rpc_get(_comm, msg):
-            rpc_future.set_result(msg)
+def test_custom_task_queue(thread_communicator: rmq.RmqThreadCommunicator):
+    """Test creating a custom task queue"""
+    TASK = 'The meaning?'
+    RESULT = 42
+    result_future = kiwipy.Future()
 
-        self.communicator.add_rpc_subscriber(rpc_get, 'test_context_manager')
-        # Check the context manager of the communicator works
-        with self.communicator as comm:
-            comm.rpc_send('test_context_manager', MESSAGE)
+    tasks = []
 
-        message = rpc_future.result(self.WAIT_TIMEOUT)
-        self.assertEqual(MESSAGE, message)
+    def on_task(_comm, task):
+        tasks.append(task)
+        return result_future
 
-    def test_custom_task_queue(self):
-        """Test creating a custom task queue"""
-        TASK = 'The meaning?'
-        RESULT = 42
-        result_future = kiwipy.Future()
+    task_queue = thread_communicator.task_queue(f'test-queue-{utils.rand_string(5)}')
 
-        tasks = []
+    task_queue.add_task_subscriber(on_task)
+    task_future = task_queue.task_send(TASK).result(timeout=WAIT_TIMEOUT)
 
-        def on_task(_comm, task):
-            tasks.append(task)
-            return result_future
+    result_future.set_result(42)
 
-        task_queue = self.communicator.task_queue(f'test-queue-{utils.rand_string(5)}')
+    result = task_future.result(timeout=WAIT_TIMEOUT)
 
-        task_queue.add_task_subscriber(on_task)
-        task_future = task_queue.task_send(TASK).result(timeout=self.WAIT_TIMEOUT)
+    assert TASK == tasks[0]
+    assert RESULT == result
 
-        result_future.set_result(42)
 
-        result = task_future.result(timeout=self.WAIT_TIMEOUT)
+def test_task_queue_next(thread_communicator: rmq.RmqThreadCommunicator):
+    """Test creating a custom task queue"""
+    TASK = 'The meaning?'
+    RESULT = 42
 
-        self.assertEqual(TASK, tasks[0])
-        self.assertEqual(RESULT, result)
+    # Create a new queue and sent the task
+    task_queue = thread_communicator.task_queue(f'test-queue-{utils.rand_string(5)}')
+    task_future = task_queue.task_send(TASK)
 
-    def test_task_queue_next(self):
-        """Test creating a custom task queue"""
-        TASK = 'The meaning?'
-        RESULT = 42
+    # Get the task and carry it out
+    with task_queue.next_task() as task:
+        with task.processing() as outcome:
+            outcome.set_result(RESULT)
 
-        # Create a new queue and sent the task
-        task_queue = self.communicator.task_queue(f'test-queue-{utils.rand_string(5)}')
-        task_future = task_queue.task_send(TASK)
-
-        # Get the task and carry it out
-        with task_queue.next_task() as task:
-            with task.processing() as outcome:
-                outcome.set_result(RESULT)
-
-        # Now wait for the result
-        result = task_future.result(timeout=self.WAIT_TIMEOUT)
-        self.assertEqual(RESULT, result)
+    # Now wait for the result
+    result = task_future.result(timeout=WAIT_TIMEOUT)
+    assert RESULT == result
 
 
 def test_queue_get_next(thread_task_queue: rmq.RmqThreadTaskQueue):
