@@ -191,7 +191,20 @@ async def test_queue_get_next(task_queue: rmq.RmqTaskQueue):
             outcome.set_result('Goodbye')
     await result
     assert result.result() == 'Goodbye'
-
+    
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
+@pytest.mark.asyncio
+async def test_task_process(task_queue: rmq.RmqTaskQueue):
+    """call process and tear down manually"""
+    result = await task_queue.task_send('Hello!')
+    async with task_queue.next_task(timeout=1.) as task:
+        outcome = task.process()
+        assert task.body == 'Hello!'
+        outcome.set_result('Goodbye')
+        await task._task_done(outcome)  # have to be explicitly called.
+        
+    await result
+    assert result.result() == 'Goodbye'
 
 @unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
@@ -228,7 +241,8 @@ async def test_queue_iter_not_process(task_queue: rmq.RmqTaskQueue):
     # Now let's see what happens when we have tasks but don't process some of them
     async for task in task_queue:
         if task.body < 5:
-            task.process().set_result(task.body * 10)
+            with task.processing() as outcome:
+                outcome.set_result(task.body * 10)
 
     await asyncio.wait(outcomes[:5])
     for i, outcome in enumerate(outcomes[:5]):
@@ -236,7 +250,8 @@ async def test_queue_iter_not_process(task_queue: rmq.RmqTaskQueue):
 
     # Now, to through and process the rest
     async for task in task_queue:
-        task.process().set_result(task.body * 10)
+        with task.processing() as outcome:
+            outcome.set_result(task.body * 10)
 
     await asyncio.wait(outcomes)
     for i, outcome in enumerate(outcomes):
@@ -270,8 +285,8 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
     # outcomes.append(await task_queue.task_send(1))
     # Now the task should be back in the queue
     async with task_queue.next_task() as task:
-        outcome = task.process()
-        outcome.set_result(10)
+        with task.processing() as outcome:
+            outcome.set_result(10)
 
     await asyncio.wait(outcomes)
     assert outcomes[0].result() == 10

@@ -109,7 +109,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             # Put back any tasks that are still pending (i.e. not processed or to be processed)
             for task in tasks:
                 if task.state == TASK_PENDING:
-                    task.requeue()
+                    await task.requeue()
 
     @asynccontextmanager
     @async_generator
@@ -130,7 +130,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                 await yield_(task)
             finally:
                 if task.state == TASK_PENDING:
-                    task.requeue()
+                    await task.requeue()
 
     async def _create_task_queue(self):
         """Create and bind the task queue"""
@@ -228,16 +228,17 @@ class RmqIncomingTask:
     def state(self) -> str:
         return self._state
 
-    def process(self) -> asyncio.Future:
+    def process(self, auto_requeue=True) -> asyncio.Future:
         if self._state != TASK_PENDING:
             raise asyncio.InvalidStateError(f'The task is {self._state}')
 
         self._state = TASK_PROCESSING
         outcome = self._create_future()
         # Rely on the done callback to signal the end of processing
-        outcome.add_done_callback(self._task_done)
+        # outcome.add_done_callback(self._task_done)    # XXX: have to be explicitly called??
         # Or the user let's the future get destroyed
-        self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
+        if auto_requeue:
+            self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
 
         return outcome
 
@@ -260,11 +261,11 @@ class RmqIncomingTask:
             raise
         finally:
             if outcome.done():
-                self._task_done(outcome)
+                self._subscriber.loop().create_task(self._task_done(outcome))
             else:
-                self.requeue()
+                self._subscriber.loop().create_task(self.requeue())
 
-    def _task_done(self, outcome: asyncio.Future):
+    async def _task_done(self, outcome: asyncio.Future):
         assert outcome.done()
         self._outcome_ref = None
 
@@ -275,7 +276,7 @@ class RmqIncomingTask:
             # Task is done or excepted
             # Permanently store the outcome
             self._state = TASK_FINISHED
-            self._subscriber.loop().create_task(self._message.ack())
+            await self._message.ack()
 
             # We have to get the result from the future here (even if not replying), otherwise
             # python complains that it was never retrieved in case of exception
@@ -287,18 +288,17 @@ class RmqIncomingTask:
             if not self.no_reply:
                 # Schedule a task to send the appropriate response
                 # pylint: disable=protected-access
-                self._subscriber.loop().create_task(self._subscriber._send_response(reply_body, self._message))
+                await self._subscriber._send_response(reply_body, self._message)
 
         # Clean up
         self._finalise()
         
-    def requeue(self):
+    async def requeue(self):
         if self._state not in [TASK_PENDING, TASK_PROCESSING]:
             raise asyncio.InvalidStateError(f'The task is {self._state}')
 
         self._state = TASK_REQUEUED
-        print(f"loop subscriber id: {id(self._subscriber.loop())}")
-        self._subscriber.loop().create_task(self._message.nack(requeue=True))
+        await self._message.nack(requeue=True)
         self._finalise()
 
     def _outcome_destroyed(self, outcome_ref):
@@ -307,7 +307,7 @@ class RmqIncomingTask:
         assert outcome_ref is self._outcome_ref
         # This task will not be processed
         self._outcome_ref = None
-        self.requeue()
+        self._subscriber.loop().create_task(self.requeue())
 
     def _finalise(self):
         self._outcome_ref = None
