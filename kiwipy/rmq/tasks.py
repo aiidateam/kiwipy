@@ -235,7 +235,7 @@ class RmqIncomingTask:
         self._state = TASK_PROCESSING
         outcome = self._create_future()
         # Rely on the done callback to signal the end of processing
-        # outcome.add_done_callback(self._task_done)    # XXX: have to be explicitly called??
+        # outcome.add_done_callback(self.on_task_done)    # ???: have to be explicitly called??
         # Or the user let's the future get destroyed
         if auto_requeue:
             self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
@@ -261,11 +261,11 @@ class RmqIncomingTask:
             raise
         finally:
             if outcome.done():
-                self._subscriber.loop().create_task(self._task_done(outcome))
+                self._subscriber.loop().create_task(self.on_task_done(outcome))
             else:
                 self._subscriber.loop().create_task(self.requeue())
 
-    async def _task_done(self, outcome: asyncio.Future):
+    async def on_task_done(self, outcome: asyncio.Future):
         assert outcome.done()
         self._outcome_ref = None
 
@@ -292,7 +292,7 @@ class RmqIncomingTask:
 
         # Clean up
         self._finalise()
-        
+
     async def requeue(self):
         if self._state not in [TASK_PENDING, TASK_PROCESSING]:
             raise asyncio.InvalidStateError(f'The task is {self._state}')

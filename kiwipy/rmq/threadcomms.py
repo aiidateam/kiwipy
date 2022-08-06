@@ -6,6 +6,7 @@ from concurrent.futures import Future as ThreadFuture
 import functools
 import logging
 from typing import Union, Dict
+import weakref
 
 import aio_pika
 import deprecation
@@ -329,12 +330,13 @@ class RmqThreadTaskQueue:
         with self._loop_scheduler.async_ctx(self._task_queue.next_task(timeout=timeout, fail=fail)) as task:
             yield RmqThreadIncomingTask(task, self._loop_scheduler)
 
-import weakref
+
 class RmqThreadIncomingTask:
 
     def __init__(self, task: tasks.RmqIncomingTask, loop_scheduler):
         self._task = task
         self._loop_scheduler = loop_scheduler
+        self._outcome_ref = None
 
     @property
     def body(self) -> str:
@@ -351,7 +353,7 @@ class RmqThreadIncomingTask:
     def process(self) -> ThreadFuture:
         outcome = aiothreads.aio_future_to_thread(self._task.process(auto_requeue=False))
         self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
-        
+
         return outcome
 
     def requeue(self):
@@ -361,7 +363,7 @@ class RmqThreadIncomingTask:
     def processing(self):
         with self._loop_scheduler.ctx(self._task.processing()) as outcome:
             yield outcome
-            
+
     def _outcome_destroyed(self, outcome_ref):
         # This only happens if someone called self.process() and then let the future
         # get destroyed without setting an outcome
@@ -369,9 +371,10 @@ class RmqThreadIncomingTask:
         # This task will not be processed
         self._outcome_ref = None
         self.requeue()
-        
-    def _task_done(self, outcome):
-        self._loop_scheduler.await_(self._task._task_done(outcome))
+
+    def on_task_done(self, outcome):
+        self._loop_scheduler.await_(self._task.on_task_done(outcome))
+
 
 def connect(
     connection_params: Union[str, dict] = None,

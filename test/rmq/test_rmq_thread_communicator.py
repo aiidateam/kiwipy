@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=invalid-name, redefined-outer-name
-import asyncio
 import concurrent.futures
 import pathlib
 import unittest
@@ -131,7 +130,8 @@ def test_queue_get_next(thread_task_queue: rmq.RmqThreadTaskQueue):
             assert task.body == 'Hello!'
             outcome.set_result('Goodbye')
     assert result.result() == 'Goodbye'
-    
+
+
 def test_task_process(thread_task_queue: rmq.RmqThreadTaskQueue):
     """call process and tear down manually"""
     result = thread_task_queue.task_send('Hello!')
@@ -139,8 +139,8 @@ def test_task_process(thread_task_queue: rmq.RmqThreadTaskQueue):
         outcome = task.process()
         assert task.body == 'Hello!'
         outcome.set_result('Goodbye')
-        task._task_done(outcome)  # have to be explicitly called.
-        
+        task.on_task_done(outcome)  # have to be explicitly called.
+
     assert result.result() == 'Goodbye'
 
 

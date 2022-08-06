@@ -191,7 +191,8 @@ async def test_queue_get_next(task_queue: rmq.RmqTaskQueue):
             outcome.set_result('Goodbye')
     await result
     assert result.result() == 'Goodbye'
-    
+
+
 @unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
 async def test_task_process(task_queue: rmq.RmqTaskQueue):
@@ -201,10 +202,11 @@ async def test_task_process(task_queue: rmq.RmqTaskQueue):
         outcome = task.process()
         assert task.body == 'Hello!'
         outcome.set_result('Goodbye')
-        await task._task_done(outcome)  # have to be explicitly called.
-        
+        await task.on_task_done(outcome)  # have to be explicitly called.
+
     await result
     assert result.result() == 'Goodbye'
+
 
 @unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
 @pytest.mark.asyncio
