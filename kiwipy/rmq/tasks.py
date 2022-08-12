@@ -215,6 +215,7 @@ class RmqIncomingTask:
         self._task_info = TaskInfo(*subscriber._decode(message.body))
         self._state = TASK_PENDING
         self._outcome_ref = None  # type: Optional[weakref.ReferenceType]
+        self._loop = self._subscriber.loop()
 
     @property
     def body(self) -> str:
@@ -228,6 +229,9 @@ class RmqIncomingTask:
     def state(self) -> str:
         return self._state
 
+    def _trigger_done(self, outcome):
+        self._subscriber.loop().create_task(self.on_task_done(outcome))
+
     def process(self, auto_requeue=True) -> asyncio.Future:
         if self._state != TASK_PENDING:
             raise asyncio.InvalidStateError(f'The task is {self._state}')
@@ -235,8 +239,9 @@ class RmqIncomingTask:
         self._state = TASK_PROCESSING
         outcome = self._create_future()
         # Rely on the done callback to signal the end of processing
-        # outcome.add_done_callback(self.on_task_done)    # ???: have to be explicitly called??
-        # Or the user let's the future get destroyed
+
+        outcome.add_done_callback(self._trigger_done)
+
         if auto_requeue:
             self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
 

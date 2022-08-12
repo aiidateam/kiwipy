@@ -202,7 +202,6 @@ async def test_task_process(task_queue: rmq.RmqTaskQueue):
         outcome = task.process()
         assert task.body == 'Hello!'
         outcome.set_result('Goodbye')
-        await task.on_task_done(outcome)  # have to be explicitly called.
 
     await result
     assert result.result() == 'Goodbye'
