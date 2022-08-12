@@ -230,14 +230,14 @@ class RmqIncomingTask:
         return self._state
 
     def _trigger_done(self, outcome):
-        self._subscriber.loop().create_task(self.on_task_done(outcome))
+        self._loop.create_task(self.on_task_done(outcome))
 
     def process(self, auto_requeue=True) -> asyncio.Future:
         if self._state != TASK_PENDING:
             raise asyncio.InvalidStateError(f'The task is {self._state}')
 
         self._state = TASK_PROCESSING
-        outcome = self._create_future()
+        outcome = self._loop.create_future()
         # Rely on the done callback to signal the end of processing
 
         outcome.add_done_callback(self._trigger_done)
@@ -255,7 +255,7 @@ class RmqIncomingTask:
             raise asyncio.InvalidStateError(f'The task is {self._state}')
 
         self._state = TASK_PROCESSING
-        outcome = self._subscriber.loop().create_future()
+        outcome = self._loop.create_future()
         try:
             yield outcome
         except KeyboardInterrupt:  # pylint: disable=try-except-raise
@@ -267,9 +267,9 @@ class RmqIncomingTask:
         finally:
             if outcome.done():
                 self._outcome_ref = None
-                self._subscriber.loop().create_task(self.on_task_done(outcome))
+                self._loop.create_task(self.on_task_done(outcome))
             else:
-                self._subscriber.loop().create_task(self.requeue())
+                self._loop.create_task(self.requeue())
 
     async def on_task_done(self, outcome: asyncio.Future):
         if outcome.cancelled():
@@ -310,15 +310,12 @@ class RmqIncomingTask:
         assert outcome_ref is self._outcome_ref
         # This task will not be processed
         self._outcome_ref = None
-        self._subscriber.loop().create_task(self.requeue())
+        self._loop.create_task(self.requeue())
 
     def _finalise(self):
         self._outcome_ref = None
         self._subscriber = None
         self._message = None
-
-    def _create_future(self) -> asyncio.Future:
-        return self._subscriber.loop().create_future()
 
 
 class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
