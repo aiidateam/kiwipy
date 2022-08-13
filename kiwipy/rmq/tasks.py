@@ -230,20 +230,18 @@ class RmqIncomingTask:
         return self._state
 
     def _trigger_done(self, outcome):
-        self._loop.create_task(self.on_task_done(outcome))
+        self._loop.create_task(self._on_task_done(outcome))
 
-    def process(self, auto_requeue=True) -> asyncio.Future:
+    def process(self) -> asyncio.Future:
         if self._state != TASK_PENDING:
             raise asyncio.InvalidStateError(f'The task is {self._state}')
 
         self._state = TASK_PROCESSING
         outcome = self._loop.create_future()
         # Rely on the done callback to signal the end of processing
-
         outcome.add_done_callback(self._trigger_done)
 
-        if auto_requeue:
-            self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
+        self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
 
         return outcome
 
@@ -267,11 +265,11 @@ class RmqIncomingTask:
         finally:
             if outcome.done():
                 self._outcome_ref = None
-                self._loop.create_task(self.on_task_done(outcome))
+                self._loop.create_task(self._on_task_done(outcome))
             else:
                 self._loop.create_task(self.requeue())
 
-    async def on_task_done(self, outcome: asyncio.Future):
+    async def _on_task_done(self, outcome: asyncio.Future):
         if outcome.cancelled():
             # Whoever took the task decided not to process it
             self._state = TASK_PENDING

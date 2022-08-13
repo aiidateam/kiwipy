@@ -333,7 +333,7 @@ class RmqThreadTaskQueue:
 
 class RmqThreadIncomingTask:
 
-    def __init__(self, task: tasks.RmqIncomingTask, loop_scheduler):
+    def __init__(self, task: tasks.RmqIncomingTask, loop_scheduler: aiothreads.LoopScheduler):
         self._task = task
         self._loop_scheduler = loop_scheduler
         self._outcome_ref = None
@@ -351,8 +351,7 @@ class RmqThreadIncomingTask:
         return self._task.state
 
     def process(self) -> ThreadFuture:
-        outcome = aiothreads.aio_future_to_thread(self._task.process(auto_requeue=False))
-        self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
+        outcome = aiothreads.aio_future_to_thread(self._task.process())
 
         return outcome
 
@@ -364,17 +363,17 @@ class RmqThreadIncomingTask:
         with self._loop_scheduler.ctx(self._task.processing()) as outcome:
             yield outcome
 
-    def _outcome_destroyed(self, outcome_ref):
-        # This only happens if someone called self.process() and then let the future
-        # get destroyed without setting an outcome
-        assert outcome_ref is self._outcome_ref
-        # This task will not be processed
-        self._outcome_ref = None
-        self.requeue()
+    # def _outcome_destroyed(self, outcome_ref):
+    #     # This only happens if someone called self.process() and then let the future
+    #     # get destroyed without setting an outcome
+    #     assert outcome_ref is self._outcome_ref
+    #     # This task will not be processed
+    #     self._outcome_ref = None
+    #     self.requeue()
 
-    def on_task_done(self, outcome):
-        self._outcome_ref = None
-        self._loop_scheduler.await_(self._task.on_task_done(outcome))
+    # def on_task_done(self, outcome):
+    #     self._outcome_ref = None
+    #     self._loop_scheduler.await_(self._task.on_task_done(outcome))
 
 
 def connect(
