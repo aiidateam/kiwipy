@@ -351,7 +351,7 @@ class RmqThreadIncomingTask:
         return aiothreads.aio_future_to_thread(self._task.process())
 
     def requeue(self):
-        self._task.requeue()
+        self._loop_scheduler.await_(self._task.requeue())
 
     @contextmanager
     def processing(self):

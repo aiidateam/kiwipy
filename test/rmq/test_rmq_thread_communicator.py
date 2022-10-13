@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+"""
+WARNING: This file should not contain any coroutines code (i.e. no use of async/await) as the intended
+function of RmqThreadCommunicator is that users should be completely shielded from the asyncio code.
+"""
 # pylint: disable=invalid-name, redefined-outer-name
 import concurrent.futures
 import pathlib
@@ -103,7 +107,7 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
         self.assertEqual(TASK, tasks[0])
         self.assertEqual(RESULT, result)
 
-    async def test_task_queue_next(self):
+    def test_task_queue_next(self):
         """Test creating a custom task queue"""
         TASK = 'The meaning?'
         RESULT = 42
@@ -114,24 +118,24 @@ class TestRmqThreadCommunicator(CommunicatorTester, unittest.TestCase):
 
         # Get the task and carry it out
         with task_queue.next_task() as task:
-            await task.process().set_result(RESULT)
+            task.process().set_result(RESULT)
 
         # Now wait for the result
         result = task_future.result(timeout=self.WAIT_TIMEOUT)
         self.assertEqual(RESULT, result)
 
 
-async def test_queue_get_next(thread_task_queue: rmq.RmqThreadTaskQueue):
+def test_queue_get_next(thread_task_queue: rmq.RmqThreadTaskQueue):
     """Test getting the next task from the queue"""
     result = thread_task_queue.task_send('Hello!')
     with thread_task_queue.next_task(timeout=1.) as task:
-        async with task.processing() as outcome:
+        with task.processing() as outcome:
             assert task.body == 'Hello!'
             outcome.set_result('Goodbye')
     assert result.result() == 'Goodbye'
 
 
-async def test_queue_iter(thread_task_queue: rmq.RmqThreadTaskQueue):
+def test_queue_iter(thread_task_queue: rmq.RmqThreadTaskQueue):
     """Test iterating through a task queue"""
     results = []
 
@@ -140,7 +144,7 @@ async def test_queue_iter(thread_task_queue: rmq.RmqThreadTaskQueue):
         results.append(thread_task_queue.task_send(i))
 
     for task in thread_task_queue:
-        async with task.processing() as outcome:
+        with task.processing() as outcome:
             outcome.set_result(task.body * 10)
 
     concurrent.futures.wait(results)
@@ -151,7 +155,7 @@ async def test_queue_iter(thread_task_queue: rmq.RmqThreadTaskQueue):
         assert False, "Shouldn't get here"
 
 
-async def test_queue_iter_not_process(thread_task_queue: rmq.RmqThreadTaskQueue):
+def test_queue_iter_not_process(thread_task_queue: rmq.RmqThreadTaskQueue):
     """Check what happens when we iterate a queue but don't process all tasks"""
     outcomes = []
 
@@ -162,7 +166,7 @@ async def test_queue_iter_not_process(thread_task_queue: rmq.RmqThreadTaskQueue)
     # Now let's see what happens when we have tasks but don't process some of them
     for task in thread_task_queue:
         if task.body < 5:
-            await task.process().set_result(task.body * 10)
+            task.process().set_result(task.body * 10)
 
     concurrent.futures.wait(outcomes[:5])
     for i, outcome in enumerate(outcomes[:5]):
@@ -170,14 +174,14 @@ async def test_queue_iter_not_process(thread_task_queue: rmq.RmqThreadTaskQueue)
 
     # Now, to through and process the rest
     for task in thread_task_queue:
-        await task.process().set_result(task.body * 10)
+        task.process().set_result(task.body * 10)
 
     concurrent.futures.wait(outcomes)
     for i, outcome in enumerate(outcomes):
         assert outcome.result() == i * 10
 
 
-async def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
+def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
     """
     Check what happens when we forget to process a task we said we would
     WARNING: This test mail fail when running with a debugger as it relies on the 'outcome'
@@ -188,7 +192,7 @@ async def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
     # Get the first task and say that we will process it
     outcome = None
     with thread_task_queue.next_task() as task:
-        outcome = await task.process()
+        outcome = task.process()
 
     with pytest.raises(kiwipy.exceptions.QueueEmpty):
         with thread_task_queue.next_task():
@@ -199,7 +203,7 @@ async def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
 
     # Now the task should be back in the queue
     with thread_task_queue.next_task() as task:
-        await task.process().set_result(10)
+        task.process().set_result(10)
 
     concurrent.futures.wait(outcomes)
     assert outcomes[0].result() == 10
@@ -211,14 +215,14 @@ def test_empty_queue(thread_task_queue: rmq.RmqThreadTaskQueue):
             pass
 
 
-async def test_task_processing_exception(thread_task_queue: rmq.RmqThreadTaskQueue):
+def test_task_processing_exception(thread_task_queue: rmq.RmqThreadTaskQueue):
     """Check that if there is an exception processing a task that it is removed from the queue"""
     task_future = thread_task_queue.task_send('Do this')
 
     # The error should still get propageted in the 'worker'
     with pytest.raises(RuntimeError):
         with thread_task_queue.next_task(timeout=WAIT_TIMEOUT) as task:
-            async with task.processing():
+            with task.processing():
                 raise RuntimeError('Cannea do it captain!')
 
     # And the task sender should get a remote exception to inform them of the problem
