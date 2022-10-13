@@ -11,9 +11,7 @@ exclude release.sh
 exclude tox.ini
 
 # Licenses
-include LICENSE
-include GPL
-include MIT
+include LICENSE.txt
 
 include README.rst
 include CHANGELOG.md
