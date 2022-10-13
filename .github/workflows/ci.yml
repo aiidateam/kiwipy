@@ -26,13 +26,13 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python-version: ['3.7', '3.8', '3.9']
+                python-version: ['3.7', '3.8', '3.9', '3.10']
                 rabbitmq: [latest]
                 include:
-                -   python-version: 3.8
-                    rabbitmq: 3.6
-                -   python-version: 3.8
-                    rabbitmq: 3.8
+                -   python-version: '3.8'
+                    rabbitmq: '3.6'
+                -   python-version: '3.8'
+                    rabbitmq: '3.8'
 
         services:
             rabbitmq:
