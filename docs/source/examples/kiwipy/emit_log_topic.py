@@ -1,5 +1,6 @@
-import kiwipy
 import sys
+
+import kiwipy
 
 message = ' '.join(sys.argv[2:]) or 'Hello World!'
 

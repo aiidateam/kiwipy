@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import asyncio
-from contextlib import contextmanager
 import concurrent.futures
 from concurrent.futures import Future as ThreadFuture
+from contextlib import contextmanager
 import functools
 import logging
-from typing import Union, Dict
+from typing import Dict, Union
 
 import aio_pika
 import deprecation
@@ -14,9 +14,8 @@ from pytray import aiothreads
 
 import kiwipy
 from kiwipy import __version__
-from . import defaults
-from . import communicator
-from . import tasks
+
+from . import communicator, defaults, tasks
 
 __all__ = 'RmqThreadCommunicator', 'RmqThreadTaskQueue', 'connect'
 

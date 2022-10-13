@@ -1,6 +1,7 @@
-import kiwipy
 import sys
 import threading
+
+import kiwipy
 
 
 def callback(_comm, body, _sender, subject, _msg_id):

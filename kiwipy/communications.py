@@ -5,10 +5,9 @@ from typing import Any, Callable
 
 import shortuuid
 
-from . import exceptions
+from . import exceptions, futures
 # For backwards compatibility import exceptions too
 from .exceptions import *  # pylint: disable=wildcard-import, redefined-builtin, unused-wildcard-import
-from . import futures
 
 __all__ = 'Communicator', 'CommunicatorHelper'
 

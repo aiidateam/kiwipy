@@ -1,6 +1,7 @@
 import threading
-import kiwipy
 import time
+
+import kiwipy
 
 
 def callback(_comm, body):

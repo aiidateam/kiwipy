@@ -1,5 +1,6 @@
-import pika
 import uuid
+
+import pika
 
 
 class FibonacciRpcClient(object):

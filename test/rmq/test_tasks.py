@@ -13,6 +13,7 @@ try:
 
     import aio_pika
     import aio_pika.exceptions
+
     from kiwipy import rmq
     import kiwipy.rmq
 

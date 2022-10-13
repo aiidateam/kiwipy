@@ -10,8 +10,8 @@ import shortuuid
 import kiwipy
 from kiwipy import rmq
 
-from ..utils import CommunicatorTester
 from . import utils
+from ..utils import CommunicatorTester
 
 WAIT_TIMEOUT = 5.
 

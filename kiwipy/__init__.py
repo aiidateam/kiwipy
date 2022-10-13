@@ -4,9 +4,9 @@ __version__ = '0.7.6'
 
 import logging
 
+from .communicate import *
 # pylint: disable=redefined-builtin, undefined-variable
 from .communications import *
-from .communicate import *
 from .exceptions import *
 from .filters import *
 from .futures import *

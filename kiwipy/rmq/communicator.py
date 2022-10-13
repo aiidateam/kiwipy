@@ -1,19 +1,17 @@
 # -*- coding: utf-8 -*-
 import asyncio
-from functools import partial
 import copy
+from functools import partial
 import logging
 import typing
-from typing import Union, Optional, Dict
+from typing import Dict, Optional, Union
 
-import shortuuid
 import aio_pika
+import shortuuid
 
 import kiwipy
-from . import defaults
-from . import tasks
-from . import messages
-from . import utils
+
+from . import defaults, messages, tasks, utils
 
 __all__ = 'RmqCommunicator', 'async_connect'
 
