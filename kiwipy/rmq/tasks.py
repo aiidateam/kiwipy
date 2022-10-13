@@ -79,8 +79,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
     async def remove_task_subscriber(self, identifier):
         try:
             self._subscribers.pop(identifier)
-        except KeyError:
-            raise ValueError(f"Unknown task subscriber '{identifier}'")
+        except KeyError as exception:
+            raise ValueError(f"Unknown task subscriber '{identifier}'") from exception
         if not self._subscribers:
             await self._task_queue.cancel(self._consumer_tag)
             self._consumer_tag = None
@@ -443,7 +443,7 @@ class RmqTaskQueue:
     @asynccontextmanager
     @async_generator
     async def next_task(self, no_ack=False, fail=True, timeout=defaults.TASK_FETCH_TIMEOUT):
-        async with self._subscriber.next_task(no_ack=no_ack, fail=fail, timeout=timeout) as task:
+        async with self._subscriber.next_task(no_ack=no_ack, fail=fail, timeout=timeout) as task:  # pylint: disable=not-async-context-manager
             await yield_(task)
 
     async def connect(self):

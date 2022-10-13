@@ -13,7 +13,7 @@ import pamqp
 from pytray import aiothreads
 
 import kiwipy
-from kiwipy.version import __version__
+from kiwipy import __version__
 from . import defaults
 from . import communicator
 from . import tasks

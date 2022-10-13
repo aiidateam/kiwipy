@@ -152,8 +152,8 @@ class CommunicatorHelper(Communicator):
         self._ensure_open()
         try:
             self._rpc_subscribers.pop(identifier)
-        except KeyError:
-            raise ValueError(f"Unknown subscriber '{identifier}'")
+        except KeyError as exception:
+            raise ValueError(f"Unknown subscriber '{identifier}'") from exception
 
     def add_task_subscriber(self, subscriber, identifier=None):
         """
@@ -179,8 +179,8 @@ class CommunicatorHelper(Communicator):
         self._ensure_open()
         try:
             self._task_subscribers.pop(identifier)
-        except KeyError:
-            raise ValueError(f"Unknown subscriber: '{identifier}'")
+        except KeyError as exception:
+            raise ValueError(f"Unknown subscriber: '{identifier}'") from exception
 
     def add_broadcast_subscriber(self, subscriber: BroadcastSubscriber, identifier=None) -> Any:
         self._ensure_open()
@@ -195,8 +195,8 @@ class CommunicatorHelper(Communicator):
         self._ensure_open()
         try:
             del self._broadcast_subscribers[identifier]
-        except KeyError:
-            raise ValueError(f"Broadcast subscriber '{identifier}' unknown")
+        except KeyError as exception:
+            raise ValueError(f"Broadcast subscriber '{identifier}' unknown") from exception
 
     def fire_task(self, msg, no_reply=False):
         self._ensure_open()
@@ -222,8 +222,8 @@ class CommunicatorHelper(Communicator):
         self._ensure_open()
         try:
             subscriber = self._rpc_subscribers[recipient_id]
-        except KeyError:
-            raise exceptions.UnroutableError(f"Unknown rpc recipient '{recipient_id}'")
+        except KeyError as exception:
+            raise exceptions.UnroutableError(f"Unknown rpc recipient '{recipient_id}'") from exception
         else:
             future = futures.Future()
             try:

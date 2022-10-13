@@ -253,9 +253,7 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
     WARNING: This test mail fail when running with a debugger as it relies on the 'outcome'
     reference count dropping to zero but the debugger may be preventing this.
     """
-    outcomes = list()
-
-    outcomes.append(await task_queue.task_send(1))
+    outcomes = [await task_queue.task_send(1)]
 
     # Get the first task and say that we will process it
     outcome = None

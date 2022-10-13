@@ -123,8 +123,8 @@ class RmqSubscriber:
         rpc_queue = await self._channel.declare_queue(exclusive=True, arguments=self._rmq_queue_arguments)
         try:
             identifier = await rpc_queue.consume(partial(self._on_rpc, subscriber), consumer_tag=identifier)
-        except aio_pika.exceptions.DuplicateConsumerTag:
-            raise kiwipy.DuplicateSubscriberIdentifier(f"RPC identifier '{identifier}'")
+        except aio_pika.exceptions.DuplicateConsumerTag as exception:
+            raise kiwipy.DuplicateSubscriberIdentifier(f"RPC identifier '{identifier}'") from exception
         else:
             await rpc_queue.bind(self._exchange, routing_key=f'{defaults.RPC_TOPIC}.{identifier}')
             # Save the queue so we can cancel and unbind later
@@ -134,8 +134,8 @@ class RmqSubscriber:
     async def remove_rpc_subscriber(self, identifier):
         try:
             rpc_queue = self._rpc_subscribers.pop(identifier)
-        except KeyError:
-            raise ValueError(f"Unknown subscriber '{identifier}'")
+        except KeyError as exception:
+            raise ValueError(f"Unknown subscriber '{identifier}'") from exception
         else:
             await rpc_queue.cancel(identifier)
             await rpc_queue.unbind(self._exchange, routing_key=f'{defaults.RPC_TOPIC}.{identifier}')
@@ -154,8 +154,8 @@ class RmqSubscriber:
     async def remove_broadcast_subscriber(self, identifier):
         try:
             del self._broadcast_subscribers[identifier]
-        except KeyError:
-            raise ValueError(f"Broadcast subscriber '{identifier}' unknown")
+        except KeyError as exception:
+            raise ValueError(f"Broadcast subscriber '{identifier}' unknown") from exception
         if not self._broadcast_subscribers:
             await self._broadcast_queue.cancel(self._broadcast_consumer_tag)
             self._broadcast_consumer_tag = None
