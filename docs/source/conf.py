@@ -228,7 +228,7 @@ def run_apidoc(app):
     source_dir = Path(os.path.abspath(__file__)).parent
     apidoc_dir = source_dir / 'apidoc'
     apidoc_dir.mkdir(exist_ok=True)
-    package_dir = source_dir.parent.parent / 'kiwipy'
+    package_dir = source_dir.parent.parent / 'src' / 'kiwipy'
 
     # we write to a temporary folder first then only move across files that have changed
     # this ensures that document rebuilds are not triggered every time (due to change in file mtime)
