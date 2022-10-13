@@ -42,7 +42,7 @@ Documentation = 'https://kiwipy.readthedocs.io'
 
 [project.optional-dependencies]
 docs = [
-    'docutils==0.14',
+    'docutils',
     'jupyter',  # For running doc examples
     'nbsphinx',  # Jupyter notebooks in docs
     'pandoc',
