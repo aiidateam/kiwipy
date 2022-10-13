@@ -202,7 +202,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         del self._loop
         self._closed = True
 
-    def add_close_callback(self, callback: aio_pika.types.CloseCallbackType, weak: bool = False) -> None:
+    def add_close_callback(self, callback: aio_pika.abc.ConnectionCloseCallback, weak: bool = False) -> None:
         """Add a callable to be called each time (after) the connection is closed.
 
         :param weak: If True, the callback will be added to a `WeakSet`
@@ -258,7 +258,7 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         result = self._loop_scheduler.await_(
             self._communicator.broadcast_send(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
         )
-        return isinstance(result, pamqp.specification.Basic.Ack)
+        return isinstance(result, pamqp.commands.Basic.Ack)
 
     def _wrap_subscriber(self, subscriber):
         """"
