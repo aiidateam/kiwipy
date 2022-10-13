@@ -1,70 +1,113 @@
-name: continuous-deployment
-
-# deploy on creating a release tag vX.Y.Z
-# will only be published to PyPi if the tests pass
+name: cd
 
 on:
-  push:
-    tags:
-      - "v*"
+    push:
+        tags:
+        -   'v[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
-  pre-commit:
-    runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python 3.8
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.8
-      - uses: pre-commit/action@v2.0.0
+    validate-release-tag:
 
-  tests:
-    runs-on: ubuntu-latest
+        if: github.repository == 'aiidateam/kiwipy'
+        runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        python-version: [3.7, 3.8, 3.9, 3.10]
+        steps:
+        -   name: Checkout source
+            uses: actions/checkout@v2
 
-    services:
-      rabbitmq:
-        image: rabbitmq:latest
-        ports:
-          - 5672:5672
+        -   name: Set up Python 3.8
+            uses: actions/setup-python@v2
+            with:
+                python-version: '3.8'
 
-    steps:
-      - uses: actions/checkout@v2
+        -   name: Validate the tag version against the package version
+            run: python .github/workflows/validate_release_tag.py $GITHUB_REF
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
+    pre-commit:
 
-      - name: Install python dependencies
-        run: pip install -e .[rmq,tests]
+        needs: [validate-release-tag]
+        runs-on: ubuntu-latest
 
-      - name: Run pytest
-        run: pytest --cov=kiwipy -sv -p no:nb_regression test
+        steps:
+        -   uses: actions/checkout@v2
 
-  publish:
-    name: Publish to PyPi
-    needs: [pre-commit, tests]
-    if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v2
-      - name: Set up Python 3.8
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.8
-      - name: Build package
-        run: |
-          pip install wheel
-          python setup.py sdist bdist_wheel
-      - name: Publish ot PyPi
-        uses: pypa/gh-action-pypi-publish@v1.1.0
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_KEY }}
+        -   name: Cache Python dependencies
+            uses: actions/cache@v1
+            with:
+                path: ~/.cache/pip
+                key: pip-pre-commit-${{ hashFiles('**/setup.json') }}
+                restore-keys:
+                    pip-pre-commit-
+
+        -   name: Set up Python
+            uses: actions/setup-python@v2
+            with:
+                python-version: '3.8'
+
+        -   name: Install Python dependencies
+            run: pip install -e .[pre-commit,rmq,tests]
+
+        -   name: Run pre-commit
+            run: pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
+
+    tests:
+
+        needs: [validate-release-tag]
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                python-version: ['3.7', '3.8', '3.9', '3.10']
+
+        services:
+            rabbitmq:
+                image: rabbitmq:latest
+                ports:
+                -   5672:5672
+
+        steps:
+        -   uses: actions/checkout@v2
+
+        -   name: Cache Python dependencies
+            uses: actions/cache@v1
+            with:
+                path: ~/.cache/pip
+                key: pip-${{ matrix.python-version }}-tests-${{ hashFiles('**/setup.json') }}
+                restore-keys:
+                    pip-${{ matrix.python-version }}-tests
+
+        -   name: Set up Python ${{ matrix.python-version }}
+            uses: actions/setup-python@v2
+            with:
+                python-version: ${{ matrix.python-version }}
+
+        -   name: Install Python dependencies
+            run: pip install -e .[rmq,tests]
+
+        -   name: Run pytest
+            run: pytest -sv -p no:nb_regression test
+
+    publish:
+
+        name: Publish to PyPI
+        needs: [pre-commit, tests]
+        runs-on: ubuntu-latest
+
+        steps:
+        -   name: Checkout source
+            uses: actions/checkout@v2
+
+        -   name: Set up Python 3.8
+            uses: actions/setup-python@v2
+            with:
+                python-version: '3.8'
+
+        -   name: Install flit
+            run: pip install flit~=3.4
+
+        -   name: Build and publish
+            run: flit publish
+            env:
+                FLIT_USERNAME: __token__
+                FLIT_PASSWORD: ${{ secrets.PYPI_KEY }}
