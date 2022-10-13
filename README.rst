@@ -11,7 +11,7 @@ kiwiPy
    :width: 64px
    :alt: kiwiPy
 
-.. image:: https://codecov.io/gh/aiidateam/kiwipy/branch/develop/graph/badge.svg
+.. image:: https://codecov.io/gh/aiidateam/kiwipy/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/aiidateam/kiwipy
     :alt: Coveralls
 
@@ -62,7 +62,7 @@ The client:
         response = comm.rpc_send('fib', 30).result()
         print((" [.] Got %r" % response))
 
-`(rmq_rpc_client.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/develop/examples/rmq_rpc_client.py>`_
+`(rmq_rpc_client.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/master/examples/rmq_rpc_client.py>`_
 
 
 The server:
@@ -86,7 +86,7 @@ The server:
         # Now wait indefinitely for fibonacci calls
         threading.Event().wait()
 
-`(rmq_rpc_server.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/develop/examples/rmq_rpc_server.py>`_
+`(rmq_rpc_server.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/master/examples/rmq_rpc_server.py>`_
 
 
 Worker
@@ -104,7 +104,7 @@ Create a new task:
     with rmq.connect('amqp://localhost') as comm:
         comm.task_send(message)
 
-`(rmq_new_task.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/develop/examples/rmq_new_task.py>`_
+`(rmq_new_task.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/master/examples/rmq_new_task.py>`_
 
 
 And the worker:
@@ -131,7 +131,7 @@ And the worker:
     except KeyboardInterrupt:
         pass
 
-`(rmq_worker.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/develop/examples/rmq_worker.py>`_
+`(rmq_worker.py source) <https://raw.githubusercontent.com/aiidateam/kiwipy/master/examples/rmq_worker.py>`_
 
 Citing
 ======

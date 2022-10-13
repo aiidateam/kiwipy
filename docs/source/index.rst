@@ -17,7 +17,7 @@
 Welcome to kiwiPy's documentation!
 ==================================
 
-.. image:: https://codecov.io/gh/aiidateam/kiwipy/branch/develop/graph/badge.svg
+.. image:: https://codecov.io/gh/aiidateam/kiwipy/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/aiidateam/kiwipy
     :alt: Coveralls
 
