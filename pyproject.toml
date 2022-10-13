@@ -1,0 +1,170 @@
+[build-system]
+requires = ['flit_core >=3.4,<4']
+build-backend = 'flit_core.buildapi'
+
+[project]
+name = 'kiwipy'
+dynamic = ['description', 'version']
+authors = [
+    {name = 'Martin Uhrin', email = 'martin.uhrin@gmail.com'},
+    {name = 'Sebastiaan P. Huber'},
+    {name = 'Jason Yu'},
+    {name = 'Sonia Collaud'},
+]
+readme = 'README.rst'
+license = {file = 'LICENSE.txt'}
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'License :: OSI Approved :: MIT License',
+    'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+]
+keywords = ['ommunication', 'messaging', 'rpc', 'broadcast']
+requires-python = '>=3.7'
+dependencies = [
+    'aio-pika~=8.0',
+    'async_generator',
+    'deprecation',
+    'kiwipy[rmq]~=0.7.4',
+    'nest_asyncio~=1.5,>=1.5.1',
+    'pytray>=0.2.2,<0.4.0',
+    'pyyaml~=5.4',
+]
+
+[project.urls]
+Home = 'https://github.com/aiidateam/kiwipy'
+Source = 'https://github.com/aiidateam/kiwipy'
+Documentation = 'https://kiwipy.readthedocs.io'
+
+[project.optional-dependencies]
+docs = [
+    'docutils==0.14',
+    'jupyter',  # For running doc examples
+    'nbsphinx',  # Jupyter notebooks in docs
+    'pandoc',
+    'sphinx',
+    'sphinx-autobuild',
+]
+pre-commit = [
+    'pre-commit~=2.2',
+    'pylint==2.12.2',
+]
+rmq = [
+    'aio-pika~=8.2',
+    'pamqp~=3.2',
+    'pyyaml~=5.1'
+]
+tests = [
+    'coverage',
+    'ipykernel',
+    'pytest-cov',
+    'pytest~=5.4',
+    'pytest-asyncio~=0.12,<0.17',
+    'pytest-notebook>=0.7',
+    'pytest-benchmark',
+    'pika',
+    'msgpack',
+    'shortuuid',
+]
+
+[tool.flit.module]
+name = 'kiwipy'
+
+[tool.flit.sdist]
+exclude = [
+    '.github/',
+    'docs/',
+    'examples/',
+    'test/',
+]
+
+[tool.flynt]
+line-length = 120
+fail-on-change = true
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.messages_control]
+disable = [
+    'duplicate-code',
+    'import-outside-toplevel',
+    'missing-docstring',
+    'bad-continuation',
+    'locally-disabled',
+    'too-few-public-methods',
+    'too-many-arguments',
+    'too-many-instance-attributes',
+]
+
+[tool.pytest.ini_options]
+minversion = '6.0'
+testpaths = [
+    'test',
+]
+filterwarnings = [
+    'ignore::DeprecationWarning:frozendict:',
+]
+
+[tool.yapf]
+align_closing_bracket_with_visual_indent = true
+based_on_style = 'google'
+coalesce_brackets = true
+column_limit = 120
+dedent_closing_brackets = true
+indent_dictionary_value = false
+split_arguments_when_comma_terminated = true
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = py37
+
+[testenv]
+usedevelop = true
+
+[testenv:py{37,38,39}]
+description = Run the unit tests
+extras =
+    rmq
+    tests
+commands = pytest {posargs}
+
+[testenv:pre-commit]
+description = Run the style checks and formatting
+extras =
+    rmq
+    pre-commit
+    tests
+commands = pre-commit run {posargs}
+
+[testenv:docs-{update,clean}]
+description = Build the documentation
+extras =
+    rmq
+    docs
+whitelist_externals = rm
+commands =
+    clean: rm -rf docs/_build
+    sphinx-build -nW --keep-going -b {posargs:html} docs/source/ docs/_build/{posargs:html}
+
+[testenv:docs-live]
+description = Build the documentation and launch browser (with live updates)
+extras =
+    rmq
+    docs
+deps = sphinx-autobuild
+commands =
+    sphinx-autobuild \
+        --re-ignore _build/.* \
+        --port 0 --open-browser \
+        -n -b {posargs:html} docs/source/ docs/_build/{posargs:html}
+
+
+[pytest]
+filterwarnings =
+    ignore::DeprecationWarning:distutils:
+"""

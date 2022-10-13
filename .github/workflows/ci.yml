@@ -3,57 +3,63 @@ name: continuous-integration
 on: [push, pull_request]
 
 jobs:
-  pre-commit:
-    runs-on: ubuntu-latest
+    pre-commit:
+        runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python 3.8
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.8
-      - uses: pre-commit/action@v2.0.0
+        steps:
+        -   uses: actions/checkout@v2
 
-  tests:
-    runs-on: ubuntu-latest
+        -   name: Set up Python 3.8
+            uses: actions/setup-python@v2
+            with:
+                python-version: '3.8'
 
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: [3.7, 3.8, 3.9]
-        rabbitmq: [latest]
-        include:
-        - python-version: 3.8
-          rabbitmq: 3.6
-        - python-version: 3.8
-          rabbitmq: 3.8
+        -   name: Install Python dependencies
+            run: pip install -e .[pre-commit,rmq,tests]
 
-    services:
-      rabbitmq:
-        image: rabbitmq:${{ matrix.rabbitmq }}
-        ports:
-          - 5672:5672
+        -   name: Run pre-commit
+            run: pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
 
-    steps:
-      - uses: actions/checkout@v2
+    tests:
+        runs-on: ubuntu-latest
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
+        strategy:
+            fail-fast: false
+            matrix:
+                python-version: ['3.7', '3.8', '3.9']
+                rabbitmq: [latest]
+                include:
+                -   python-version: 3.8
+                    rabbitmq: 3.6
+                -   python-version: 3.8
+                    rabbitmq: 3.8
 
-      - name: Install python dependencies
-        run: pip install -e .[rmq,tests]
+        services:
+            rabbitmq:
+                image: rabbitmq:${{ matrix.rabbitmq }}
+                ports:
+                    - 5672:5672
 
-      - name: Run pytest
-        run: pytest --cov=kiwipy -sv -p no:nb_regression test
+        steps:
+        -   uses: actions/checkout@v2
 
-      - name: Create xml coverage
-        run: coverage xml
+        -   name: Set up Python ${{ matrix.python-version }}
+            uses: actions/setup-python@v2
+            with:
+                python-version: ${{ matrix.python-version }}
 
-      - name: Upload coverage to Codecov
-        if: github.repository == 'aiidateam/kiwipy'
-        uses: codecov/codecov-action@v2
-        with:
-            file: ./coverage.xml
-            name: kiwipy
+        -   name: Install Python dependencies
+            run: pip install -e .[rmq,tests]
+
+        -   name: Run pytest
+            run: pytest --cov=kiwipy -sv -p no:nb_regression test
+
+        -   name: Create xml coverage
+            run: coverage xml
+
+        -   name: Upload coverage to Codecov
+            if: github.repository == 'aiidateam/kiwipy'
+            uses: codecov/codecov-action@v2
+            with:
+                file: ./coverage.xml
+                name: kiwipy

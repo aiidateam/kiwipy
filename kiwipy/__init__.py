@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+"""Robust, high-volume, message based communication made easy."""
+__version__ = '0.7.6'
+
 import logging
 
 # pylint: disable=redefined-builtin, undefined-variable
@@ -9,11 +12,10 @@ from .filters import *
 from .futures import *
 from .local import *
 from .utils import *
-from .version import *
 
 __all__ = (
-    exceptions.__all__ + futures.__all__ + communications.__all__ + version.__all__ + utils.__all__ + local.__all__ +
-    filters.__all__ + communicate.__all__
+    exceptions.__all__ + futures.__all__ + communications.__all__ + utils.__all__ + local.__all__ + filters.__all__ +
+    communicate.__all__
 )
 
 

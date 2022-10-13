@@ -183,9 +183,7 @@ async def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
     WARNING: This test mail fail when running with a debugger as it relies on the 'outcome'
     reference count dropping to zero but the debugger may be preventing this.
     """
-    outcomes = list()
-
-    outcomes.append(thread_task_queue.task_send(1))
+    outcomes = [thread_task_queue.task_send(1)]
 
     # Get the first task and say that we will process it
     outcome = None
@@ -261,7 +259,7 @@ def test_jupyter_notebook():
     fixture.diff_ignore = ('/metadata/language_info/version',)
 
     my_dir = pathlib.Path(__file__).parent
-    with open(my_dir / pathlib.Path('notebooks/communicator.ipynb')) as handle:
+    with open(my_dir / pathlib.Path('notebooks/communicator.ipynb'), encoding='utf-8') as handle:
         fixture.check(handle)
 
 
