@@ -205,7 +205,7 @@ class RmqSubscriber:
         """
         async with message.process(ignore_processed=True):
             # Tell the sender that we've dealt with it
-            message.ack()
+            await message.ack()
             msg = self._decode(message.body)
 
             try:
@@ -370,19 +370,19 @@ class RmqCommunicator:
         if self._connection is None:
             return {}
 
-        return self._connection.connection.server_properties
+        return self._connection.transport.connection.server_properties
 
     @property
     def loop(self):
         """Get the event loop instance driving this communicator connection."""
         return self._connection.loop
 
-    def add_close_callback(self, callback: aio_pika.types.CloseCallbackType, weak: bool = False) -> None:
+    def add_close_callback(self, callback: aio_pika.abc.ConnectionCloseCallback, weak: bool = False) -> None:
         """Add a callable to be called each time (after) the connection is closed.
 
         :param weak: If True, the callback will be added to a `WeakSet`
         """
-        self._connection.add_close_callback(callback, weak)
+        self._connection.close_callbacks.add(callback, weak)
 
     async def get_default_task_queue(self) -> tasks.RmqTaskQueue:
         """Get a default task queue.

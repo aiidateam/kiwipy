@@ -186,7 +186,7 @@ async def test_queue_get_next(task_queue: rmq.RmqTaskQueue):
     """Test getting the next task from the queue"""
     result = await task_queue.task_send('Hello!')
     async with task_queue.next_task(timeout=1.) as task:
-        with task.processing() as outcome:
+        async with task.processing() as outcome:
             assert task.body == 'Hello!'
             outcome.set_result('Goodbye')
     await result
@@ -204,7 +204,7 @@ async def test_queue_iter(task_queue: rmq.RmqTaskQueue):
         results.append(await task_queue.task_send(i))
 
     async for task in task_queue:
-        with task.processing() as outcome:
+        async with task.processing() as outcome:
             outcome.set_result(task.body * 10)
 
     await asyncio.wait(results)
@@ -228,7 +228,8 @@ async def test_queue_iter_not_process(task_queue: rmq.RmqTaskQueue):
     # Now let's see what happens when we have tasks but don't process some of them
     async for task in task_queue:
         if task.body < 5:
-            task.process().set_result(task.body * 10)
+            future = task.process()
+            future.set_result(task.body * 10)
 
     await asyncio.wait(outcomes[:5])
     for i, outcome in enumerate(outcomes[:5]):
@@ -236,7 +237,8 @@ async def test_queue_iter_not_process(task_queue: rmq.RmqTaskQueue):
 
     # Now, to through and process the rest
     async for task in task_queue:
-        task.process().set_result(task.body * 10)
+        future = task.process()
+        future.set_result(task.body * 10)
 
     await asyncio.wait(outcomes)
     for i, outcome in enumerate(outcomes):
@@ -269,7 +271,8 @@ async def test_queue_task_forget(task_queue: rmq.RmqTaskQueue):
 
     # Now the task should be back in the queue
     async with task_queue.next_task() as task:
-        task.process().set_result(10)
+        future = task.process()
+        future.set_result(10)
 
     await asyncio.wait(outcomes)
     assert outcomes[0].result() == 10
@@ -292,7 +295,7 @@ async def test_task_processing_exception(task_queue: rmq.RmqTaskQueue):
     # The error should still get propageted in the 'worker'
     with pytest.raises(RuntimeError):
         async with task_queue.next_task() as task:
-            with task.processing():
+            async with task.processing():
                 raise RuntimeError('Cannea do it captain!')
 
     # And the task sender should get a remote exception to inform them of the problem
