@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.0 2022-10-13
+
+### Dependencies
+
+- Update requirement for `aio-pika~=8.2` [[#114]](https://github.com/aiidateam/kiwipy/pull/114)
+- Add support for Python 3.10 [[#120]](https://github.com/aiidateam/kiwipy/pull/120)
+
+### Devops
+
+- Remove obsolete `release.sh` [[#115]](https://github.com/aiidateam/kiwipy/pull/115)
+- Merge separate license files into one [[#116]](https://github.com/aiidateam/kiwipy/pull/116)
+- Add the `isort` pre-commit hook [[#118]](https://github.com/aiidateam/kiwipy/pull/118)
+- Move package into the `src/` subdirectory [[#119]](https://github.com/aiidateam/kiwipy/pull/119)
+- Update the continuous deployment workflow [[#121]](https://github.com/aiidateam/kiwipy/pull/121)
+
+
 ## v0.7.6 2022-08-05
 
 - Dependencies: restrict ranges of `aio-pika<6.8.2` and `pamqp~=2.0` [[#108]](https://github.com/aiidateam/kiwipy/pull/110)
