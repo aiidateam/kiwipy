@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from functools import partial
+
 import yaml
 
 # Times are in milliseconds

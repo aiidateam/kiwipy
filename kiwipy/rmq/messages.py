@@ -9,8 +9,7 @@ import uuid
 
 import aio_pika
 
-from . import defaults
-from . import utils
+from . import defaults, utils
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import functools
 
+import msgpack
 import pika
 import pytest
-import msgpack
 
 import kiwipy
 from kiwipy import rmq

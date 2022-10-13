@@ -3,8 +3,8 @@ import asyncio
 import collections
 from contextlib import asynccontextmanager
 import logging
-import uuid
 from typing import Optional
+import uuid
 import weakref
 
 import aio_pika
@@ -12,9 +12,8 @@ from async_generator import async_generator, yield_
 import shortuuid
 
 import kiwipy
-from . import defaults
-from . import messages
-from . import utils
+
+from . import defaults, messages, utils
 
 _LOGGER = logging.getLogger(__name__)
 

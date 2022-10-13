@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
-import tempfile
 import os
+import tempfile
+
 from . import utils
 
 TEST_LOG = os.path.join(tempfile.gettempdir(), 'kiwipy_unittest.log')
