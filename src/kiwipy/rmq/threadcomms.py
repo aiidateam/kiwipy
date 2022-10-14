@@ -8,7 +8,6 @@ import logging
 from typing import Dict, Union
 
 import aio_pika
-import deprecation
 import pamqp
 from pytray import aiothreads
 
@@ -122,30 +121,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
                 testing_mode=testing_mode
             )
         )
-
-    @deprecation.deprecated(
-        deprecated_in='0.6.0',
-        removed_in='0.7.0',
-        current_version=__version__,
-        details='This method was deprecated in v0.6.0 and will be removed in 0.7.0.  There is no '
-        "replacement and the class should be reinstantiated if it's been closed."
-    )
-    def start(self):
-        # pylint: disable=no-self-use
-        raise DeprecationWarning(
-            'This method was deprecated in v0.6.0 and will be removed in 0.7.0.  There is no '
-            "replacement and the class should be reinstantiated if it's been closed."
-        )
-
-    @deprecation.deprecated(
-        deprecated_in='0.6.0',
-        removed_in='0.7.0',
-        current_version=__version__,
-        details='Use close() instead.  Unlike stop(), close() is permanent and '
-        'the class should not be used again after this.'
-    )
-    def stop(self):
-        self.close()
 
     @property
     def server_properties(self) -> Dict:
