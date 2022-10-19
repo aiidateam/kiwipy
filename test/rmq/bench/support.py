@@ -32,10 +32,10 @@ def get_tasks(num_tasks, queue: rmq.RmqThreadTaskQueue):
             queue.remove_task_subscriber(identifier)
 
 
-async def clear_all_tasks(queue: rmq.RmqThreadTaskQueue):
+def clear_all_tasks(queue: rmq.RmqThreadTaskQueue):
     """Just go through all tasks picking them up so the queue is cleared"""
     for task in queue:
-        async with task.processing() as outcome:
+        with task.processing() as outcome:
             outcome.set_result(True)
 
 

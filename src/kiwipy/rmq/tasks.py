@@ -236,7 +236,7 @@ class RmqIncomingTask:
         outcome = self._loop.create_future()
         # Rely on the done callback to signal the end of processing
         outcome.add_done_callback(self._on_task_done)
-        # Or the user let's the future get destroyed
+        # Or the user lets the future get destroyed
         self._outcome_ref = weakref.ref(outcome, self._outcome_destroyed)
 
         return outcome
@@ -252,7 +252,7 @@ class RmqIncomingTask:
     @asynccontextmanager
     async def processing(self):
         """Processing context.  The task should be done at the end otherwise it's assumed the
-        caller doesn't want to process it and it's sent back to the queue"""
+        caller doesn't want to process it, and it's sent back to the queue"""
         if self._state != TASK_PENDING:
             raise asyncio.InvalidStateError(f'The task is {self._state}')
 
