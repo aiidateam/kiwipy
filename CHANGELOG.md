@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.1 2022-10-20
+
+### Fixes
+
+- Restore intended interface of `RmqThreadCommunicator` [[#124]](https://github.com/aiidateam/kiwipy/pull/124)
+
+### Deprecations
+
+- `RmqThreadCommunicator`: remove deprecated `start` and `stop` methods [[#125]](https://github.com/aiidateam/kiwipy/pull/125)
+
+### Dependencies
+
+- Move `shortuuid` from `test` extra to main [[#123]](https://github.com/aiidateam/kiwipy/pull/123)
+- Unpin `docutils` from the `docs` extra [[#123]](https://github.com/aiidateam/kiwipy/pull/123)
+
+
 ## v0.8.0 2022-10-13
 
 ### Dependencies
