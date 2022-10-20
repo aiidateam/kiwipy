@@ -326,11 +326,15 @@ class RmqThreadIncomingTask:
         return aiothreads.aio_future_to_thread(self._task.process())
 
     def requeue(self):
-        self._task.requeue()
+        """Requeue the task.
+
+        This call is blocking and by the time function returns the task will be back in the queue.
+        """
+        self._loop_scheduler.await_(self._task.requeue())
 
     @contextmanager
     def processing(self):
-        with self._loop_scheduler.ctx(self._task.processing()) as outcome:
+        with self._loop_scheduler.async_ctx(self._task.processing()) as outcome:
             yield outcome
 
 

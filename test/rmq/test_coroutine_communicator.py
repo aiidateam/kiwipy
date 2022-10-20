@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import gc
 
 import pytest
+import shortuuid
 
 import kiwipy
 import kiwipy.rmq
@@ -208,3 +210,36 @@ def test_server_properties(communicator: kiwipy.rmq.RmqCommunicator):
     assert props['product'] == 'RabbitMQ'
     assert 'version' in props
     assert props['platform'].startswith('Erlang')
+
+
+@pytest.mark.asyncio
+async def test_queue_task_forget(communicator: kiwipy.rmq.RmqCommunicator):
+    """
+    Check what happens when we forget to process a task we said we would
+    WARNING: This test may fail when running with a debugger as it relies on the 'outcome'
+    reference count dropping to zero but the debugger may be preventing this.
+    """
+    task_queue_name = f'{__file__}.{shortuuid.uuid()}'
+    task_queue = await communicator.task_queue(task_queue_name)
+
+    outcomes = [await task_queue.task_send(1)]
+
+    # Get the first task and say that we will process it
+    outcome = None
+    async with task_queue.next_task() as task:
+        outcome = task.process()
+
+    with pytest.raises(kiwipy.exceptions.QueueEmpty):
+        async with task_queue.next_task():
+            pass
+
+    # Now let's 'forget' i.e. lose the outcome
+    del outcome
+    gc.collect()
+
+    # Now the task should be back in the queue
+    async with task_queue.next_task() as task:
+        task.process().set_result(10)
+
+    await asyncio.wait(outcomes)
+    assert outcomes[0].result() == 10
