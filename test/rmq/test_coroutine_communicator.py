@@ -216,7 +216,7 @@ def test_server_properties(communicator: kiwipy.rmq.RmqCommunicator):
 async def test_queue_task_forget(communicator: kiwipy.rmq.RmqCommunicator):
     """
     Check what happens when we forget to process a task we said we would
-    WARNING: This test mail fail when running with a debugger as it relies on the 'outcome'
+    WARNING: This test may fail when running with a debugger as it relies on the 'outcome'
     reference count dropping to zero but the debugger may be preventing this.
     """
     task_queue_name = f'{__file__}.{shortuuid.uuid()}'

@@ -131,9 +131,6 @@ def test_queue_get_next(thread_task_queue: rmq.RmqThreadTaskQueue):
         with task.processing() as outcome:
             assert task.body == 'Hello!'
             outcome.set_result('Goodbye')
-            print('test_queue_get_next leaving processing() ctx')
-        print('test_queue_get_next leaving next_task() ctx')
-    print('test_queue_get_next getting result.result()')
     assert result.result() == 'Goodbye'
 
 
@@ -186,7 +183,7 @@ def test_queue_iter_not_process(thread_task_queue: rmq.RmqThreadTaskQueue):
 def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
     """
     Check what happens when we forget to process a task we said we would
-    WARNING: This test mail fail when running with a debugger as it relies on the 'outcome'
+    WARNING: This test may fail when running with a debugger as it relies on the 'outcome'
     reference count dropping to zero but the debugger may be preventing this.
     """
     outcomes = [thread_task_queue.task_send(1)]
