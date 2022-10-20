@@ -5,6 +5,7 @@ function of RmqThreadCommunicator is that users should be completely shielded fr
 """
 # pylint: disable=invalid-name, redefined-outer-name
 import concurrent.futures
+import gc
 import pathlib
 import unittest
 
@@ -42,9 +43,7 @@ def thread_communicator():
 @pytest.fixture
 def thread_task_queue(thread_communicator: rmq.RmqThreadCommunicator):
     task_queue_name = f'{__file__}.{shortuuid.uuid()}'
-
     task_queue = thread_communicator.task_queue(task_queue_name)
-
     yield task_queue
 
 
@@ -132,6 +131,9 @@ def test_queue_get_next(thread_task_queue: rmq.RmqThreadTaskQueue):
         with task.processing() as outcome:
             assert task.body == 'Hello!'
             outcome.set_result('Goodbye')
+            print('test_queue_get_next leaving processing() ctx')
+        print('test_queue_get_next leaving next_task() ctx')
+    print('test_queue_get_next getting result.result()')
     assert result.result() == 'Goodbye'
 
 
@@ -200,6 +202,7 @@ def test_queue_task_forget(thread_task_queue: rmq.RmqThreadTaskQueue):
 
     # Now let's 'forget' i.e. lose the outcome
     del outcome
+    gc.collect()
 
     # Now the task should be back in the queue
     with thread_task_queue.next_task() as task:

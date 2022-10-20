@@ -3,12 +3,11 @@ import asyncio
 import collections
 from contextlib import asynccontextmanager
 import logging
-from typing import Optional
+from typing import Generator, Optional
 import uuid
 import weakref
 
 import aio_pika
-from async_generator import async_generator, yield_
 import shortuuid
 
 import kiwipy
@@ -94,14 +93,13 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
 
         await self._create_task_queue()
 
-    @async_generator
     async def __aiter__(self):
         tasks = []
         try:
             while True:
                 task = RmqIncomingTask(self, await self._task_queue.get(timeout=1.))
                 tasks.append(task)
-                await yield_(task)
+                yield task
         except aio_pika.exceptions.QueueEmpty:
             return
         finally:
@@ -111,8 +109,10 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
                     await task.requeue()
 
     @asynccontextmanager
-    @async_generator
-    async def next_task(self, no_ack=False, fail=True, timeout=defaults.TASK_FETCH_TIMEOUT):
+    async def next_task(self,
+                        no_ack=False,
+                        fail=True,
+                        timeout=defaults.TASK_FETCH_TIMEOUT) -> Generator['RmqIncomingTask', None, None]:
         """
         Get the next task from the queue.
 
@@ -126,7 +126,7 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         else:
             task = RmqIncomingTask(self, message)
             try:
-                await yield_(task)
+                yield task
             finally:
                 if task.state == TASK_PENDING:
                     await task.requeue()
@@ -250,9 +250,10 @@ class RmqIncomingTask:
         self._finalise()
 
     @asynccontextmanager
-    async def processing(self):
+    async def processing(self) -> Generator[asyncio.Future, None, None]:
         """Processing context.  The task should be done at the end otherwise it's assumed the
         caller doesn't want to process it, and it's sent back to the queue"""
+
         if self._state != TASK_PENDING:
             raise asyncio.InvalidStateError(f'The task is {self._state}')
 
@@ -310,7 +311,7 @@ class RmqIncomingTask:
         assert outcome_ref is self._outcome_ref
         # This task will not be processed
         self._outcome_ref = None
-        self._loop.create_task(self.requeue())
+        asyncio.run_coroutine_threadsafe(self.requeue(), loop=self._loop)
 
     def _finalise(self):
         self._outcome_ref = None
@@ -421,13 +422,12 @@ class RmqTaskQueue:
             testing_mode=testing_mode
         )
 
-    @async_generator
     async def __aiter__(self):
         # Have to do it this way rather than the more convenient yield from style because
         # python doesn't support it for coroutines.  See:
         # https://stackoverflow.com/questions/47376408/why-cant-i-yield-from-inside-an-async-function
         async for task in self._subscriber:
-            await yield_(task)
+            yield task
 
     async def task_send(self, task, no_reply: bool = False):
         """Send a task to the queue"""
@@ -440,10 +440,9 @@ class RmqTaskQueue:
         return await self._subscriber.remove_task_subscriber(identifier)
 
     @asynccontextmanager
-    @async_generator
     async def next_task(self, no_ack=False, fail=True, timeout=defaults.TASK_FETCH_TIMEOUT):
         async with self._subscriber.next_task(no_ack=no_ack, fail=fail, timeout=timeout) as task:  # pylint: disable=not-async-context-manager
-            await yield_(task)
+            yield task
 
     async def connect(self):
         await self._subscriber.connect()
