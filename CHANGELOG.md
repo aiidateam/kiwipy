@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.2 2022-10-28
+
+### Dependencies
+
+- Dependencies: Remove `aio-pika` and `pytray` from base requirements [[#126]](https://github.com/aiidateam/kiwipy/pull/126)
+- Dependencies: Remove the `nest-asyncio` requirement [[#126]](https://github.com/aiidateam/kiwipy/pull/126)
+
+
 ## v0.8.1 2022-10-20
 
 ### Fixes
