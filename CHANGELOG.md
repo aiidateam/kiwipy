@@ -1,14 +1,22 @@
 # Changelog
 
-## v0.8.2 2022-10-28
+## `v0.8.3` - 2022-11-21
 
 ### Dependencies
 
-- Dependencies: Remove `aio-pika` and `pytray` from base requirements [[#126]](https://github.com/aiidateam/kiwipy/pull/126)
-- Dependencies: Remove the `nest-asyncio` requirement [[#126]](https://github.com/aiidateam/kiwipy/pull/126)
+- Add support for Python 3.11 [[#129]](https://github.com/aiidateam/kiwipy/pull/129)
+- Update requirement `pyyaml~=6.0` [[#128]](https://github.com/aiidateam/kiwipy/pull/128)
 
 
-## v0.8.1 2022-10-20
+## `v0.8.2` - 2022-10-28
+
+### Dependencies
+
+- Remove `aio-pika` and `pytray` from base requirements [[#126]](https://github.com/aiidateam/kiwipy/pull/126)
+- Remove the `nest-asyncio` requirement [[#126]](https://github.com/aiidateam/kiwipy/pull/126)
+
+
+## `v0.8.1` - 2022-10-20
 
 ### Fixes
 
@@ -24,7 +32,7 @@
 - Unpin `docutils` from the `docs` extra [[#123]](https://github.com/aiidateam/kiwipy/pull/123)
 
 
-## v0.8.0 2022-10-13
+## `v0.8.0` - 2022-10-13
 
 ### Dependencies
 
@@ -40,30 +48,30 @@
 - Update the continuous deployment workflow [[#121]](https://github.com/aiidateam/kiwipy/pull/121)
 
 
-## v0.7.6 2022-08-05
+## `v0.7.6` - 2022-08-05
 
 - Dependencies: restrict ranges of `aio-pika<6.8.2` and `pamqp~=2.0` [[#108]](https://github.com/aiidateam/kiwipy/pull/110)
 
-## v0.7.5 2022-01-17
+## `v0.7.5` - 2022-01-17
 
 - Drop support for Python 3.6 [[#108]](https://github.com/aiidateam/kiwipy/pull/108)
 - `RmqCommunicator`: add the `server_properties` property [[#107]](https://github.com/aiidateam/kiwipy/pull/107)
 - Expose `aio_pika.Connection.add_close_callback` [[#104]](https://github.com/aiidateam/kiwipy/pull/104)
 
-## v0.7.4 2021-03-02
+## `v0.7.4` - 2021-03-02
 
 - ♻️ REFACTOR: BroadcastFilter to extract filter conditions into a separate `is_filtered` method.
 
-## v0.7.3 2021-02-24
+## `v0.7.3` - 2021-02-24
 
 - 👌 IMPROVE: Add debug logging for sending task/rpc/broadcast to RMQ.
 - 👌 IMPROVE: Close created asyncio loop on RmqThreadCommunicator.close
 
-## v0.7.2 2021-02-11
+## `v0.7.2` - 2021-02-11
 
 - 🐛 FIX: an aio-pika deprecation, to use async context managers when processing messages.
 
-## v0.7.1
+## `v0.7.1` - 2020-12-09
 
 The default task message TTL setting was changed in `v0.5.4` but this breaks existing queues since RabbitMQ does not allow changing these parameters on existing queues.
 Therefore the change was reverted which was released in `v0.5.5`.
@@ -74,7 +82,7 @@ The same revert is applied in this release to restore original functionality.
 - Revert "Increase the default TTL for task messages" [[#93]](https://github.com/aiidateam/kiwipy/pull/93)
 
 
-## v0.7.0
+## `v0.7.0` - 2020-11-04
 
 ### Changes
 - Add support for Python 3.9 [[#87]](https://github.com/aiidateam/kiwipy/pull/87)
