@@ -43,10 +43,11 @@ setup(
         'tests': [
             'coverage',
             'ipykernel',
+            'importlib-resources~=5.2',
             'pytest-cov',
             'pytest~=6.0',
             'pytest-asyncio~=0.12,<0.17',
-            'pytest-notebook>=0.7',
+            'pytest-notebook>=0.8.1',
             'pytest-benchmark',
             'pika',
             'msgpack',
