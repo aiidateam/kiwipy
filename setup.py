@@ -44,7 +44,7 @@ setup(
             'coverage',
             'ipykernel',
             'pytest-cov',
-            'pytest~=5.4',
+            'pytest~=6.0',
             'pytest-asyncio~=0.12,<0.17',
             'pytest-notebook>=0.7',
             'pytest-benchmark',
