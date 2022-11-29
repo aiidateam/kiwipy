@@ -1,8 +1,16 @@
 # Changelog
 
+## v0.7.7 2022-08-05
+
+- Dependencies: Add support for Python 3.10 and 3.11 [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+- Dependencies: Update requirement `pytest-notebook>=0.8.1` [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+- Dependencies: Unpin requirement `docutils` [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+- Dependencies: Update requirement `pytest~=6.0` [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+- Dependencies: Update requirement `pyyaml~=6.0` [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+
 ## v0.7.6 2022-08-05
 
-- Dependencies: restrict ranges of `aio-pika<6.8.2` and `pamqp~=2.0` [[#108]](https://github.com/aiidateam/kiwipy/pull/110)
+- Dependencies: restrict ranges of `aio-pika<6.8.2` and `pamqp~=2.0` [[#110]](https://github.com/aiidateam/kiwipy/pull/110)
 
 ## v0.7.5 2022-01-17
 
