@@ -31,7 +31,7 @@ setup(
     python_requires='>=3.7',
     extras_require={
         'docs': [
-            'docutils==0.14',
+            'docutils',
             'jupyter',  # For running doc examples
             'nbsphinx',  # Jupyter notebooks in docs
             'pandoc',
