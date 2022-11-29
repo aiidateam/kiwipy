@@ -48,6 +48,17 @@
 - Update the continuous deployment workflow [[#121]](https://github.com/aiidateam/kiwipy/pull/121)
 
 
+## `v0.7.7` - 2022-11-29
+
+### Dependencies
+
+- Add support for Python 3.10 and 3.11 [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+- Update requirement `pytest-notebook>=0.8.1` [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+- Unpin requirement `docutils` [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+- Update requirement `pytest~=6.0` [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+- Update requirement `pyyaml~=6.0` [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
+
+
 ## `v0.7.6` - 2022-08-05
 
 - Dependencies: restrict ranges of `aio-pika<6.8.2` and `pamqp~=2.0` [[#108]](https://github.com/aiidateam/kiwipy/pull/110)
