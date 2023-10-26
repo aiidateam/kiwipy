@@ -22,6 +22,7 @@ classifiers = [
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
     'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
 ]
 keywords = ['ommunication', 'messaging', 'rpc', 'broadcast']
 requires-python = '>=3.8'
@@ -60,7 +61,7 @@ tests = [
     'pytest-cov',
     'pytest~=7.0',
     'pytest-asyncio~=0.12,<0.17',
-    'pytest-notebook>=0.7',
+    'pytest-notebook>=0.9',
     'pytest-benchmark',
     'pika',
     'msgpack',
