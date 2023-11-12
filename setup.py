@@ -40,7 +40,7 @@ setup(
             'sphinx',
             'sphinx-autobuild',
         ],
-        'pre-commit': ['pre-commit~=2.2', 'pylint==2.5.2'],
+        'pre-commit': ['pre-commit~=2.2'],
         'rmq': ['aio-pika~=6.6,<6.8.2', 'pamqp~=2.0', 'pyyaml~=6.0'],
         'tests': [
             'coverage',
