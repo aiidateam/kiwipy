@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=cyclic-import
 import asyncio
 import collections
 import contextlib

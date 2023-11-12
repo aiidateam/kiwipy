@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=cyclic-import
 import asyncio
 from contextlib import contextmanager
 import concurrent.futures
@@ -132,7 +133,6 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         "replacement and the class should be reinstantiated if it's been closed."
     )
     def start(self):
-        # pylint: disable=no-self-use
         raise DeprecationWarning(
             'This method was deprecated in v0.6.0 and will be removed in 0.7.0.  There is no '
             "replacement and the class should be reinstantiated if it's been closed."

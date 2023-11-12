@@ -30,7 +30,7 @@ repos:
         types: [python]
 
   - repo: https://github.com/PyCQA/pylint
-    rev: pylint-2.5.2
+    rev: 'v2.17.7'
     hooks:
       - id: pylint
         additional_dependencies:
@@ -41,7 +41,7 @@ repos:
             "deprecation",
             "aio-pika~=6.6,<6.8.2",
             "pamqp~=2.0",
-            "pyyaml~=5.1",
+            "pyyaml~=6.0",
             "pytest~=5.4",
             "pytest-notebook",
             "pika",
@@ -53,10 +53,16 @@ repos:
             "--disable=duplicate-code",
             "--disable=import-outside-toplevel",
             "--disable=missing-docstring",
-            "--disable=bad-continuation",
             "--disable=locally-disabled",
             "--disable=too-few-public-methods",
             "--disable=too-many-arguments",
             "--disable=too-many-instance-attributes",
+            "--disable=unspecified-encoding",
+            "--disable=consider-using-with",
+            "--disable=no-else-raise",
+            "--disable=raise-missing-from",
+            "--disable=not-async-context-manager",
+            "--disable=superfluous-parens",
+            "--disable=use-list-literal",
           ]
         exclude: *exclude_files
