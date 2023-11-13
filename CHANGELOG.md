@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.8 2023-11-13
+
+- Dependencies: Add support for Python 3.12 [[7aef66f]](https://github.com/aiidateam/kiwipy/commit/7aef66f69e34386aff78a9b9ac988fc377ca49e5)
+- Dependencies: Drop support Python 3.7 [[08e77e9]](https://github.com/aiidateam/kiwipy/commit/08e77e96e48de92391cea3c4c0ef7fadb0e0a23e)
+- Dependencies: Update `pylint==2.17.7` [[5fafe43]](https://github.com/aiidateam/kiwipy/commit/5fafe43c8dc4c5a6f6a3d2ffb6383db2fd97a246)
+- Devops: Fix the ReadTheDocs build [[59cd6f4]](https://github.com/aiidateam/kiwipy/commit/59cd6f40974e764db03bf127f34adc9f5ec1a4a4)
+
 ## v0.7.7 2022-08-05
 
 - Dependencies: Add support for Python 3.10 and 3.11 [[#130]](https://github.com/aiidateam/kiwipy/pull/130)
