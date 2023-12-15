@@ -116,6 +116,7 @@ class RmqSubscriber:
         self._broadcast_queue = None  # type: typing.Optional[aio_pika.Queue]
         self._broadcast_consumer_tag = None
 
+    @utils.auto_reopen_channel
     async def add_rpc_subscriber(self, subscriber, identifier=None):
         # Create an RPC queue
         rpc_queue = await self._channel.declare_queue(exclusive=True, arguments=self._rmq_queue_arguments)
@@ -129,6 +130,7 @@ class RmqSubscriber:
             self._rpc_subscribers[identifier] = rpc_queue
             return identifier
 
+    @utils.auto_reopen_channel
     async def remove_rpc_subscriber(self, identifier):
         try:
             rpc_queue = self._rpc_subscribers.pop(identifier)
@@ -138,6 +140,7 @@ class RmqSubscriber:
             await rpc_queue.cancel(identifier)
             await rpc_queue.unbind(self._exchange, routing_key=f'{defaults.RPC_TOPIC}.{identifier}')
 
+    @utils.auto_reopen_channel
     async def add_broadcast_subscriber(self, subscriber, identifier=None):
         identifier = identifier or shortuuid.uuid()
         if identifier in self._broadcast_subscribers:
@@ -149,6 +152,7 @@ class RmqSubscriber:
             self._broadcast_consumer_tag = await self._broadcast_queue.consume(self._on_broadcast)
         return identifier
 
+    @utils.auto_reopen_channel
     async def remove_broadcast_subscriber(self, identifier):
         try:
             del self._broadcast_subscribers[identifier]
@@ -177,6 +181,7 @@ class RmqSubscriber:
 
         await self._create_broadcast_queue()
 
+    @utils.auto_reopen_channel
     async def _create_broadcast_queue(self):
         """
         Create and bind the broadcast queue
@@ -593,9 +598,9 @@ async def async_connect(
     """
     connection_params = connection_params or {}
     if isinstance(connection_params, dict):
-        connection = await connection_factory(**connection_params)
+        connection = await connection_factory(**connection_params, reconnect_interval=1, fail_fast=False)
     else:
-        connection = await connection_factory(connection_params)
+        connection = await connection_factory(connection_params, reconnect_interval=1, fail_fast=False)
 
     communicator = RmqCommunicator(
         connection=connection,

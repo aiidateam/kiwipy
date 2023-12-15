@@ -3,9 +3,12 @@ import asyncio
 import collections.abc
 import functools
 import inspect
+import logging
 import os
 import socket
 import traceback
+
+import aio_pika
 
 from kiwipy import exceptions
 
@@ -19,6 +22,37 @@ RESULT_KEY = 'result'
 EXCEPTION_KEY = 'exception'
 CANCELLED_KEY = 'cancelled'
 PENDING_KEY = 'pending'
+
+
+def auto_reopen_channel(wrapped):
+    """Call the wrapped method and automatically recover from closed channels and connections.
+
+    This decorator should be used on methods that attempt to use the open channel. It calls the method catching
+    :class:`aio_pika.ChannelInvalidStateError`, which is thrown when the channel was closed. RabbitMQ will close
+    channels if a call is made over it that errors, in order to protect other channels that may be using the same
+    connection. The decorator will attempt to reopen the channel. If the connection has also closed, it will wait
+    for it to be restored throught the robust connection mechanism.
+    """
+    logger = logging.getLogger(auto_reopen_channel.__name__)
+
+    async def wrapper(self, *args, **kwargs):
+        from aio_pika.exceptions import ChannelInvalidStateError
+
+        while True:
+            try:
+                return await wrapped(self, *args, **kwargs)
+            except ChannelInvalidStateError as exception:
+                # This is thrown when the ``Channel`` was closed, so attempt to reopen it.
+                logger.exception('Channel was closed: <%s>. Attempting to reopen it.', exception)
+                try:
+                    await self._channel.reopen()  # pylint: disable=protected-access
+                except RuntimeError as exc:
+                    logger.exception(
+                        'Caught `RuntimeError`: %s . Maybe connection closed, waiting for it to be restored', exc
+                    )
+                    await asyncio.sleep(2)
+
+    return wrapper
 
 
 def get_host_info():

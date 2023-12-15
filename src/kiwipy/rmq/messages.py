@@ -196,6 +196,7 @@ class BasePublisherWithReplyQueue:
         message.send(self)
         return message.future
 
+    @utils.auto_reopen_channel
     async def publish(self, message, routing_key, mandatory=True):
         """
         Send a fire-and-forget message i.e. no response expected.
@@ -208,6 +209,7 @@ class BasePublisherWithReplyQueue:
         result = await self._exchange.publish(message, routing_key=routing_key, mandatory=mandatory)
         return result
 
+    @utils.auto_reopen_channel
     async def publish_expect_response(self, message, routing_key, mandatory=True):
         # If there is no correlation id we have to set on so that we know what the response will be to
         if not message.correlation_id:
