@@ -8,7 +8,7 @@ Installation
 Python
 ------
 
-KiwiPy supports Python versions 3.7 and above.
+KiwiPy supports Python versions 3.8 and above.
 
 RabbitMQ
 --------
