@@ -1,5 +1,16 @@
 # Changelog
 
+## `v0.8.4` - 2024-02-02
+
+### Dependencies
+- Drop support for Python 3.7 [[8adf324]](https://github.com/aiidateam/kiwipy/commit/8adf3245e8d2de7ab96304a21f4c25381683d714)
+- Update requirement `aio-pika~=9.0` [[e6538e6]](https://github.com/aiidateam/kiwipy/commit/e6538e60c832fcbc61165c3dc7bfa209a957984b)
+- Update `isort==5.12.0` [[bb0c7b6]](https://github.com/aiidateam/kiwipy/commit/bb0c7b6ae994f736f57dbf5c2b84b8f9e0dd77e1)
+
+### Devops
+- Update ReadTheDocs configuration file [[8a7bcf6]](https://github.com/aiidateam/kiwipy/commit/8a7bcf6ba3caf3191ad3085ea0c317f157aad11a)
+
+
 ## `v0.8.3` - 2022-11-21
 
 ### Dependencies
