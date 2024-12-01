@@ -2,7 +2,6 @@
 import asyncio
 import collections
 from contextlib import asynccontextmanager
-from functools import partial
 import logging
 from typing import Generator, Optional
 import uuid
@@ -20,12 +19,6 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = 'RmqTaskSubscriber', 'RmqTaskPublisher', 'RmqTaskQueue', 'RmqIncomingTask'
 
 TaskInfo = collections.namedtuple('TaskBody', ('task', 'no_reply'))
-
-try:
-    run_coroutine = asyncio.eager_task_factory
-except AttributeError:
-    # For Python older than 3.12
-    run_coroutine = asyncio.run_coroutine_threadsafe
 
 
 class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
@@ -318,7 +311,7 @@ class RmqIncomingTask:
         assert outcome_ref is self._outcome_ref
         # This task will not be processed
         self._outcome_ref = None
-        partial(run_coroutine, loop=self._loop)(coro=self.requeue())
+        asyncio.run_coroutine_threadsafe(self.requeue(), loop=self._loop)
 
     def _finalise(self):
         self._outcome_ref = None
