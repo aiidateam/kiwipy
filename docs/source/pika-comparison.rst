@@ -4,7 +4,7 @@
 .. _work queues: https://www.rabbitmq.com/tutorials/tutorial-two-python.html
 .. _topics: https://www.rabbitmq.com/tutorials/tutorial-five-python.html
 .. _RPC: https://www.rabbitmq.com/tutorials/tutorial-six-python.html
-.. _aio-pika: https://aio-pika.readthedocs.io/en/latest/index.html
+.. _aio-pika: https://docs.aio-pika.com/index.html
 
 Coming from Pika
 ================
