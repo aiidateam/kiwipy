@@ -55,7 +55,7 @@ extensions = [
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3.8', None),
-    'aio_pika': ('https://aio-pika.readthedocs.io/en/latest/', None)
+    'aio_pika': ('https://docs.aio-pika.com/', None)
 }
 
 # Add any paths that contain templates here, relative to this directory.

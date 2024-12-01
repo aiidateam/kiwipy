@@ -1,5 +1,5 @@
 .. _pika: https://pika.readthedocs.io/en/stable/
-.. _aio-pika: https://pika.readthedocs.io/en/stable/
+.. _aio-pika: https://docs.aio-pika.com/
 .. _msgpack: https://github.com/msgpack/msgpack-python
 
 
