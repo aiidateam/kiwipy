@@ -119,6 +119,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         raises:
             kiwipy.exceptions.QueueEmpty: When the queue has no tasks within the timeout
         """
+        # relinquish so that if there is requeue coroutines, they are run first and task queue get updated
+        await asyncio.sleep(0)
+
         try:
             message = await self._task_queue.get(no_ack=no_ack, fail=fail, timeout=timeout)
         except aio_pika.exceptions.QueueEmpty as exc:
