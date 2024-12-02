@@ -1,5 +1,18 @@
 # Changelog
 
+## `v0.8.5` - 2024-12-02
+
+### Dependencies
+- Add support for Python 3.12 [[ece863e]](https://github.com/aiidateam/kiwipy/commit/ece863e3bb6d510d9d52d1d3894a1a16aac97358)
+- Temporarily pin `aio-pika~=9.4.0` [[2559607]](https://github.com/aiidateam/kiwipy/commit/2559607f870f1c73cc679c5690c0b9cde0d2c3fd)
+
+### Fixes
+- Refresh task queue first before get task from queue [[2434b44]](https://github.com/aiidateam/kiwipy/commit/2434b44dfe2829b3d98948ce6c77425ad2725067)
+
+### Devops
+- Update documentation link for `aio-pika` inventory [[18248d4]](https://github.com/aiidateam/kiwipy/commit/18248d46f8eb4a45f51af83f0bce1ca9be187539)
+
+
 ## `v0.8.4` - 2024-02-02
 
 ### Dependencies

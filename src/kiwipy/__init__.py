@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Robust, high-volume, message based communication made easy."""
-__version__ = '0.8.4'
+__version__ = '0.8.5'
 
 import logging
 
