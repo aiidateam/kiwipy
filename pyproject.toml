@@ -52,7 +52,7 @@ pre-commit = [
 ]
 rmq = [
     'aio-pika~=9.4.0',
-    'pamqp~=3.2',
+    'pamqp~=3.3',
     'pytray>=0.3.4,<0.4.0',
 ]
 tests = [
