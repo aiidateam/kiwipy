@@ -1,5 +1,14 @@
 # Changelog
 
+## `v0.9.0` - 2025-10-21
+
+### Dependencies
+- bump `aio-pika~=9.5.0` [[#143]](https://github.com/aiidateam/kiwipy/pull/143) to take the fix to gracefully close comm channel.
+
+### Devops
+- Stop support for py3.8, start support for py3.13 [#140](https://github.com/aiidateam/kiwipy/pull/140)
+- Update the the readthedocs yaml to v2 and py39 [4d7678c](https://github.com/aiidateam/kiwipy/commit/4d7678c3b0cc614bc7ea3c37be8030b7458e48b0)
+
 ## `v0.8.5` - 2024-12-02
 
 ### Dependencies
