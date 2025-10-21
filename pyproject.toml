@@ -51,7 +51,7 @@ pre-commit = [
     'pylint==2.12.2',
 ]
 rmq = [
-    'aio-pika~=9.4.0',
+    'aio-pika~=9.5.0',
     'pamqp~=3.2',
     'pytray>=0.3.4,<0.4.0',
 ]
