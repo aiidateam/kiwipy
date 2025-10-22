@@ -107,7 +107,7 @@ def future_to_response(future):
 
 
 def ensure_coroutine(coro_or_fn):
-    if asyncio.iscoroutinefunction(coro_or_fn):
+    if inspect.iscoroutinefunction(coro_or_fn):
         return coro_or_fn
     if callable(coro_or_fn):
         if inspect.isclass(coro_or_fn):
