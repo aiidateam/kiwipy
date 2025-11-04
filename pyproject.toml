@@ -28,7 +28,6 @@ classifiers = [
 keywords = ['ommunication', 'messaging', 'rpc', 'broadcast']
 requires-python = '>=3.9'
 dependencies = [
-    'deprecation',
     'pyyaml~=6.0',
     'shortuuid',
 ]
