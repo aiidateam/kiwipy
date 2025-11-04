@@ -15,7 +15,7 @@ jobs:
                 python-version: '3.9'
 
         -   name: Install Python dependencies
-            run: pip install -e .[pre-commit,rmq]
+            run: pip install -e .[pre-commit,rmq,tests]
 
         -   name: Run pre-commit
             run: pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
