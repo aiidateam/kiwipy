@@ -7,15 +7,15 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v6
 
         -   name: Set up Python 3.9
-            uses: actions/setup-python@v2
+            uses: actions/setup-python@v6
             with:
                 python-version: '3.9'
 
         -   name: Install Python dependencies
-            run: pip install -e .[pre-commit,rmq,tests]
+            run: pip install -e .[pre-commit,rmq]
 
         -   name: Run pre-commit
             run: pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
@@ -41,10 +41,10 @@ jobs:
                     - 5672:5672
 
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v6
 
         -   name: Set up Python ${{ matrix.python-version }}
-            uses: actions/setup-python@v2
+            uses: actions/setup-python@v6
             with:
                 python-version: ${{ matrix.python-version }}
 
@@ -59,7 +59,9 @@ jobs:
 
         -   name: Upload coverage to Codecov
             if: github.repository == 'aiidateam/kiwipy'
-            uses: codecov/codecov-action@v2
+            uses: codecov/codecov-action@v5
             with:
                 file: ./coverage.xml
                 name: kiwipy
+                token: ${{ secrets.CODECOV_TOKEN }}
+                fail_ci_if_error: false  # don't fail job, if coverage upload fails

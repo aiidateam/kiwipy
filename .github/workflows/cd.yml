@@ -14,10 +14,10 @@ jobs:
 
         steps:
         -   name: Checkout source
-            uses: actions/checkout@v2
+            uses: actions/checkout@v6
 
         -   name: Set up Python 3.9
-            uses: actions/setup-python@v2
+            uses: actions/setup-python@v6
             with:
                 python-version: '3.9'
 
@@ -30,18 +30,10 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-        -   uses: actions/checkout@v2
-
-        -   name: Cache Python dependencies
-            uses: actions/cache@v4
-            with:
-                path: ~/.cache/pip
-                key: pip-pre-commit-${{ hashFiles('**/setup.json') }}
-                restore-keys:
-                    pip-pre-commit-
+        -   uses: actions/checkout@v6
 
         -   name: Set up Python
-            uses: actions/setup-python@v2
+            uses: actions/setup-python@v6
             with:
                 python-version: '3.9'
 
@@ -58,7 +50,7 @@ jobs:
 
         strategy:
             matrix:
-                python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+                python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
 
         services:
             rabbitmq:
@@ -67,18 +59,10 @@ jobs:
                 -   5672:5672
 
         steps:
-        -   uses: actions/checkout@v2
-
-        -   name: Cache Python dependencies
-            uses: actions/cache@v4
-            with:
-                path: ~/.cache/pip
-                key: pip-${{ matrix.python-version }}-tests-${{ hashFiles('**/setup.json') }}
-                restore-keys:
-                    pip-${{ matrix.python-version }}-tests
+        -   uses: actions/checkout@v6
 
         -   name: Set up Python ${{ matrix.python-version }}
-            uses: actions/setup-python@v2
+            uses: actions/setup-python@v6
             with:
                 python-version: ${{ matrix.python-version }}
 
@@ -96,10 +80,10 @@ jobs:
 
         steps:
         -   name: Checkout source
-            uses: actions/checkout@v2
+            uses: actions/checkout@v6
 
         -   name: Set up Python 3.9
-            uses: actions/setup-python@v2
+            uses: actions/setup-python@v6
             with:
                 python-version: '3.9'
 
