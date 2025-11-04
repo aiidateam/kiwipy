@@ -8,7 +8,7 @@ Installation
 Python
 ------
 
-KiwiPy supports Python versions 3.8 and above.
+KiwiPy supports Python versions 3.9 and above.
 
 RabbitMQ
 --------
@@ -41,12 +41,12 @@ First, clone the source:
 
    $ git clone https://github.com/aiidateam/kiwipy.git
 
-Then, create and activate a virtualenv:
+Then, create and activate a venv:
 
 .. code-block:: shell
 
-    virtualenv venv
-    . venv/bin/activate
+    python -m venv .venv
+    . .venv/bin/activate
     pip install -e "kiwipy[rmq,pre-commit,tests]"
 
 To run the tests, make sure the RabbitMQ server is up and running (see the RabbitMQ documentation on how to accomplish and/or verify this) and type:
