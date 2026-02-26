@@ -157,7 +157,8 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             for subscriber in self._subscribers.values():
                 try:
                     subscriber = utils.ensure_coroutine(subscriber)
-                    result = await subscriber(self, rmq_task.body)
+                    # Pass task object as third argument for early reply capability
+                    result = await subscriber(self, rmq_task.body, rmq_task)
 
                     # If a task returns a future it is not considered done until the chain of
                     # futures (i.e. if the first future resolves to a future and so on) finishes
