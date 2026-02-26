@@ -218,6 +218,7 @@ class RmqIncomingTask:
         self._state = TASK_PENDING
         self._outcome_ref = None  # type: Optional[weakref.ReferenceType]
         self._loop = self._subscriber.loop()
+        self._early_reply_sent = False
 
     @property
     def body(self) -> str:
@@ -230,6 +231,30 @@ class RmqIncomingTask:
     @property
     def state(self) -> str:
         return self._state
+
+    @property
+    def early_reply_sent(self) -> bool:
+        """Return True if an early reply has already been sent."""
+        return self._early_reply_sent
+
+    async def send_early_response(self, result) -> bool:
+        """Send a response without acknowledging the message.
+
+        This allows confirming receipt/progress while keeping the task slot blocked.
+        The message will be acknowledged when the task handler completes.
+
+        :param result: The result to send as the response
+        :return: True if response was sent, False if no_reply is set or already sent
+        """
+        if self.no_reply:
+            return False
+        if self._early_reply_sent:
+            return False
+
+        reply_body = utils.result_response(result)
+        await self._subscriber._send_response(reply_body, self._message)
+        self._early_reply_sent = True
+        return True
 
     def process(self) -> asyncio.Future:
         if self._state != TASK_PENDING:
@@ -300,7 +325,7 @@ class RmqIncomingTask:
             except Exception as exc:  # pylint: disable=broad-except
                 reply_body = utils.exception_response(exc)
 
-            if not self.no_reply:
+            if not self.no_reply and not self._early_reply_sent:
                 # Schedule a task to send the appropriate response
                 # pylint: disable=protected-access
                 await self._subscriber._send_response(reply_body, self._message)
