@@ -53,7 +53,7 @@ async def test_task_send(communicator: kiwipy.rmq.RmqCommunicator):
 
     tasks = []
 
-    def on_task(_comm, task, _incoming_task):
+    def on_task(_comm, task):
         tasks.append(task)
         return RESULT
 
@@ -77,7 +77,7 @@ async def test_future_task(communicator: kiwipy.rmq.RmqCommunicator):
 
     tasks = []
 
-    def on_task(_comm, task, _incoming_task):
+    def on_task(_comm, task):
         tasks.append(task)
         return result_future
 
@@ -104,7 +104,7 @@ async def test_task_exception(communicator: kiwipy.rmq.RmqCommunicator):
 
     tasks = []
 
-    def on_task(_comm, task, _incoming_task):
+    def on_task(_comm, task):
         tasks.append(task)
         raise RuntimeError('I cannea do it Captain!')
 
@@ -127,7 +127,7 @@ async def test_task_no_reply(communicator: kiwipy.rmq.RmqCommunicator):
 
     task_future = asyncio.Future()
 
-    def on_task(_comm, task, _incoming_task):
+    def on_task(_comm, task):
         tasks.append(task)
         task_future.set_result(RESULT)
         return RESULT
@@ -154,7 +154,7 @@ async def test_custom_tasks_queue(communicator: kiwipy.rmq.RmqCommunicator):
 
     task_future = asyncio.Future()
 
-    def on_task(_comm, task, _incoming_task):
+    def on_task(_comm, task):
         tasks.append(task)
         task_future.set_result(RESULT)
         return RESULT

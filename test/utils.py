@@ -196,7 +196,7 @@ class CommunicatorTester(metaclass=abc.ABCMeta):
 
         tasks = []
 
-        def on_task(_com, task):
+        def on_task(_comm, task):
             tasks.append(task)
             raise EXCEPTION
 
