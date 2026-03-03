@@ -520,10 +520,10 @@ class RmqCommunicator:
         result = await publisher.broadcast_send(body, sender, subject, correlation_id)
         return result
 
-    async def task_send(self, task, no_reply=False):
+    async def task_send(self, task, no_reply=False, nowait=False):
         try:
             task_queue = await self.get_default_task_queue()
-            result = await task_queue.task_send(task, no_reply)
+            result = await task_queue.task_send(task, no_reply, nowait)
             return result
         except aio_pika.exceptions.DeliveryError as exception:
             raise kiwipy.UnroutableError(str(exception))

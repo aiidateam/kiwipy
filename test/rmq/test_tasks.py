@@ -305,3 +305,49 @@ async def test_task_processing_exception(task_queue: rmq.RmqTaskQueue):
     with pytest.raises(kiwipy.QueueEmpty):
         async with task_queue.next_task(timeout=1.):
             pass
+
+
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
+@pytest.mark.asyncio
+async def test_early_reply(task_queue: rmq.RmqTaskQueue):
+    """Test that we can send an early reply without acknowledging the message.
+
+    This allows the client to receive confirmation that work has started
+    while the task slot remains blocked until the work completes.
+    """
+    task_future = await task_queue.task_send('Do this')
+
+    async with task_queue.next_task() as task:
+        # Send early reply to confirm receipt
+        sent = await task.send_early_response('started')
+        assert sent is True
+        assert task.early_reply_sent is True
+
+        # Sending again should return False
+        sent_again = await task.send_early_response('started again')
+        assert sent_again is False
+
+        # Complete the task
+        async with task.processing() as outcome:
+            outcome.set_result('completed')
+
+    # The client should receive the early reply ('started'), not the final result
+    result = await task_future
+    assert result == 'started'
+
+
+@unittest.skipIf(not aio_pika, 'Requires aio_pika library and RabbitMQ')
+@pytest.mark.asyncio
+async def test_early_reply_no_reply_mode(task_queue: rmq.RmqTaskQueue):
+    """Test that early reply does nothing when no_reply is set."""
+    # Send with no_reply=True
+    await task_queue.task_send('Do this', no_reply=True)
+
+    async with task_queue.next_task() as task:
+        # Early reply should return False when no_reply is set
+        sent = await task.send_early_response('started')
+        assert sent is False
+        assert task.early_reply_sent is False
+
+        async with task.processing() as outcome:
+            outcome.set_result('done')

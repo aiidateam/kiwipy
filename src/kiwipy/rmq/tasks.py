@@ -2,8 +2,9 @@
 import asyncio
 import collections
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 import logging
-from typing import Generator, Optional
+from typing import Generator, Optional, Union
 import uuid
 import weakref
 
@@ -16,9 +17,26 @@ from . import defaults, messages, utils
 
 _LOGGER = logging.getLogger(__name__)
 
-__all__ = 'RmqTaskSubscriber', 'RmqTaskPublisher', 'RmqTaskQueue', 'RmqIncomingTask'
+__all__ = 'RmqTaskSubscriber', 'RmqTaskPublisher', 'RmqTaskQueue', 'RmqIncomingTask', 'TaskResult'
 
-TaskInfo = collections.namedtuple('TaskBody', ('task', 'no_reply'))
+TaskInfo = collections.namedtuple('TaskBody', ('task', 'no_reply', 'nowait'))
+
+
+@dataclass
+class TaskResult:
+    """Result from a task subscriber with immediate ID and deferred result.
+
+    This is used when a subscriber wants to:
+    1. Return an immediate identifier (task_id) that can be sent to the client right away
+    2. Provide a Future that kiwipy will wait on before acknowledging the message
+
+    The reply behavior depends on the `nowait` flag in the task message:
+    - nowait=True: Send {task_id, result: None} immediately, ack when Future done
+    - nowait=False: Wait for Future, send {task_id, result: <resolved>}, then ack
+    """
+
+    task_id: Union[int, str, uuid.UUID]
+    result: kiwipy.Future  # Future resolves to Any, used for reply content
 
 
 class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
@@ -153,33 +171,146 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
         """
         # Decode the message tuple into a task body for easier use
         rmq_task = RmqIncomingTask(self, message)
-        async with rmq_task.processing() as outcome:
-            for subscriber in self._subscribers.values():
-                try:
-                    subscriber = utils.ensure_coroutine(subscriber)
-                    result = await subscriber(self, rmq_task.body)
+        outcome = rmq_task.process()  # Returns Future with done callback for ack
 
-                    # If a task returns a future it is not considered done until the chain of
-                    # futures (i.e. if the first future resolves to a future and so on) finishes
-                    # and produces a concrete result
-                    while asyncio.isfuture(result):
-                        if not rmq_task.no_reply:
-                            await self._send_response(utils.pending_response(), message)
-                        result = await result
-                except kiwipy.TaskRejected:
-                    # Task was rejected by this subscriber, keep trying
-                    continue
-                except kiwipy.CancelledError:
-                    # The subscriber has cancelled their processing of the task
-                    outcome.cancel()
-                except Exception as exc:  # pylint: disable=broad-except
-                    # There was an exception during the processing of this task
-                    outcome.set_exception(exc)
-                    _LOGGER.exception('Exception occurred while processing task.')
+        for subscriber in self._subscribers.values():
+            try:
+                subscriber = utils.ensure_coroutine(subscriber)
+                # Call subscriber with just (comm, task) - kiwipy handles TaskResult internally
+                result = await subscriber(self, rmq_task.body)
+
+                # Handle TaskResult: subscriber returns TaskResult(task_id, result=Future)
+                if isinstance(result, TaskResult):
+                    # If nowait, send task_id immediately as reply
+                    if rmq_task.nowait and not rmq_task.no_reply:
+                        # Send just the task_id for nowait mode
+                        reply_body = utils.result_response(result.task_id)
+                        await self._send_response(reply_body, message)
+                        rmq_task._early_reply_sent = True
+
+                    # Attach callback to wait for result Future and ack when done
+                    self._attach_task_result_callback(result, outcome, rmq_task)
+                    return
+
+                # If a task returns a future, attach a done callback instead of awaiting.
+                # This keeps the task slot blocked (message unacked) until the future resolves.
+                if asyncio.isfuture(result):
+                    if not rmq_task.no_reply:
+                        await self._send_response(utils.pending_response(), message)
+                    self._attach_outcome_callback(result, outcome, rmq_task)
+                    return  # Don't block - ack happens when result future resolves
+
+                # Non-future result: complete immediately
+                outcome.set_result(result)
+                return  # Got handled
+
+            except kiwipy.TaskRejected:
+                # Task was rejected by this subscriber, keep trying
+                continue
+            except kiwipy.CancelledError:
+                # The subscriber has cancelled their processing of the task
+                outcome.cancel()
+                return
+            except Exception as exc:  # pylint: disable=broad-except
+                # There was an exception during the processing of this task
+                outcome.set_exception(exc)
+                _LOGGER.exception('Exception occurred while processing task.')
+                return
+
+    def _attach_outcome_callback(
+        self, result_future: asyncio.Future, outcome: asyncio.Future, rmq_task: 'RmqIncomingTask' = None
+    ):
+        """Attach a callback to resolve the outcome when the result future completes.
+
+        This keeps the task slot blocked (message unacked) until the future resolves.
+        Handles chained futures (futures that resolve to futures) using a while loop.
+        Also handles TaskResult by extracting the result Future and waiting for it.
+        """
+
+        def resolve_chain(fut: asyncio.Future):
+            if fut.cancelled():
+                outcome.cancel()
+                return
+            if fut.exception():
+                outcome.set_exception(fut.exception())
+                return
+
+            result = fut.result()
+
+            # Follow chain of futures with a while loop
+            while asyncio.isfuture(result):
+                if result.done():
+                    # Already resolved - get result and continue loop
+                    if result.cancelled():
+                        outcome.cancel()
+                        return
+                    if result.exception():
+                        outcome.set_exception(result.exception())
+                        return
+                    result = result.result()
                 else:
-                    # All good
-                    outcome.set_result(result)
-                    break  # Got handled
+                    # Not done yet - attach callback and return
+                    result.add_done_callback(resolve_chain)
+                    return
+
+            # Check if the result is a TaskResult - need to handle it specially
+            if isinstance(result, TaskResult):
+                # If nowait, send task_id immediately as early reply (if not already sent)
+                if rmq_task and rmq_task.nowait and not rmq_task.no_reply and not rmq_task.early_reply_sent:
+                    # Need to send early reply - schedule it in the event loop
+                    async def send_early_reply():
+                        reply_body = utils.result_response(result.task_id)
+                        await self._send_response(reply_body, rmq_task._message)
+                        rmq_task._early_reply_sent = True
+                    self.loop().create_task(send_early_reply())
+                self._attach_task_result_callback(result, outcome, rmq_task)
+                return
+
+            outcome.set_result(result)
+
+        result_future.add_done_callback(resolve_chain)
+
+    def _attach_task_result_callback(
+        self, task_result: TaskResult, outcome: asyncio.Future, rmq_task: 'RmqIncomingTask'
+    ):
+        """Attach a callback to handle TaskResult when the result Future completes.
+
+        This keeps the task slot blocked (message unacked) until the Future resolves.
+        - If nowait=True: Early reply with task_id was already sent, just ack when done
+        - If nowait=False: Send the full result when done
+
+        Note: task_result.result is a kiwipy.Future (concurrent.futures.Future) which may be
+        completed from a different thread. We use call_soon_threadsafe to safely update the
+        asyncio.Future outcome from the callback.
+        """
+        loop = self.loop()
+        nowait = rmq_task.nowait if rmq_task else False
+
+        def on_result_done(fut):
+            # This callback may be called from a different thread (plumpy's event loop)
+            # Use call_soon_threadsafe to safely update the asyncio outcome Future
+            if fut.cancelled():
+                loop.call_soon_threadsafe(outcome.cancel)
+                return
+
+            try:
+                exc = fut.exception()
+            except Exception:
+                exc = None
+            if exc is not None:
+                loop.call_soon_threadsafe(outcome.set_exception, exc)
+                return
+
+            resolved_result = fut.result()
+
+            if nowait:
+                # Early reply with task_id was already sent, just ack (outcome not used for reply)
+                loop.call_soon_threadsafe(outcome.set_result, resolved_result)
+            else:
+                # Send the full result - for backward compatibility, just the resolved result
+                loop.call_soon_threadsafe(outcome.set_result, resolved_result)
+
+        task_result.result.add_done_callback(on_result_done)
 
     def _build_response_message(self, body, incoming_message):
         """
@@ -218,6 +349,7 @@ class RmqIncomingTask:
         self._state = TASK_PENDING
         self._outcome_ref = None  # type: Optional[weakref.ReferenceType]
         self._loop = self._subscriber.loop()
+        self._early_reply_sent = False
 
     @property
     def body(self) -> str:
@@ -228,8 +360,36 @@ class RmqIncomingTask:
         return self._task_info.no_reply
 
     @property
+    def nowait(self) -> bool:
+        return self._task_info.nowait
+
+    @property
     def state(self) -> str:
         return self._state
+
+    @property
+    def early_reply_sent(self) -> bool:
+        """Return True if an early reply has already been sent."""
+        return self._early_reply_sent
+
+    async def send_early_response(self, result) -> bool:
+        """Send a response without acknowledging the message.
+
+        This allows confirming receipt/progress while keeping the task slot blocked.
+        The message will be acknowledged when the task handler completes.
+
+        :param result: The result to send as the response
+        :return: True if response was sent, False if no_reply is set or already sent
+        """
+        if self.no_reply:
+            return False
+        if self._early_reply_sent:
+            return False
+
+        reply_body = utils.result_response(result)
+        await self._subscriber._send_response(reply_body, self._message)
+        self._early_reply_sent = True
+        return True
 
     def process(self) -> asyncio.Future:
         if self._state != TASK_PENDING:
@@ -300,7 +460,7 @@ class RmqIncomingTask:
             except Exception as exc:  # pylint: disable=broad-except
                 reply_body = utils.exception_response(exc)
 
-            if not self.no_reply:
+            if not self.no_reply and not self._early_reply_sent:
                 # Schedule a task to send the appropriate response
                 # pylint: disable=protected-access
                 await self._subscriber._send_response(reply_body, self._message)
@@ -350,24 +510,26 @@ class RmqTaskPublisher(messages.BasePublisherWithReplyQueue):
         )
         self._task_queue_name = queue_name
 
-    async def task_send(self, task, no_reply: bool = False) -> asyncio.Future:
+    async def task_send(self, task, no_reply: bool = False, nowait: bool = False) -> asyncio.Future:
         """Send a task for processing by a task subscriber.
 
         All task messages will be set to be persistent by setting `delivery_mode=2`.
 
         :param task: The task payload
         :param no_reply: Don't send a reply containing the result of the task
+        :param nowait: If True, send task_id reply immediately instead of waiting for result
         :return: A future representing the result of the task
         """
         _LOGGER.debug(
-            'Sending task with routing key %r to RMQ queue %r (reply=%r): %r',
+            'Sending task with routing key %r to RMQ queue %r (reply=%r, nowait=%r): %r',
             self._task_queue_name,
             self._reply_queue.name,
             not no_reply,
+            nowait,
             task,
         )
         # Build the full message body and encode as a tuple
-        body = self._encode((task, no_reply))
+        body = self._encode((task, no_reply, nowait))
         # Now build up the full aio_pika message
         task_msg = aio_pika.Message(
             body=body,
@@ -432,9 +594,9 @@ class RmqTaskQueue:
         async for task in self._subscriber:
             yield task
 
-    async def task_send(self, task, no_reply: bool = False):
+    async def task_send(self, task, no_reply: bool = False, nowait: bool = False):
         """Send a task to the queue"""
-        return await self._publisher.task_send(task, no_reply)
+        return await self._publisher.task_send(task, no_reply, nowait)
 
     async def add_task_subscriber(self, subscriber, identifier=None):
         return await self._subscriber.add_task_subscriber(subscriber, identifier)

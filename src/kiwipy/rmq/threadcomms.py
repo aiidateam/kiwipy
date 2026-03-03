@@ -212,9 +212,9 @@ class RmqThreadCommunicator(kiwipy.Communicator):
         self._ensure_open()
         return self._loop_scheduler.await_(self._communicator.remove_broadcast_subscriber(identifier))
 
-    def task_send(self, task, no_reply=False):
+    def task_send(self, task, no_reply=False, nowait=False):
         self._ensure_open()
-        return self._loop_scheduler.await_(self._communicator.task_send(task, no_reply))
+        return self._loop_scheduler.await_(self._communicator.task_send(task, no_reply, nowait))
 
     def task_queue(
         self, queue_name: str, prefetch_size=defaults.TASK_PREFETCH_SIZE, prefetch_count=defaults.TASK_PREFETCH_COUNT
@@ -287,8 +287,8 @@ class RmqThreadTaskQueue:
         for task in self._loop_scheduler.async_iter(self._task_queue):
             yield RmqThreadIncomingTask(task, self._loop_scheduler)
 
-    def task_send(self, task, no_reply=False):
-        return self._loop_scheduler.await_(self._task_queue.task_send(task, no_reply))
+    def task_send(self, task, no_reply=False, nowait=False):
+        return self._loop_scheduler.await_(self._task_queue.task_send(task, no_reply, nowait))
 
     def add_task_subscriber(self, subscriber):
         return self._loop_scheduler.await_(self._task_queue.add_task_subscriber(self._wrap_subscriber(subscriber)))
