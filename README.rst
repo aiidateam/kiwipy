@@ -13,7 +13,7 @@ kiwiPy
 
 .. image:: https://codecov.io/gh/aiidateam/kiwipy/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/aiidateam/kiwipy
-    :alt: Coveralls
+    :alt: Codecov
 
 .. image:: https://github.com/aiidateam/kiwipy/workflows/continuous-integration/badge.svg
     :target: https://github.com/aiidateam/kiwipy/actions?query=workflow%3Acontinuous-integration
